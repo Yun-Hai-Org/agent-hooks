@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
  * Auto Stage - PostToolUse Hook for Edit|Write
  * Automatically stages files after Claude Code modifies them.

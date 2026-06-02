@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
  * Protect Secrets - PreToolUse Hook for Read|Edit|Write|Bash
  * Prevents reading, modifying, or exfiltrating sensitive files.

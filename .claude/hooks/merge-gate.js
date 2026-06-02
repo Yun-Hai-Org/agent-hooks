@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
  * Merge Gate - PreToolUse Hook for Bash
  * 合并门：在 git merge 到 main/master 时执行安全扫描和测试
