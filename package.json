@@ -1,0 +1,13 @@
+{
+  "dependencies": {},
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@typescript-eslint/eslint-plugin": "8.60.0",
+    "@typescript-eslint/parser": "8.60.0",
+    "eslint": "10.4.1",
+    "markdownlint-cli2": "0.22.1",
+    "prettier": "3.8.3",
+    "typescript-eslint": "8.60.0",
+    "knip": "^5.0.0"
+  }
+}
