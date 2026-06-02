@@ -1,89 +1,70 @@
 {
   "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/session-start.sh",
-            "args": [],
-            "statusMessage": "正在加载会话初始化信息..."
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/prompt-filter.sh",
-            "args": [],
-            "statusMessage": "正在检查用户提示..."
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(rm *)",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/block-rm.sh",
-            "args": [],
-            "statusMessage": "正在检查危险命令..."
+            "command": "bun /Users/zhangwm/Python/TEST/20260531-hooks/.claude/hooks/block-dangerous-commands.js",
+            "statusMessage": "检查危险命令和工具限制..."
           }
         ]
       },
       {
-        "matcher": "Write|Edit",
+        "matcher": "Write|Edit|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-write-check.sh",
-            "args": [],
-            "statusMessage": "正在执行写入前检查..."
+            "command": "bun /Users/zhangwm/Python/TEST/20260531-hooks/.claude/hooks/branch-gate.js",
+            "statusMessage": "检查分支保护（master/main 写入限制）..."
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun /Users/zhangwm/Python/TEST/20260531-hooks/.claude/hooks/protect-secrets.js",
+            "statusMessage": "检查敏感文件和内容..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun /Users/zhangwm/Python/TEST/20260531-hooks/.claude/hooks/commit-gate.js",
+            "statusMessage": "检查提交规范..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun /Users/zhangwm/Python/TEST/20260531-hooks/.claude/hooks/merge-gate.js",
+            "statusMessage": "检查合并操作..."
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Write|Edit",
+        "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/post-write-lint.sh",
-            "args": [],
-            "statusMessage": "正在执行写入后检查...",
-            "async": true
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
+            "command": "bun /Users/zhangwm/Python/TEST/20260531-hooks/.claude/hooks/post-write-lint.js",
+            "statusMessage": "执行代码质量检查..."
+          },
           {
             "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/turn-end.sh",
-            "args": [],
-            "statusMessage": "正在记录回合结束..."
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/session-end.sh",
-            "args": [],
-            "statusMessage": "正在执行会话清理..."
+            "command": "bun /Users/zhangwm/Python/TEST/20260531-hooks/.claude/hooks/auto-stage.js",
+            "statusMessage": "自动暂存修改文件..."
           }
         ]
       }
