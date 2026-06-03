@@ -225,9 +225,24 @@ async function runFullTests() {
 
   if (hasPackageJson.success) {
     try {
+      // 仅测试 git 跟踪的测试文件，排除未跟踪的第三方代码
+      // bun test 要求以 ./ 开头的路径才能精确匹配文件
+      const trackedFiles = execCommand(
+        "git ls-files '*.test.js' '*.test.ts' '*.spec.js' '*.spec.ts' '*.test.jsx' '*.test.tsx'",
+        { timeout: 5000 },
+      );
+      let testCmd = 'bun test ./.claude/hooks/__tests__/';
+      if (trackedFiles.success && trackedFiles.stdout.trim()) {
+        const files = trackedFiles.stdout
+          .trim()
+          .split('\n')
+          .map((f) => `./${f}`)
+          .join(' ');
+        testCmd = `bun test ${files}`;
+      }
       const jsResult = await withTimeout(
         new Promise((resolve) => {
-          const r = execCommand('bun test', { timeout: 60000 });
+          const r = execCommand(testCmd, { timeout: 60000 });
           resolve(r);
         }),
         60000,
@@ -269,7 +284,7 @@ async function runHookTests() {
   try {
     const result = await withTimeout(
       new Promise((resolve) => {
-        const r = execCommand(`bun test "${testDir}"`, { timeout: 30000 });
+        const r = execCommand(`bun test "./${testDir}"`, { timeout: 30000 });
         resolve(r);
       }),
       30000,
