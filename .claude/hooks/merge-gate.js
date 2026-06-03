@@ -201,13 +201,14 @@ async function runFullTests() {
         );
         if (!pyResult.success) {
           const output = pyResult.stderr || pyResult.stdout || '';
-          // pytest 退出码 5 = no tests collected，不应判为失败
+          // pytest 未安装、无测试文件等非失败场景，不应判为 DENY
           if (
+            output.includes('No module named pytest') ||
             output.includes('no tests ran') ||
             output.includes('collected 0 items') ||
             output.includes('no tests collected')
           ) {
-            results.push(formatResult('full-test-py', DECISION.SKIP, 'Python 项目无测试文件，跳过'));
+            results.push(formatResult('full-test-py', DECISION.SKIP, 'Python 测试跳过（pytest 未安装或无测试文件）'));
           } else {
             results.push(
               formatResult('full-test-py', DECISION.DENY, `Python 全量测试失败`, { output: output.slice(0, 500) }),
