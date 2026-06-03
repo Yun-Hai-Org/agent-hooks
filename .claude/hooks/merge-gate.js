@@ -12,7 +12,18 @@
  * 6. 生成安全报告 summary
  */
 
-import { formatResult, decide, formatHookOutput, log, execCommand, readStdin, safeMain, withTimeout, DECISION, SEVERITY } from './security-orchestrator.js';
+import {
+  formatResult,
+  decide,
+  formatHookOutput,
+  log,
+  execCommand,
+  readStdin,
+  safeMain,
+  withTimeout,
+  DECISION,
+  SEVERITY,
+} from './security-orchestrator.js';
 
 const HOOK_NAME = 'merge-gate';
 
@@ -53,18 +64,19 @@ async function runSemgrep() {
         resolve(r);
       }),
       60000,
-      'semgrep 超时 (60s)'
+      'semgrep 超时 (60s)',
     );
 
     if (!result.success && result.stderr) {
       // semgrep may exit non-zero with findings
       try {
         const json = JSON.parse(result.stdout);
-        const errors = json.results?.filter(r => r.extra?.severity === 'ERROR') || [];
+        const errors = json.results?.filter((r) => r.extra?.severity === 'ERROR') || [];
         if (errors.length > 0) {
-          return formatResult('semgrep', DECISION.DENY,
-            `Semgrep 发现 ${errors.length} 个 ERROR 级别问题`,
-            { count: errors.length, sample: errors.slice(0, 3).map(e => e.extra?.message || e.check_id) });
+          return formatResult('semgrep', DECISION.DENY, `Semgrep 发现 ${errors.length} 个 ERROR 级别问题`, {
+            count: errors.length,
+            sample: errors.slice(0, 3).map((e) => e.extra?.message || e.check_id),
+          });
         }
       } catch {}
     }
@@ -90,7 +102,7 @@ async function runKnip() {
         resolve(r);
       }),
       30000,
-      'knip 超时 (30s)'
+      'knip 超时 (30s)',
     );
 
     if (!result.success) {
@@ -100,9 +112,12 @@ async function runKnip() {
         const unusedFiles = json.files ? Object.keys(json.files).length : 0;
         const unusedDeps = json.dependencies ? Object.keys(json.dependencies).length : 0;
         if (unusedFiles > 0 || unusedDeps > 0) {
-          return formatResult('knip', DECISION.DENY,
+          return formatResult(
+            'knip',
+            DECISION.DENY,
             `Knip 发现 ${unusedFiles} 个未使用文件, ${unusedDeps} 个未使用依赖`,
-            { unusedFiles, unusedDeps });
+            { unusedFiles, unusedDeps },
+          );
         }
       } catch {}
     }
@@ -129,19 +144,22 @@ async function runTrivy() {
         resolve(r);
       }),
       60000,
-      'trivy 超时 (60s)'
+      'trivy 超时 (60s)',
     );
 
     if (result.success) {
       try {
         const json = JSON.parse(result.stdout);
-        const vulns = json.Results?.flatMap(r => r.Vulnerabilities || []) || [];
-        const criticals = vulns.filter(v => v.Severity === 'CRITICAL');
-        const highs = vulns.filter(v => v.Severity === 'HIGH');
+        const vulns = json.Results?.flatMap((r) => r.Vulnerabilities || []) || [];
+        const criticals = vulns.filter((v) => v.Severity === 'CRITICAL');
+        const highs = vulns.filter((v) => v.Severity === 'HIGH');
         if (criticals.length > 0 || highs.length > 0) {
-          return formatResult('trivy', DECISION.DENY,
+          return formatResult(
+            'trivy',
+            DECISION.DENY,
             `Trivy 发现 ${criticals.length} CRITICAL, ${highs.length} HIGH 漏洞`,
-            { critical: criticals.length, high: highs.length });
+            { critical: criticals.length, high: highs.length },
+          );
         }
       } catch {}
     }
@@ -159,30 +177,48 @@ async function runTrivy() {
  */
 async function runFullTests() {
   // Check for Python project
-  const hasPytest = execCommand('test -f pyproject.toml') || execCommand('test -f setup.py') || execCommand('test -f setup.cfg');
+  const hasPytest =
+    execCommand('test -f pyproject.toml') || execCommand('test -f setup.py') || execCommand('test -f setup.cfg');
   // Check for JS project
   const hasPackageJson = execCommand('test -f package.json');
 
   const results = [];
 
   if (hasPytest.success) {
-    try {
-      const pyResult = await withTimeout(
-        new Promise((resolve) => {
-          const r = execCommand('uv run python -m pytest -x -q', { timeout: 60000 });
-          resolve(r);
-        }),
-        60000,
-        'pytest 超时 (60s)'
-      );
-      if (!pyResult.success) {
-        results.push(formatResult('full-test-py', DECISION.DENY,
-          `Python 全量测试失败`, { output: (pyResult.stderr || pyResult.stdout).slice(0, 500) }));
-      } else {
-        results.push(formatResult('full-test-py', DECISION.ALLOW, 'Python 全量测试通过'));
+    // 先检查 uv 和 pytest 是否可用
+    const hasUv = execCommand('which uv');
+    if (!hasUv.success) {
+      results.push(formatResult('full-test-py', DECISION.SKIP, 'uv 未安装，跳过 Python 测试'));
+    } else {
+      try {
+        const pyResult = await withTimeout(
+          new Promise((resolve) => {
+            const r = execCommand('uv run python -m pytest -x -q', { timeout: 60000 });
+            resolve(r);
+          }),
+          60000,
+          'pytest 超时 (60s)',
+        );
+        if (!pyResult.success) {
+          const output = pyResult.stderr || pyResult.stdout || '';
+          // pytest 退出码 5 = no tests collected，不应判为失败
+          if (
+            output.includes('no tests ran') ||
+            output.includes('collected 0 items') ||
+            output.includes('no tests collected')
+          ) {
+            results.push(formatResult('full-test-py', DECISION.SKIP, 'Python 项目无测试文件，跳过'));
+          } else {
+            results.push(
+              formatResult('full-test-py', DECISION.DENY, `Python 全量测试失败`, { output: output.slice(0, 500) }),
+            );
+          }
+        } else {
+          results.push(formatResult('full-test-py', DECISION.ALLOW, 'Python 全量测试通过'));
+        }
+      } catch (e) {
+        results.push(formatResult('full-test-py', DECISION.SKIP, `Python 测试跳过: ${e.message}`));
       }
-    } catch (e) {
-      results.push(formatResult('full-test-py', DECISION.SKIP, `Python 测试跳过: ${e.message}`));
     }
   }
 
@@ -194,11 +230,14 @@ async function runFullTests() {
           resolve(r);
         }),
         60000,
-        'bun test 超时 (60s)'
+        'bun test 超时 (60s)',
       );
       if (!jsResult.success) {
-        results.push(formatResult('full-test-js', DECISION.DENY,
-          `JS 全量测试失败`, { output: (jsResult.stderr || jsResult.stdout).slice(0, 500) }));
+        results.push(
+          formatResult('full-test-js', DECISION.DENY, `JS 全量测试失败`, {
+            output: (jsResult.stderr || jsResult.stdout).slice(0, 500),
+          }),
+        );
       } else {
         results.push(formatResult('full-test-js', DECISION.ALLOW, 'JS 全量测试通过'));
       }
@@ -212,7 +251,7 @@ async function runFullTests() {
   }
 
   // Return the first failure, or all passed
-  const failure = results.find(r => r.decision === DECISION.DENY);
+  const failure = results.find((r) => r.decision === DECISION.DENY);
   return failure || formatResult('full-tests', DECISION.ALLOW, '所有全量测试通过');
 }
 
@@ -233,12 +272,13 @@ async function runHookTests() {
         resolve(r);
       }),
       30000,
-      'Hook 测试超时 (30s)'
+      'Hook 测试超时 (30s)',
     );
 
     if (!result.success) {
-      return formatResult('hook-tests', DECISION.DENY,
-        `Hook 自身测试失败`, { output: (result.stderr || result.stdout).slice(0, 500) });
+      return formatResult('hook-tests', DECISION.DENY, `Hook 自身测试失败`, {
+        output: (result.stderr || result.stdout).slice(0, 500),
+      });
     }
 
     return formatResult('hook-tests', DECISION.ALLOW, 'Hook 自身测试通过');
@@ -251,10 +291,12 @@ async function runHookTests() {
  * 生成安全报告 summary
  */
 function generateSummary(results) {
-  const summary = results.map(r => {
-    const icon = { allow: '✅', deny: '❌', skip: '⏭️', warn: '⚠️' }[r.decision] || '📋';
-    return `${icon} [${r.checkId}] ${r.message}`;
-  }).join('\n');
+  const summary = results
+    .map((r) => {
+      const icon = { allow: '✅', deny: '❌', skip: '⏭️', warn: '⚠️' }[r.decision] || '📋';
+      return `${icon} [${r.checkId}] ${r.message}`;
+    })
+    .join('\n');
   return summary;
 }
 
@@ -288,14 +330,12 @@ async function main() {
     }
 
     // Phase 1: 安全扫描（并行）
-    const [semgrepResult, knipResult, trivyResult] = await Promise.allSettled([
-      runSemgrep(),
-      runKnip(),
-      runTrivy(),
-    ]);
+    const [semgrepResult, knipResult, trivyResult] = await Promise.allSettled([runSemgrep(), runKnip(), runTrivy()]);
 
     const securityResults = [
-      semgrepResult.status === 'fulfilled' ? semgrepResult.value : formatResult('semgrep', DECISION.SKIP, 'Semgrep 执行异常'),
+      semgrepResult.status === 'fulfilled'
+        ? semgrepResult.value
+        : formatResult('semgrep', DECISION.SKIP, 'Semgrep 执行异常'),
       knipResult.status === 'fulfilled' ? knipResult.value : formatResult('knip', DECISION.SKIP, 'Knip 执行异常'),
       trivyResult.status === 'fulfilled' ? trivyResult.value : formatResult('trivy', DECISION.SKIP, 'Trivy 执行异常'),
     ];
@@ -332,7 +372,8 @@ async function main() {
     log(HOOK_NAME, {
       level: 'PASSED',
       summary: summary.slice(0, 1000),
-      session_id, cwd,
+      session_id,
+      cwd,
     });
 
     console.log(formatHookOutput(DECISION.ALLOW, `✅ 合并门检查全部通过:\n${summary}`));
