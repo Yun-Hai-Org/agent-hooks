@@ -96,9 +96,9 @@ function lintPython(filePath) {
   console.log(`🐍 Python 严格校验: ${filePath}`);
   let success = true;
 
-  // ruff check (lint + 自动修复)
+  // ruff check (lint + 自动修复 + preview 模式)
   if (execCommand('which ruff').success) {
-    const lintResult = execCommand(`ruff check --fix "${filePath}"`);
+    const lintResult = execCommand(`ruff check --preview --fix "${filePath}"`);
     if (!lintResult.success) {
       console.log('   ❌ ruff lint 发现问题（严格模式）');
       console.log(lintResult.error.split('\n').slice(0, 20).join('\n'));
@@ -155,8 +155,10 @@ function lintTypescriptJavascript(filePath) {
   execCommand(`bunx prettier --write "${filePath}"`);
   console.log('   ✅ prettier 格式化完成');
 
-  // eslint 检查（严格模式，--max-warnings 0）
-  const eslintResult = execCommand(`bunx eslint --max-warnings 0 --fix "${filePath}"`);
+  // eslint 检查（严格模式，--max-warnings 0，报告未使用的禁用指令）
+  const eslintResult = execCommand(
+    `bunx eslint --max-warnings 0 --report-unused-disable-directives --fix "${filePath}"`,
+  );
   if (!eslintResult.success) {
     console.log('   ❌ eslint 发现问题（严格模式）');
     console.log(eslintResult.error.split('\n').slice(0, 20).join('\n'));

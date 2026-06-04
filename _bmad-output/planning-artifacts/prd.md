@@ -562,6 +562,49 @@ async function lintShell(filePath) {
 - **NFR17**: 99.9% 的钩子行为一致性（相同输入 → 相同输出）
 - **NFR18**: 所有钩子提供清晰的错误信息和可操作的修复建议
 
+### Tool Strictness（工具严格度）— 已实现
+
+**背景：** 所有校验工具必须启用最严格的检查模式，以确保 AI 生成的代码符合最高质量标准。
+
+**约束条件：**
+
+- **NFR19**: Semgrep 必须启用所有安全和 OWASP 规则包，报告所有严重级别（ERROR、WARNING、INFO）
+- **NFR20**: Trivy 必须启用所有扫描器（漏洞、错误配置、密钥、许可证），报告中等级别及以上漏洞
+- **NFR21**: ESLint 必须使用 `strict` 预设（非 `strictTypeChecked`，因项目为纯 JS），启用未使用禁用指令报告
+- **NFR22**: Ruff 必须启用 preview 模式，启用最新实验性规则
+- **NFR23**: ~~TypeScript 必须启用 `strict: true`~~ **不适用** — 项目为纯 JavaScript，无 TypeScript 文件
+
+**实现状态：**
+
+1. **Semgrep 严格模式 ✅**
+   - 规则包：`--config p/security-audit --config p/secrets --config p/owasp-top-ten`
+   - 报告级别：`--severity ERROR,WARNING,INFO`
+   - 影响：增加约 200+ 条安全规则
+
+2. **Trivy 严格模式 ✅**
+   - 扫描器：`--scanners vuln,misconfig,secret,license`
+   - 严重级别：`--severity CRITICAL,HIGH,MEDIUM`
+   - 影响：从仅检测漏洞扩展到检测错误配置、密钥泄露、许可证问题
+
+3. **ESLint 严格模式 ✅**
+   - 预设：`strict`（非 `strictTypeChecked`，因项目为纯 JavaScript）
+   - 标志：`--report-unused-disable-directives`
+   - 影响：启用严格检查，报告未使用的 `// eslint-disable` 注释
+
+4. **Ruff 严格模式 ✅**
+   - 标志：`--preview`
+   - 影响：启用实验性规则，提前发现潜在问题
+
+5. **TypeScript 严格模式 ❌ 不适用**
+   - 原因：项目为纯 JavaScript，无 TypeScript 文件
+   - 替代：通过 ESLint 严格模式覆盖代码质量检查
+
+**验证结果：**
+
+- ✅ 所有工具已启用最严格模式
+- ✅ 118 个测试全部通过
+- ✅ 无回归问题
+
 ### Gitignore 兼容性
 
 **背景：** 当前所有钩子都不检查 `.gitignore`，导致：
@@ -572,9 +615,9 @@ async function lintShell(filePath) {
 
 **约束条件：**
 
-- **NFR19**: post-write-lint 必须跳过 `.gitignore` 中的文件，避免对生成文件/临时文件做无意义校验
-- **NFR20**: merge-gate 中 Semgrep 和 Trivy 扫描必须排除 `.gitignore` 中的目录
-- **NFR21**: protect-secrets 不应受 `.gitignore` 影响（安全保护优先级高于 gitignore）
+- **NFR24**: post-write-lint 必须跳过 `.gitignore` 中的文件，避免对生成文件/临时文件做无意义校验
+- **NFR25**: merge-gate 中 Semgrep 和 Trivy 扫描必须排除 `.gitignore` 中的目录
+- **NFR26**: protect-secrets 不应受 `.gitignore` 影响（安全保护优先级高于 gitignore）
 
 **实现方式：**
 
@@ -598,12 +641,12 @@ async function lintShell(filePath) {
 
 **约束条件（P2 实现）：**
 
-- **NFR22**: post-write-lint 必须支持增量校验模式：仅报告 Claude 本次修改引入的新问题，忽略历史遗留问题
-- **NFR23**: commit-gate 必须支持 baseline 模式：记录项目启用钩子时的初始问题清单，后续只检查新增问题
-- **NFR24**: merge-gate 必须提供宽松模式（relaxed）和严格模式（strict）：宽松模式仅检查新文件和新修改的代码，严格模式进行全量扫描
-- **NFR25**: 首次启用钩子时，系统应自动生成 baseline 文件（记录当前所有 lint/security 问题）
-- **NFR26**: baseline 文件必须版本控制友好：存储在 `.claude/hooks-baseline/` 目录，格式为 JSON，可按文件/规则类型分类
-- **NFR27**: 用户可通过配置切换严格度级别：`strict`（全量检查）、`relaxed`（仅新代码）、`baseline`（对比基线）
+- **NFR27**: post-write-lint 必须支持增量校验模式：仅报告 Claude 本次修改引入的新问题，忽略历史遗留问题
+- **NFR28**: commit-gate 必须支持 baseline 模式：记录项目启用钩子时的初始问题清单，后续只检查新增问题
+- **NFR29**: merge-gate 必须提供宽松模式（relaxed）和严格模式（strict）：宽松模式仅检查新文件和新修改的代码，严格模式进行全量扫描
+- **NFR30**: 首次启用钩子时，系统应自动生成 baseline 文件（记录当前所有 lint/security 问题）
+- **NFR31**: baseline 文件必须版本控制友好：存储在 `.claude/hooks-baseline/` 目录，格式为 JSON，可按文件/规则类型分类
+- **NFR32**: 用户可通过配置切换严格度级别：`strict`（全量检查）、`relaxed`（仅新代码）、`baseline`（对比基线）
 
 **P2 实现策略：**
 
@@ -636,12 +679,12 @@ async function lintShell(filePath) {
 
 **约束条件：**
 
-- **NFR28**: settings.json 必须使用相对路径（`bun .claude/hooks/xxx.js`），而非绝对路径，以支持全局模式
-- **NFR29**: merge-gate.js 的测试目录引用必须使用 `import.meta.url` 相对定位，而非硬编码 `.claude/hooks/__tests__/`
-- **NFR30**: 所有 git 命令必须显式传入 stdin 中的 `cwd` 字段，而非依赖进程 cwd
-- **NFR31**: protect-secrets.js 必须添加 `process.env.HOME || ''` fallback，避免极端环境异常
-- **NFR32**: 工具链检测必须基于项目类型（检查 package.json/pyproject.toml），而非硬编码 bun/uv
-- **NFR33**: 全局钩子和项目级钩子共存时，项目级配置优先
+- **NFR33**: settings.json 必须使用相对路径（`bun .claude/hooks/xxx.js`），而非绝对路径，以支持全局模式
+- **NFR34**: merge-gate.js 的测试目录引用必须使用 `import.meta.url` 相对定位，而非硬编码 `.claude/hooks/__tests__/`
+- **NFR35**: 所有 git 命令必须显式传入 stdin 中的 `cwd` 字段，而非依赖进程 cwd
+- **NFR36**: protect-secrets.js 必须添加 `process.env.HOME || ''` fallback，避免极端环境异常
+- **NFR37**: 工具链检测必须基于项目类型（检查 package.json/pyproject.toml），而非硬编码 bun/uv
+- **NFR38**: 全局钩子和项目级钩子共存时，项目级配置优先
 
 **实现策略：**
 
@@ -660,7 +703,7 @@ async function lintShell(filePath) {
 | **所有使用 git 命令的 hook**       | 显式传入 cwd        | P1（建议） |
 | **protect-secrets.js**             | HOME fallback       | P1（建议） |
 | **merge-gate.js / commit-gate.js** | 工具链检测增强      | P1（建议） |
-| ****tests**/**                     | fixtures 目录迁移   | P2（可选） |
+| \***\*tests**/\*\*                 | fixtures 目录迁移   | P2（可选） |
 
 **验证标准：**
 

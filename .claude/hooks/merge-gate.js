@@ -24,8 +24,16 @@ import {
   DECISION,
   SEVERITY,
 } from './security-orchestrator.js';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 const HOOK_NAME = 'merge-gate';
+
+// 获取当前脚本所在目录（支持全局模式和项目级模式）
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const HOOKS_DIR = __dirname;
+const TESTS_DIR = join(HOOKS_DIR, '__tests__');
 
 // ─── 工具函数 ─────────────────────────────────────────────────────────────────
 
@@ -74,7 +82,7 @@ async function runSemgrep() {
   try {
     const ignoredDirs = getGitIgnoredDirs();
     const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
-    const semgrepCmd = `semgrep --config auto --severity ERROR,WARNING --json ${excludeFlags} .`;
+    const semgrepCmd = `semgrep --config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten --severity ERROR,WARNING,INFO --json ${excludeFlags} .`;
 
     const result = await withTimeout(
       new Promise((resolve) => {
@@ -158,7 +166,7 @@ async function runTrivy() {
   try {
     const ignoredDirs = getGitIgnoredDirs();
     const skipDirs = ignoredDirs.map((d) => `--skip-dirs "${d}"`).join(' ');
-    const trivyCmd = `trivy fs --scanners vuln --severity CRITICAL,HIGH --format json ${skipDirs} .`;
+    const trivyCmd = `trivy fs --scanners vuln,misconfig,secret,license --severity CRITICAL,HIGH,MEDIUM --format json ${skipDirs} .`;
 
     const result = await withTimeout(
       new Promise((resolve) => {
@@ -175,12 +183,13 @@ async function runTrivy() {
         const vulns = json.Results?.flatMap((r) => r.Vulnerabilities || []) || [];
         const criticals = vulns.filter((v) => v.Severity === 'CRITICAL');
         const highs = vulns.filter((v) => v.Severity === 'HIGH');
-        if (criticals.length > 0 || highs.length > 0) {
+        const mediums = vulns.filter((v) => v.Severity === 'MEDIUM');
+        if (criticals.length > 0 || highs.length > 0 || mediums.length > 0) {
           return formatResult(
             'trivy',
             DECISION.DENY,
-            `Trivy 发现 ${criticals.length} CRITICAL, ${highs.length} HIGH 漏洞`,
-            { critical: criticals.length, high: highs.length },
+            `Trivy 发现 ${criticals.length} CRITICAL, ${highs.length} HIGH, ${mediums.length} MEDIUM 漏洞`,
+            { critical: criticals.length, high: highs.length, medium: mediums.length },
           );
         }
       } catch {}
@@ -253,7 +262,7 @@ async function runFullTests() {
         "git ls-files '*.test.js' '*.test.ts' '*.spec.js' '*.spec.ts' '*.test.jsx' '*.test.tsx'",
         { timeout: 5000 },
       );
-      let testCmd = 'bun test ./.claude/hooks/__tests__/';
+      let testCmd = `bun test "${TESTS_DIR}"`;
       if (trackedFiles.success && trackedFiles.stdout.trim()) {
         const files = trackedFiles.stdout
           .trim()
@@ -297,8 +306,7 @@ async function runFullTests() {
  * Hook 自身测试
  */
 async function runHookTests() {
-  const testDir = '.claude/hooks/__tests__';
-  const check = execCommand(`test -d "${testDir}"`);
+  const check = execCommand(`test -d "${TESTS_DIR}"`);
   if (!check.success) {
     return formatResult('hook-tests', DECISION.SKIP, 'Hook 测试目录不存在，跳过');
   }
@@ -306,7 +314,7 @@ async function runHookTests() {
   try {
     const result = await withTimeout(
       new Promise((resolve) => {
-        const r = execCommand(`bun test "./${testDir}"`, { timeout: 30000 });
+        const r = execCommand(`bun test "${TESTS_DIR}"`, { timeout: 30000 });
         resolve(r);
       }),
       30000,
