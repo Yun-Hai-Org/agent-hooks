@@ -416,10 +416,10 @@ async function lintShell(filePath) {
 
 **Must-Have Capabilities:**
 
-1. protect-secrets 增强 — 8 敏感文件模式 + 8 API 密钥扫描 + 5 Bash 拦截
-2. Shell 脚本校验 — lintShell()，覆盖 .sh/.bash
-3. Dockerfile 校验 — lintDockerfile()，按文件名匹配
-4. Terraform 状态文件保护 — 阻止读取/写入 `**/*.tfstate` 和 `**/*.tfvars`
+1. protect-secrets 增强 — 8 敏感文件模式 + 8 API 密钥扫描 + 5 Bash 拦截 ✅
+2. Shell 脚本校验 — lintShell()，覆盖 .sh/.bash/.zsh（shellcheck + shfmt）✅
+3. Dockerfile 校验 — lintDockerfile()，按文件名匹配（Dockerfile/Containerfile，hadolint）✅
+4. Terraform 状态文件保护 — 阻止读取/写入 `**/*.tfstate` 和 `**/*.tfvars` ✅
 
 **可妥协项：**
 

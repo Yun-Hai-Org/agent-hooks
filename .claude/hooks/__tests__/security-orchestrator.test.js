@@ -6,6 +6,10 @@ import {
   checkToolAvailable,
   execCommand,
   isGitIgnored,
+  withTimeout,
+  isGitRepo,
+  getCurrentBranch,
+  safeMain,
 } from '../security-orchestrator.js';
 
 describe('security-orchestrator', () => {
@@ -102,5 +106,105 @@ describe('security-orchestrator', () => {
     // .claude 目录是项目配置，不应该被忽略
     const r = isGitIgnored('.claude/settings.json');
     expect(r).toBe(false);
+  });
+
+  describe('withTimeout - 超时控制', () => {
+    it('应该在超时前完成的 Promise 返回结果', async () => {
+      const fastPromise = new Promise((resolve) => setTimeout(() => resolve('done'), 10));
+      const result = await withTimeout(fastPromise, 1000, '超时');
+      expect(result).toBe('done');
+    });
+
+    it('应该在超时后抛出错误', async () => {
+      const slowPromise = new Promise((resolve) => setTimeout(() => resolve('done'), 5000));
+      try {
+        await withTimeout(slowPromise, 10, '操作超时');
+        expect(true).toBe(false); // Should not reach here
+      } catch (error) {
+        expect(error.message).toBe('操作超时');
+      }
+    });
+
+    it('应该处理立即拒绝的 Promise', async () => {
+      const rejectPromise = Promise.reject(new Error('失败'));
+      try {
+        await withTimeout(rejectPromise, 1000, '超时');
+        expect(true).toBe(false);
+      } catch (error) {
+        expect(error.message).toBe('失败');
+      }
+    });
+  });
+
+  describe('isGitRepo - Git 仓库检测', () => {
+    it('应该检测到当前目录是 git 仓库', () => {
+      const result = isGitRepo(process.cwd());
+      expect(result).toBe(true);
+    });
+
+    it('应该检测不到非 git 目录', () => {
+      const result = isGitRepo('/tmp');
+      expect(result).toBe(false);
+    });
+
+    it('应该处理不存在的路径', () => {
+      const result = isGitRepo('/nonexistent/path/12345');
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('getCurrentBranch - 获取当前分支', () => {
+    it('应该返回当前分支名', () => {
+      const branch = getCurrentBranch(process.cwd());
+      expect(branch).toBeTruthy();
+      expect(typeof branch).toBe('string');
+    });
+
+    it('应该在非 git 目录返回 null', () => {
+      const branch = getCurrentBranch('/tmp');
+      expect(branch).toBeNull();
+    });
+  });
+
+  describe('safeMain - 安全主函数', () => {
+    it('应该正常执行成功的函数', async () => {
+      let executed = false;
+      await safeMain(async () => {
+        executed = true;
+      });
+      expect(executed).toBe(true);
+    });
+
+    it('应该捕获并处理错误', async () => {
+      const originalExit = process.exit;
+      let exitCode;
+      process.exit = (code) => {
+        exitCode = code;
+      };
+
+      await safeMain(async () => {
+        throw new Error('测试错误');
+      });
+
+      process.exit = originalExit;
+      // safeMain 使用 exit(0) 实现优雅降级（不阻断 Claude）
+      expect(exitCode).toBe(0);
+    });
+
+    it('应该捕获同步错误', async () => {
+      const originalExit = process.exit;
+      let exitCode;
+      process.exit = (code) => {
+        exitCode = code;
+      };
+
+      await safeMain(() => {
+        throw new Error('同步错误');
+      });
+
+      process.exit = originalExit;
+      // safeMain 使用 exit(0) 实现优雅降级（不阻断 Claude）
+      expect(exitCode).toBe(0);
+    });
   });
 });

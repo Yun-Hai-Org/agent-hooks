@@ -230,6 +230,59 @@ function lintYaml(filePath) {
   return false;
 }
 
+function lintShell(filePath) {
+  console.log(`🐚 Shell 严格校验: ${filePath}`);
+  let success = true;
+
+  // shellcheck 静态分析
+  if (execCommand('which shellcheck').success) {
+    const shellcheckResult = execCommand(`shellcheck "${filePath}"`);
+    if (!shellcheckResult.success) {
+      console.log('   ❌ shellcheck 发现问题（严格模式）');
+      console.log(shellcheckResult.error.split('\n').slice(0, 20).join('\n'));
+      success = false;
+    } else {
+      console.log('   ✅ shellcheck 检查通过（严格模式）');
+    }
+  } else {
+    console.log('   ⚠️  shellcheck 未安装，跳过 Shell 静态分析');
+  }
+
+  // shfmt 格式化
+  if (execCommand('which shfmt').success) {
+    const shfmtCheck = execCommand(`shfmt -d "${filePath}"`);
+    if (!shfmtCheck.success) {
+      execCommand(`shfmt -w "${filePath}"`);
+      console.log('   ✅ shfmt 格式化完成');
+    } else {
+      console.log('   ✅ shfmt 格式已符合规范');
+    }
+  } else {
+    console.log('   ⚠️  shfmt 未安装，跳过 Shell 格式化');
+  }
+
+  return success;
+}
+
+function lintDockerfile(filePath) {
+  console.log(`🐳 Dockerfile 严格校验: ${filePath}`);
+
+  if (!execCommand('which hadolint').success) {
+    console.log('   ⚠️  hadolint 未安装，跳过 Dockerfile 校验');
+    return true;
+  }
+
+  const hadolintResult = execCommand(`hadolint "${filePath}"`);
+  if (!hadolintResult.success) {
+    console.log('   ❌ hadolint 发现问题（严格模式）');
+    console.log(hadolintResult.error.split('\n').slice(0, 20).join('\n'));
+    return false;
+  }
+
+  console.log('   ✅ hadolint 检查通过（严格模式）');
+  return true;
+}
+
 async function main() {
   let input = '';
   for await (const chunk of process.stdin) input += chunk;
@@ -289,10 +342,25 @@ async function main() {
     case 'yml':
       success = lintYaml(filePath);
       break;
+    case 'sh':
+    case 'bash':
+    case 'zsh':
+      success = lintShell(filePath);
+      break;
+    case 'dockerfile':
+      success = lintDockerfile(filePath);
+      break;
     default:
-      log({ level: 'SKIP', reason: 'unsupported extension', file: filePath, extension });
-      console.log('{}');
-      return;
+      // 检查是否是 Dockerfile（无扩展名）
+      const filename = basename(filePath).toLowerCase();
+      if (filename === 'dockerfile' || filename === 'containerfile') {
+        success = lintDockerfile(filePath);
+      } else {
+        log({ level: 'SKIP', reason: 'unsupported extension', file: filePath, extension });
+        console.log('{}');
+        return;
+      }
+      break;
   }
 
   if (!success) {

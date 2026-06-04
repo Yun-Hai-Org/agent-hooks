@@ -98,6 +98,9 @@ async function main() {
   }
 }
 
-main();
+// 只在直接运行时执行 main()，导入时不执行
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}
 
 export { isInGitRepo, stageFile, log };
