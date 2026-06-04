@@ -623,3 +623,48 @@ async function lintShell(filePath) {
 | protect-secrets          | ✅ 无影响 | 已按设计工作（仅检查当前内容）          |
 | branch-gate              | ✅ 无影响 | 已按设计工作（仅检查分支名）            |
 | block-dangerous-commands | ✅ 无影响 | 已按设计工作（仅检查当前命令）          |
+
+### Global Mode Support（全局模式支持）— P1.5，本轮开发中实现
+
+**背景：** 当前钩子系统为项目级（`.claude/hooks/`），配置使用绝对路径。用户需要将钩子系统移动到全局（`~/.claude/hooks/`），使其在所有项目中生效，同时保持项目级钩子的支持。
+
+**实现目标：**
+
+- 同时支持全局钩子（`~/.claude/hooks/`）和项目级钩子（`.claude/hooks/`）
+- 全局钩子对所有项目生效，项目级钩子仅对当前项目生效
+- 项目级钩子可覆盖全局钩子的配置
+
+**约束条件：**
+
+- **NFR28**: settings.json 必须使用相对路径（`bun .claude/hooks/xxx.js`），而非绝对路径，以支持全局模式
+- **NFR29**: merge-gate.js 的测试目录引用必须使用 `import.meta.url` 相对定位，而非硬编码 `.claude/hooks/__tests__/`
+- **NFR30**: 所有 git 命令必须显式传入 stdin 中的 `cwd` 字段，而非依赖进程 cwd
+- **NFR31**: protect-secrets.js 必须添加 `process.env.HOME || ''` fallback，避免极端环境异常
+- **NFR32**: 工具链检测必须基于项目类型（检查 package.json/pyproject.toml），而非硬编码 bun/uv
+- **NFR33**: 全局钩子和项目级钩子共存时，项目级配置优先
+
+**实现策略：**
+
+1. **settings.json 路径重写：** 所有 hook command 从绝对路径改为相对路径（`bun .claude/hooks/xxx.js`）
+2. **merge-gate.js 测试路径修复：** 使用 `dirname(new URL(import.meta.url).pathname)` 获取脚本自身目录，再定位 `__tests__/`
+3. **git 命令 cwd 传递：** 所有调用 `execCommand` 的地方显式传入 `cwd` 参数（从 stdin 获取）
+4. **HOME fallback 修复：** protect-secrets.js 第 154 行添加 `|| ''` fallback
+5. **工具链检测增强：** 添加项目类型检测函数，根据 `package.json`/`pyproject.toml` 存在性决定使用 bun/uv/npm
+
+**影响范围：**
+
+| 文件                               | 改动                | 优先级     |
+| ---------------------------------- | ------------------- | ---------- |
+| **settings.json**                  | 绝对路径 → 相对路径 | P0（必须） |
+| **merge-gate.js**                  | 测试路径硬编码修复  | P0（必须） |
+| **所有使用 git 命令的 hook**       | 显式传入 cwd        | P1（建议） |
+| **protect-secrets.js**             | HOME fallback       | P1（建议） |
+| **merge-gate.js / commit-gate.js** | 工具链检测增强      | P1（建议） |
+| ****tests**/**                     | fixtures 目录迁移   | P2（可选） |
+
+**验证标准：**
+
+- ✅ 钩子系统在项目级（`.claude/hooks/`）正常工作
+- ✅ 钩子系统迁移到全局（`~/.claude/hooks/`）后正常工作
+- ✅ 全局钩子和项目级钩子共存时，项目级配置优先
+- ✅ 所有 118 个测试用例通过
