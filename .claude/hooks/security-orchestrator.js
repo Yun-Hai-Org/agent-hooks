@@ -164,3 +164,12 @@ export function getCurrentBranch(cwd) {
     return null;
   }
 }
+
+export function isGitIgnored(filePath, cwd) {
+  try {
+    execSync(`git check-ignore -q "${filePath}"`, { cwd, stdio: 'pipe' });
+    return true; // exit 0 = is ignored
+  } catch {
+    return false; // exit non-zero = not ignored
+  }
+}

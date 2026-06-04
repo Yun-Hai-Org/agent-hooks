@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'bun:test';
-import { formatResult, decide, formatHookOutput, checkToolAvailable, execCommand } from '../security-orchestrator.js';
+import {
+  formatResult,
+  decide,
+  formatHookOutput,
+  checkToolAvailable,
+  execCommand,
+  isGitIgnored,
+} from '../security-orchestrator.js';
 
 describe('security-orchestrator', () => {
   it('formatResult 应该返回正确格式', () => {
@@ -77,5 +84,23 @@ describe('security-orchestrator', () => {
     const r = execCommand('echo "hello"');
     expect(r.success).toBe(true);
     expect(r.stdout).toContain('hello');
+  });
+
+  it('isGitIgnored - git 忽略的文件应该返回 true', () => {
+    // 本项目 .gitignore 包含 GitHub/，测试这个场景
+    const r = isGitIgnored('GitHub/some-file.js');
+    expect(r).toBe(true);
+  });
+
+  it('isGitIgnored - 非 git 忽略的文件应该返回 false', () => {
+    // CLAUDE.md 是项目文件，不在 .gitignore 中
+    const r = isGitIgnored('CLAUDE.md');
+    expect(r).toBe(false);
+  });
+
+  it('isGitIgnored - .claude 目录下的文件应该返回 false', () => {
+    // .claude 目录是项目配置，不应该被忽略
+    const r = isGitIgnored('.claude/settings.json');
+    expect(r).toBe(false);
   });
 });

@@ -65,20 +65,29 @@ function shouldIgnoreFile(filePath) {
   return ignorePatterns.some((pattern) => filePath.includes(pattern));
 }
 
+function isGitIgnored(filePath, cwd) {
+  try {
+    execSync(`git check-ignore -q "${filePath}"`, { cwd, stdio: 'pipe' });
+    return true; // exit 0 = is ignored
+  } catch {
+    return false; // exit non-zero = not ignored
+  }
+}
+
 function execCommand(command, options = {}) {
   try {
     const result = execSync(command, {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 30000,
-      ...options
+      ...options,
     });
     return { success: true, output: result };
   } catch (error) {
     return {
       success: false,
       output: error.stdout || '',
-      error: error.stderr || error.message
+      error: error.stderr || error.message,
     };
   }
 }
@@ -118,7 +127,7 @@ function lintPython(filePath) {
     if (!pyrightResult.success) {
       console.log('   ❌ pyright 类型检查失败（严格模式）');
       const lines = (pyrightResult.output + pyrightResult.error).split('\n');
-      const errors = lines.filter(l => l.includes('error') || l.includes('Error')).slice(0, 10);
+      const errors = lines.filter((l) => l.includes('error') || l.includes('Error')).slice(0, 10);
       if (errors.length > 0) {
         console.log(errors.join('\n'));
       }
@@ -244,7 +253,7 @@ async function main() {
     filePath = getFilePath();
   }
 
-  if (!filePath || !existsSync(filePath) || shouldIgnoreFile(filePath)) {
+  if (!filePath || !existsSync(filePath) || shouldIgnoreFile(filePath) || isGitIgnored(filePath, cwd)) {
     log({ level: 'SKIP', reason: 'no file or ignored', file: filePath, tool: toolName, session: sessionId });
     console.log('{}');
     return;

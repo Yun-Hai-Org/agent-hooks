@@ -30,6 +30,20 @@ const HOOK_NAME = 'merge-gate';
 // ─── 工具函数 ─────────────────────────────────────────────────────────────────
 
 /**
+ * 获取 git 忽略的目录列表（用于安全扫描排除）
+ */
+function getGitIgnoredDirs() {
+  const result = execCommand('git ls-files --others --ignored --exclude-standard --directory | head -20', {
+    timeout: 5000,
+  });
+  if (!result.success || !result.stdout.trim()) return [];
+  return result.stdout
+    .trim()
+    .split('\n')
+    .map((d) => d.replace(/\/$/, ''));
+}
+
+/**
  * 从 git merge 命令中提取目标分支
  */
 function extractMergeTarget(cmd) {
@@ -58,9 +72,13 @@ async function runSemgrep() {
   }
 
   try {
+    const ignoredDirs = getGitIgnoredDirs();
+    const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
+    const semgrepCmd = `semgrep --config auto --severity ERROR,WARNING --json ${excludeFlags} .`;
+
     const result = await withTimeout(
       new Promise((resolve) => {
-        const r = execCommand('semgrep --config auto --severity ERROR,WARNING --json .', { timeout: 60000 });
+        const r = execCommand(semgrepCmd, { timeout: 60000 });
         resolve(r);
       }),
       60000,
@@ -138,9 +156,13 @@ async function runTrivy() {
   }
 
   try {
+    const ignoredDirs = getGitIgnoredDirs();
+    const skipDirs = ignoredDirs.map((d) => `--skip-dirs "${d}"`).join(' ');
+    const trivyCmd = `trivy fs --scanners vuln --severity CRITICAL,HIGH --format json ${skipDirs} .`;
+
     const result = await withTimeout(
       new Promise((resolve) => {
-        const r = execCommand('trivy fs --scanners vuln --severity CRITICAL,HIGH --format json .', { timeout: 60000 });
+        const r = execCommand(trivyCmd, { timeout: 60000 });
         resolve(r);
       }),
       60000,
