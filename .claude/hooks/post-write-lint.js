@@ -23,6 +23,9 @@ import { appendFileSync, mkdirSync } from 'fs';
 
 const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
 
+/**
+ * @param {Record<string, unknown>} data
+ */
 function log(data) {
   try {
     if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
@@ -48,6 +51,9 @@ function getFilePath() {
   return '';
 }
 
+/**
+ * @param {string} filePath
+ */
 function shouldIgnoreFile(filePath) {
   const ignorePatterns = [
     'node_modules/',
@@ -65,6 +71,7 @@ function shouldIgnoreFile(filePath) {
   return ignorePatterns.some((pattern) => filePath.includes(pattern));
 }
 
+/** @param {string} filePath @param {string} cwd */
 function isGitIgnored(filePath, cwd) {
   try {
     execSync(`git check-ignore -q "${filePath}"`, { cwd, stdio: 'pipe' });
@@ -74,6 +81,7 @@ function isGitIgnored(filePath, cwd) {
   }
 }
 
+/** @param {string} command @param {Record<string, unknown>} [options] */
 function execCommand(command, options = {}) {
   try {
     const result = execSync(command, {
@@ -83,7 +91,7 @@ function execCommand(command, options = {}) {
       ...options,
     });
     return { success: true, output: result };
-  } catch (error) {
+  } catch (/** @type {any} */ error) {
     return {
       success: false,
       output: error.stdout || '',
@@ -92,6 +100,7 @@ function execCommand(command, options = {}) {
   }
 }
 
+/** @param {string} filePath */
 function lintPython(filePath) {
   console.log(`🐍 Python 严格校验: ${filePath}`);
   let success = true;
@@ -127,7 +136,7 @@ function lintPython(filePath) {
     if (!pyrightResult.success) {
       console.log('   ❌ pyright 类型检查失败（严格模式）');
       const lines = (pyrightResult.output + pyrightResult.error).split('\n');
-      const errors = lines.filter((l) => l.includes('error') || l.includes('Error')).slice(0, 10);
+      const errors = lines.filter((/** @type {string} */ l) => l.includes('error') || l.includes('Error')).slice(0, 10);
       if (errors.length > 0) {
         console.log(errors.join('\n'));
       }
@@ -142,6 +151,7 @@ function lintPython(filePath) {
   return success;
 }
 
+/** @param {string} filePath */
 function lintTypescriptJavascript(filePath) {
   console.log(`📦 TS/JS 严格校验: ${filePath}`);
   let success = true;
@@ -170,6 +180,7 @@ function lintTypescriptJavascript(filePath) {
   return success;
 }
 
+/** @param {string} filePath */
 function lintMarkdown(filePath) {
   console.log(`📝 Markdown 严格校验: ${filePath}`);
   let success = true;
@@ -196,6 +207,7 @@ function lintMarkdown(filePath) {
   return success;
 }
 
+/** @param {string} filePath */
 function lintJson(filePath) {
   console.log(`⚙️  JSON 校验: ${filePath}`);
 
@@ -213,6 +225,7 @@ function lintJson(filePath) {
   return false;
 }
 
+/** @param {string} filePath */
 function lintYaml(filePath) {
   console.log(`⚙️  YAML 校验: ${filePath}`);
 
@@ -230,6 +243,7 @@ function lintYaml(filePath) {
   return false;
 }
 
+/** @param {string} filePath */
 function lintShell(filePath) {
   console.log(`🐚 Shell 严格校验: ${filePath}`);
   let success = true;
@@ -264,6 +278,7 @@ function lintShell(filePath) {
   return success;
 }
 
+/** @param {string} filePath */
 function lintDockerfile(filePath) {
   console.log(`🐳 Dockerfile 严格校验: ${filePath}`);
 

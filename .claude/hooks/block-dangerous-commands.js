@@ -257,10 +257,11 @@ const ALLOW_PATTERNS = [
   /\bgit\s+checkout\s+(main|master)\b/, // 切换到主分支本身不阻止
 ];
 
-const LEVELS = { critical: 1, high: 2, strict: 3 };
-const EMOJIS = { critical: '🚨', high: '⛔', strict: '⚠️' };
+const LEVELS = /** @type {{ [key: string]: number }} */ ({ critical: 1, high: 2, strict: 3 });
+const EMOJIS = /** @type {{ [key: string]: string }} */ ({ critical: '🚨', high: '⛔', strict: '⚠️' });
 const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
 
+/** @param {Record<string, unknown>} data */
 function log(data) {
   try {
     if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
@@ -272,11 +273,13 @@ function log(data) {
   } catch {}
 }
 
+/** @param {string} cmd */
 function isAllowedCommand(cmd) {
   if (!cmd) return false;
   return ALLOW_PATTERNS.some((pattern) => pattern.test(cmd));
 }
 
+/** @param {string} cmd @param {string} [safetyLevel] */
 function checkCommand(cmd, safetyLevel = SAFETY_LEVEL) {
   // 先检查是否为允许的命令
   if (isAllowedCommand(cmd)) {
@@ -310,6 +313,10 @@ async function main() {
 
     if (result.blocked) {
       const p = result.pattern;
+      if (!p) {
+        console.log('{}');
+        return;
+      }
       log({
         level: 'BLOCKED',
         id: p.id,
@@ -331,8 +338,8 @@ async function main() {
     }
 
     console.log('{}');
-  } catch (e) {
-    log({ level: 'ERROR', error: e.message });
+  } catch (/** @type {unknown} */ e) {
+    log({ level: 'ERROR', error: e instanceof Error ? e.message : String(e) });
     console.log('{}');
   }
 }

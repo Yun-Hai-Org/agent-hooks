@@ -22,6 +22,7 @@ import { execSync } from 'child_process';
 
 const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
 
+/** @param {Record<string, unknown>} data */
 function log(data) {
   try {
     if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
@@ -30,6 +31,7 @@ function log(data) {
   } catch {}
 }
 
+/** @param {string} filePath */
 function isInGitRepo(filePath) {
   try {
     const dir = dirname(filePath);
@@ -40,13 +42,14 @@ function isInGitRepo(filePath) {
   }
 }
 
+/** @param {string} filePath */
 function stageFile(filePath) {
   try {
     const dir = dirname(filePath);
     execSync(`git add "${filePath}"`, { cwd: dir, stdio: 'pipe' });
     return { success: true };
-  } catch (e) {
-    return { success: false, error: e.message };
+  } catch (/** @type {unknown} */ e) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -92,8 +95,8 @@ async function main() {
     }
 
     console.log('{}');
-  } catch (e) {
-    log({ level: 'ERROR', error: e.message });
+  } catch (/** @type {unknown} */ e) {
+    log({ level: 'ERROR', error: e instanceof Error ? e.message : String(e) });
     console.log('{}');
   }
 }

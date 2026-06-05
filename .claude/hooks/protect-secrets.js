@@ -378,8 +378,9 @@ const CONTENT_PATTERNS = [
 
 const LEVELS = { critical: 1, high: 2, strict: 3 };
 const EMOJIS = { critical: '🔐', high: '🛡️', strict: '⚠️' };
-const LOG_DIR = join(process.env.HOME, '.claude', 'hooks-logs');
+const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
 
+/** @param {Record<string, unknown>} data */
 function log(data) {
   try {
     if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
@@ -388,62 +389,68 @@ function log(data) {
   } catch {}
 }
 
+/** @param {string} filePath */
 function isAllowlisted(filePath) {
   return filePath && ALLOWLIST.some((p) => p.test(filePath));
 }
 
+/** @param {string} filePath */
 function isExcluded(filePath) {
   return filePath && EXCLUDE_PATTERNS.some((p) => p.test(filePath));
 }
 
+/** @param {string} filePath @param {string} [safetyLevel] */
 function checkFilePath(filePath, safetyLevel = SAFETY_LEVEL) {
   if (!filePath || isAllowlisted(filePath)) return { blocked: false, pattern: null };
-  const threshold = LEVELS[safetyLevel] || 2;
+  const threshold = LEVELS[/** @type {keyof typeof LEVELS} */ (safetyLevel)] || 2;
   for (const p of SENSITIVE_FILES) {
-    if (LEVELS[p.level] <= threshold && p.regex.test(filePath)) {
+    if (LEVELS[/** @type {keyof typeof LEVELS} */ (p.level)] <= threshold && p.regex.test(filePath)) {
       return { blocked: true, pattern: p };
     }
   }
   return { blocked: false, pattern: null };
 }
 
+/** @param {string} content @param {string} [safetyLevel] */
 function checkContent(content, safetyLevel = SAFETY_LEVEL) {
   if (!content || typeof content !== 'string') return { blocked: false, pattern: null };
-  const threshold = LEVELS[safetyLevel] || 2;
+  const threshold = LEVELS[/** @type {keyof typeof LEVELS} */ (safetyLevel)] || 2;
   for (const p of CONTENT_PATTERNS) {
-    if (LEVELS[p.level] <= threshold && p.regex.test(content)) {
+    if (LEVELS[/** @type {keyof typeof LEVELS} */ (p.level)] <= threshold && p.regex.test(content)) {
       return { blocked: true, pattern: p };
     }
   }
   return { blocked: false, pattern: null };
 }
 
+/** @param {string} cmd @param {string} [safetyLevel] */
 function checkBashCommand(cmd, safetyLevel = SAFETY_LEVEL) {
   if (!cmd) return { blocked: false, pattern: null };
   for (const allow of ALLOWLIST) {
     if (allow.test(cmd)) return { blocked: false, pattern: null };
   }
-  const threshold = LEVELS[safetyLevel] || 2;
+  const threshold = LEVELS[/** @type {keyof typeof LEVELS} */ (safetyLevel)] || 2;
   for (const p of BASH_PATTERNS) {
-    if (LEVELS[p.level] <= threshold && p.regex.test(cmd)) {
+    if (LEVELS[/** @type {keyof typeof LEVELS} */ (p.level)] <= threshold && p.regex.test(cmd)) {
       return { blocked: true, pattern: p };
     }
   }
   return { blocked: false, pattern: null };
 }
 
+/** @param {string} toolName @param {Record<string, unknown>} toolInput @param {string} [safetyLevel] */
 function check(toolName, toolInput, safetyLevel = SAFETY_LEVEL) {
   if (toolName === 'Bash') {
-    return checkBashCommand(toolInput?.command, safetyLevel);
+    return checkBashCommand(/** @type {string} */ (toolInput?.command), safetyLevel);
   }
-  if (['Edit', 'Write'].includes(toolName)) {
+  if (toolName === 'Edit' || toolName === 'Write') {
     // Check file path
-    const pathResult = checkFilePath(toolInput?.file_path, safetyLevel);
+    const filePath = /** @type {string} */ (toolInput?.file_path);
+    const pathResult = checkFilePath(filePath, safetyLevel);
     if (pathResult.blocked) return pathResult;
     // Check content (skip if file is excluded)
-    const filePath = toolInput?.file_path;
     if (filePath && !isExcluded(filePath)) {
-      const content = toolInput?.content || toolInput?.new_string || '';
+      const content = /** @type {string} */ (toolInput?.content || toolInput?.new_string || '');
       if (content) {
         const contentResult = checkContent(content, safetyLevel);
         if (contentResult.blocked) return contentResult;
@@ -452,7 +459,7 @@ function check(toolName, toolInput, safetyLevel = SAFETY_LEVEL) {
     return { blocked: false, pattern: null };
   }
   if (toolName === 'Read') {
-    return checkFilePath(toolInput?.file_path, safetyLevel);
+    return checkFilePath(/** @type {string} */ (toolInput?.file_path), safetyLevel);
   }
   return { blocked: false, pattern: null };
 }
@@ -471,25 +478,27 @@ async function main() {
 
     const result = check(tool_name, tool_input);
 
-    if (result.blocked) {
+    if (result.blocked && result.pattern) {
       const p = result.pattern;
-      const target = tool_input?.file_path || tool_input?.command?.slice(0, 100);
+      const target = /** @type {string} */ (tool_input?.file_path || tool_input?.command?.slice(0, 100));
       log({ level: 'BLOCKED', id: p.id, priority: p.level, tool: tool_name, target, session_id, cwd, permission_mode });
 
-      const action = { Read: 'read', Edit: 'modify', Write: 'write to', Bash: 'execute' }[tool_name];
+      const action = { Read: 'read', Edit: 'modify', Write: 'write to', Bash: 'execute' }[
+        /** @type {'Read'|'Edit'|'Write'|'Bash'} */ (tool_name)
+      ];
       return console.log(
         JSON.stringify({
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
             permissionDecision: 'deny',
-            permissionDecisionReason: `${EMOJIS[p.level]} [${p.id}] Cannot ${action}: ${p.reason}`,
+            permissionDecisionReason: `${EMOJIS[/** @type {keyof typeof EMOJIS} */ (p.level)]} [${p.id}] Cannot ${action}: ${p.reason}`,
           },
         }),
       );
     }
     console.log('{}');
   } catch (e) {
-    log({ level: 'ERROR', error: e.message });
+    log({ level: 'ERROR', error: /** @type {Error} */ (e).message });
     console.log('{}');
   }
 }

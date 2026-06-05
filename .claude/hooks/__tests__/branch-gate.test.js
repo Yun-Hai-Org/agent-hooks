@@ -221,9 +221,7 @@ describe('branch-gate', () => {
   });
 
   describe('Write/Edit 工具处理', () => {
-    it('Write 工具在 main 分支应该被拒绝（如果在 main 分支）', async () => {
-      const currentBranch = process.env.CI ? 'main' : 'feature/test';
-
+    it('Write 工具在主分支应该被拒绝', async () => {
       const result = await runHook({
         tool_name: 'Write',
         tool_input: { file_path: 'test.txt', content: 'test' },
@@ -231,7 +229,8 @@ describe('branch-gate', () => {
         cwd: process.cwd(),
       });
 
-      if (currentBranch === 'main') {
+      const currentBranch = getCurrentBranch(process.cwd());
+      if (MAIN_BRANCHES.includes(currentBranch)) {
         const output = JSON.parse(result.stdout);
         expect(output.hookSpecificOutput?.permissionDecision).toBe('deny');
       } else {
@@ -239,9 +238,7 @@ describe('branch-gate', () => {
       }
     });
 
-    it('Edit 工具在 main 分支应该被拒绝（如果在 main 分支）', async () => {
-      const currentBranch = process.env.CI ? 'main' : 'feature/test';
-
+    it('Edit 工具在主分支应该被拒绝', async () => {
       const result = await runHook({
         tool_name: 'Edit',
         tool_input: { file_path: 'test.txt', new_string: 'test' },
@@ -249,7 +246,8 @@ describe('branch-gate', () => {
         cwd: process.cwd(),
       });
 
-      if (currentBranch === 'main') {
+      const currentBranch = getCurrentBranch(process.cwd());
+      if (MAIN_BRANCHES.includes(currentBranch)) {
         const output = JSON.parse(result.stdout);
         expect(output.hookSpecificOutput?.permissionDecision).toBe('deny');
       } else {
@@ -556,29 +554,28 @@ describe('branch-gate', () => {
     });
 
     it('应该在 worktree 环境中允许所有操作', async () => {
+      // 使用临时目录模拟 worktree（在 /tmp 中创建 .git 文件）
+      const tempDir = '/tmp/test-worktree-branchgate';
+      mkdirSync(tempDir, { recursive: true });
+      writeFileSync(join(tempDir, '.git'), 'gitdir: /tmp/test-worktree-branchgate/.git/worktrees/test\n');
+
       const inputData = JSON.stringify({
         tool_name: 'Write',
         tool_input: { file_path: 'test.txt', content: 'test' },
         session_id: 'test-3',
-        cwd: process.cwd(),
+        cwd: tempDir,
       });
 
       process.stdin = Readable.from([inputData]);
-
-      // Mock isInsideWorktree to return true
-      const originalIsInsideWorktree = isInsideWorktree;
-      global.isInsideWorktree = () => true;
-
       await main();
 
       expect(consoleOutput).toHaveLength(1);
       expect(consoleOutput[0]).toBe('{}');
 
-      global.isInsideWorktree = originalIsInsideWorktree;
+      rmSync(tempDir, { recursive: true, force: true });
     });
 
-    it('应该允许当前分支上的 Write 操作（非主分支）', async () => {
-      // 当前 repo 在 feat/ 分支上，所以 Write 应该被允许
+    it('Write 工具在当前分支上应该根据分支类型决定', async () => {
       const inputData = JSON.stringify({
         tool_name: 'Write',
         tool_input: { file_path: 'test.txt', content: 'test' },
@@ -589,8 +586,14 @@ describe('branch-gate', () => {
       process.stdin = Readable.from([inputData]);
       await main();
 
+      const currentBranch = getCurrentBranch(process.cwd());
       expect(consoleOutput).toHaveLength(1);
-      expect(consoleOutput[0]).toBe('{}');
+      if (MAIN_BRANCHES.includes(currentBranch)) {
+        const output = JSON.parse(consoleOutput[0]);
+        expect(output.hookSpecificOutput?.permissionDecision).toBe('deny');
+      } else {
+        expect(consoleOutput[0]).toBe('{}');
+      }
     });
 
     it('应该处理无法获取分支的情况', async () => {
@@ -662,8 +665,14 @@ describe('branch-gate', () => {
       process.stdin = Readable.from([inputData]);
       await main();
 
+      const currentBranch = getCurrentBranch(process.cwd());
       expect(consoleOutput).toHaveLength(1);
-      expect(consoleOutput[0]).toBe('{}');
+      if (MAIN_BRANCHES.includes(currentBranch)) {
+        const output = JSON.parse(consoleOutput[0]);
+        expect(output.hookSpecificOutput?.permissionDecision).toBe('deny');
+      } else {
+        expect(consoleOutput[0]).toBe('{}');
+      }
     });
 
     it('应该处理 Write 工具', async () => {
@@ -677,8 +686,14 @@ describe('branch-gate', () => {
       process.stdin = Readable.from([inputData]);
       await main();
 
+      const currentBranch = getCurrentBranch(process.cwd());
       expect(consoleOutput).toHaveLength(1);
-      expect(consoleOutput[0]).toBe('{}');
+      if (MAIN_BRANCHES.includes(currentBranch)) {
+        const output = JSON.parse(consoleOutput[0]);
+        expect(output.hookSpecificOutput?.permissionDecision).toBe('deny');
+      } else {
+        expect(consoleOutput[0]).toBe('{}');
+      }
     });
 
     it('应该处理 Edit 工具', async () => {

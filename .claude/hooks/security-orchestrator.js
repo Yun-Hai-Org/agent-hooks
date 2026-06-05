@@ -16,6 +16,10 @@ const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
 
 // ─── 日志 ────────────────────────────────────────────────────────────────────
 
+/**
+ * @param {string} hookName
+ * @param {Record<string, unknown>} data
+ */
 export function log(hookName, data) {
   try {
     if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
@@ -27,6 +31,10 @@ export function log(hookName, data) {
 
 // ─── 命令执行 ────────────────────────────────────────────────────────────────
 
+/**
+ * @param {string} command
+ * @param {import('child_process').ExecSyncOptionsWithBufferEncoding & { timeout?: number }} [options]
+ */
 export function execCommand(command, options = {}) {
   try {
     const result = execSync(command, {
@@ -36,36 +44,45 @@ export function execCommand(command, options = {}) {
       ...options,
     });
     return { success: true, stdout: result, stderr: '' };
-  } catch (error) {
+  } catch (/** @type {any} */ error) {
     return {
       success: false,
       stdout: error.stdout || '',
-      stderr: error.stderr || error.message,
+      stderr: error.stderr || error.message || String(error),
     };
   }
 }
 
 // 异步版本的命令执行（支持 withTimeout 正确中断）
+/**
+ * @param {string} command
+ * @param {{ timeout?: number } & import('child_process').ExecOptions} [options]
+ */
 export function execCommandAsync(command, options = {}) {
   return new Promise((resolve) => {
     const { exec } = require('child_process');
+    /** @type {number} */
     const timeout = options.timeout || 30000;
 
-    const child = exec(command, {
-      encoding: 'utf-8',
-      timeout,
-      ...options,
-    }, (error, stdout, stderr) => {
-      if (error) {
-        resolve({
-          success: false,
-          stdout: stdout || '',
-          stderr: stderr || error.message,
-        });
-      } else {
-        resolve({ success: true, stdout, stderr: '' });
-      }
-    });
+    const child = exec(
+      command,
+      {
+        encoding: 'utf-8',
+        timeout,
+        ...options,
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          resolve({
+            success: false,
+            stdout: stdout || '',
+            stderr: stderr || (error instanceof Error ? error.message : String(error)),
+          });
+        } else {
+          resolve({ success: true, stdout, stderr: '' });
+        }
+      },
+    );
 
     // 超时保护
     setTimeout(() => {
@@ -81,12 +98,22 @@ export function execCommandAsync(command, options = {}) {
 
 // ─── 带超时的 Promise ────────────────────────────────────────────────────────
 
+/**
+ * @param {Promise<T>} promise
+ * @param {number} ms
+ * @param {string} [timeoutMessage]
+ * @template T
+ * @returns {Promise<T>}
+ */
 export function withTimeout(promise, ms, timeoutMessage = '操作超时') {
-  let timeoutId;
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let timeoutId = null;
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), ms);
   });
-  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId !== null) clearTimeout(timeoutId);
+  });
 }
 
 // ─── stdin 读取 ──────────────────────────────────────────────────────────────
@@ -102,7 +129,7 @@ export function readStdin() {
       try {
         resolve(JSON.parse(input));
       } catch (e) {
-        reject(new Error(`JSON 解析失败: ${e.message}`));
+        reject(new Error(`JSON 解析失败: ${e instanceof Error ? e.message : String(e)}`));
       }
     });
     process.stdin.on('error', reject);
@@ -111,11 +138,18 @@ export function readStdin() {
 
 // ─── 安全主函数 ──────────────────────────────────────────────────────────────
 
+/**
+ * @param {() => Promise<void>} fn
+ */
 export async function safeMain(fn) {
   try {
     await fn();
   } catch (e) {
-    log('unknown', { level: 'ERROR', error: e.message, stack: e.stack });
+    log('unknown', {
+      level: 'ERROR',
+      error: e instanceof Error ? e.message : String(e),
+      stack: e instanceof Error ? e.stack : '',
+    });
     console.log('{}');
     process.exit(0);
   }
@@ -123,12 +157,21 @@ export async function safeMain(fn) {
 
 // ─── 结果格式化 ──────────────────────────────────────────────────────────────
 
+/**
+ * @param {string} checkId
+ * @param {string} decision
+ * @param {string} message
+ * @param {Record<string, unknown>} [details]
+ */
 export function formatResult(checkId, decision, message, details = {}) {
   return { checkId, decision, message, timestamp: new Date().toISOString(), details };
 }
 
 // ─── 决策引擎 ────────────────────────────────────────────────────────────────
 
+/**
+ * @param {Array<{ checkId: string; decision: string; message: string; timestamp?: string; details?: Record<string, unknown> }>} results
+ */
 export function decide(results) {
   const denyResults = results.filter((r) => r.decision === DECISION.DENY);
   const warnResults = results.filter((r) => r.decision === DECISION.WARN);
@@ -158,6 +201,10 @@ export function decide(results) {
 
 // ─── Hook 输出格式化 ─────────────────────────────────────────────────────────
 
+/**
+ * @param {string} decision
+ * @param {string} reason
+ */
 export function formatHookOutput(decision, reason) {
   if (decision === DECISION.ALLOW) return '{}';
   return JSON.stringify({
@@ -171,6 +218,9 @@ export function formatHookOutput(decision, reason) {
 
 // ─── 工具可用性检测 ──────────────────────────────────────────────────────────
 
+/**
+ * @param {string} toolName
+ */
 export function checkToolAvailable(toolName) {
   try {
     execSync(`which ${toolName}`, { stdio: 'pipe' });
@@ -182,6 +232,9 @@ export function checkToolAvailable(toolName) {
 
 // ─── Git 辅助函数 ────────────────────────────────────────────────────────────
 
+/**
+ * @param {string} cwd
+ */
 export function isGitRepo(cwd) {
   try {
     execSync('git rev-parse --git-dir', { cwd, stdio: 'pipe' });
@@ -191,6 +244,9 @@ export function isGitRepo(cwd) {
   }
 }
 
+/**
+ * @param {string} cwd
+ */
 export function getCurrentBranch(cwd) {
   try {
     return execSync('git branch --show-current', { cwd, encoding: 'utf-8', stdio: 'pipe' }).trim();
@@ -199,6 +255,10 @@ export function getCurrentBranch(cwd) {
   }
 }
 
+/**
+ * @param {string} filePath
+ * @param {string} cwd
+ */
 export function isGitIgnored(filePath, cwd) {
   try {
     execSync(`git check-ignore -q "${filePath}"`, { cwd, stdio: 'pipe' });

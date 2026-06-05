@@ -29,6 +29,7 @@ const HOOK_NAME = 'commit-gate';
 
 // ─── 工具函数 ─────────────────────────────────────────────────────────────────
 
+/** @param {string} cmd */
 function extractCommitMessage(cmd) {
   const mMatch = cmd.match(/\bgit\s+commit\b[^"]*?-m\s+["']([^"']+)["']/);
   if (mMatch) return mMatch[1];
@@ -59,6 +60,7 @@ function checkBranch() {
   return formatResult('branch-check', DECISION.ALLOW, `当前分支: ${branch}`);
 }
 
+/** @param {string} cmd */
 function checkCommitMessage(cmd) {
   const message = extractCommitMessage(cmd);
   if (!message) {
@@ -84,7 +86,7 @@ function checkSensitiveFiles() {
     /credentials\.json$/,
   ];
   const stagedFiles = getStagedFiles();
-  const matched = stagedFiles.filter((f) => sensitivePatterns.some((p) => p.test(f)));
+  const matched = stagedFiles.filter((/** @type {string} */ f) => sensitivePatterns.some((p) => p.test(f)));
   if (matched.length > 0) {
     return formatResult('sensitive-files', DECISION.DENY, `暂存区包含敏感文件: ${matched.join(', ')}`, {
       files: matched,
@@ -96,7 +98,7 @@ function checkSensitiveFiles() {
 async function checkDependencyAudit() {
   const stagedFiles = getStagedFiles();
   const triggers = ['package.json', 'bun.lock', 'bun.lockb', 'package-lock.json', 'yarn.lock'];
-  const hasTrigger = stagedFiles.some((f) => triggers.some((t) => f.endsWith(t)));
+  const hasTrigger = stagedFiles.some((/** @type {string} */ f) => triggers.some((t) => f.endsWith(t)));
   if (!hasTrigger) {
     return formatResult('dep-audit', DECISION.SKIP, '暂存区无依赖文件变更，跳过审计');
   }
@@ -117,7 +119,7 @@ async function checkDependencyAudit() {
     }
     return formatResult('dep-audit', DECISION.ALLOW, '依赖审计通过（无 critical/high 漏洞）');
   } catch (e) {
-    return formatResult('dep-audit', DECISION.SKIP, `依赖审计跳过: ${e.message}`);
+    return formatResult('dep-audit', DECISION.SKIP, `依赖审计跳过: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
@@ -166,7 +168,7 @@ async function checkTypeScript() {
     }
     return formatResult('type-check', DECISION.ALLOW, '类型检查通过');
   } catch (e) {
-    return formatResult('type-check', DECISION.SKIP, `类型检查跳过: ${e.message}`);
+    return formatResult('type-check', DECISION.SKIP, `类型检查跳过: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
@@ -177,17 +179,17 @@ async function checkRelatedTests() {
   }
 
   // Only check tests for code files (.js, .ts, .py)
-  const codeFiles = stagedFiles.filter((f) => /\.(js|ts|py|jsx|tsx|mjs|cjs)$/i.test(f));
+  const codeFiles = stagedFiles.filter((/** @type {string} */ f) => /\.(js|ts|py|jsx|tsx|mjs|cjs)$/i.test(f));
   if (codeFiles.length === 0) {
     return formatResult('related-tests', DECISION.SKIP, '暂存区无代码文件，跳过关联测试');
   }
 
   const testPatterns = [
-    (f) => f.replace(/\.py$/, '_test.py').replace(/\/src\//, '/tests/'),
-    (f) => f.replace(/\.py$/, '_test.py'),
-    (f) => f.replace(/\.(js|ts)$/, '.test.$1'),
-    (f) => f.replace(/\.(js|ts)$/, '.spec.$1'),
-    (f) => f.replace(/\/src\//, '/__tests__/').replace(/\.(js|ts)$/, '.test.$1'),
+    (/** @type {string} */ f) => f.replace(/\.py$/, '_test.py').replace(/\/src\//, '/tests/'),
+    (/** @type {string} */ f) => f.replace(/\.py$/, '_test.py'),
+    (/** @type {string} */ f) => f.replace(/\.(js|ts)$/, '.test.$1'),
+    (/** @type {string} */ f) => f.replace(/\.(js|ts)$/, '.spec.$1'),
+    (/** @type {string} */ f) => f.replace(/\/src\//, '/__tests__/').replace(/\.(js|ts)$/, '.test.$1'),
   ];
 
   const testFiles = new Set();
@@ -257,7 +259,7 @@ async function checkRelatedTests() {
 
     return formatResult('related-tests', DECISION.ALLOW, `关联测试通过: ${testFileList.join(', ')}`);
   } catch (e) {
-    return formatResult('related-tests', DECISION.SKIP, `关联测试跳过: ${e.message}`);
+    return formatResult('related-tests', DECISION.SKIP, `关联测试跳过: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
@@ -319,4 +321,14 @@ if (isDirectRun) {
   main();
 }
 
-export { extractCommitMessage, getCurrentBranch, getStagedFiles, checkBranch, checkCommitMessage, checkSensitiveFiles, checkDependencyAudit, checkTypeScript, checkRelatedTests };
+export {
+  extractCommitMessage,
+  getCurrentBranch,
+  getStagedFiles,
+  checkBranch,
+  checkCommitMessage,
+  checkSensitiveFiles,
+  checkDependencyAudit,
+  checkTypeScript,
+  checkRelatedTests,
+};

@@ -23,7 +23,6 @@ import {
   safeMain,
   withTimeout,
   DECISION,
-  SEVERITY,
 } from './security-orchestrator.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -49,12 +48,16 @@ function getGitIgnoredDirs() {
   return result.stdout
     .trim()
     .split('\n')
-    .map((d) => d.replace(/\/$/, ''));
+    .map((/** @type {string} */ d) => d.replace(/\/$/, ''));
 }
 
 /**
  * 从 git merge 命令中提取目标分支
  * 支持带参数的命令，如 git merge --no-ff feat/xxx
+ */
+/**
+ * @param {string} cmd
+ * @returns {string | null}
  */
 function extractMergeTarget(cmd) {
   // 匹配 git merge，跳过所有 --xxx 参数，然后捕获第一个不以 - 开头的词
@@ -83,7 +86,7 @@ async function runSemgrep() {
 
   try {
     const ignoredDirs = getGitIgnoredDirs();
-    const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
+    const excludeFlags = ignoredDirs.map((/** @type {string} */ d) => `--exclude "${d}"`).join(' ');
     const semgrepCmd = `semgrep --config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten --severity ERROR,WARNING,INFO --json ${excludeFlags} .`;
 
     const result = await withTimeout(execCommandAsync(semgrepCmd, { timeout: 60000 }), 60000, 'semgrep 超时 (60s)');
@@ -92,11 +95,11 @@ async function runSemgrep() {
       // semgrep may exit non-zero with findings
       try {
         const json = JSON.parse(result.stdout);
-        const errors = json.results?.filter((r) => r.extra?.severity === 'ERROR') || [];
+        const errors = json.results?.filter((/** @type {any} */ r) => r.extra?.severity === 'ERROR') || [];
         if (errors.length > 0) {
           return formatResult('semgrep', DECISION.DENY, `Semgrep 发现 ${errors.length} 个 ERROR 级别问题`, {
             count: errors.length,
-            sample: errors.slice(0, 3).map((e) => e.extra?.message || e.check_id),
+            sample: errors.slice(0, 3).map((/** @type {any} */ e) => e.extra?.message || e.check_id),
           });
         }
       } catch {}
@@ -107,8 +110,8 @@ async function runSemgrep() {
     }
 
     return formatResult('semgrep', DECISION.ALLOW, 'Semgrep 扫描完成（无 ERROR）');
-  } catch (e) {
-    return formatResult('semgrep', DECISION.SKIP, `Semgrep 跳过: ${e.message}`);
+  } catch (/** @type {unknown} */ e) {
+    return formatResult('semgrep', DECISION.SKIP, `Semgrep 跳过: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
@@ -141,8 +144,8 @@ async function runKnip() {
     }
 
     return formatResult('knip', DECISION.ALLOW, 'Knip 检查通过（无未使用代码）');
-  } catch (e) {
-    return formatResult('knip', DECISION.SKIP, `Knip 跳过: ${e.message}`);
+  } catch (/** @type {unknown} */ e) {
+    return formatResult('knip', DECISION.SKIP, `Knip 跳过: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
@@ -157,7 +160,7 @@ async function runTrivy() {
 
   try {
     const ignoredDirs = getGitIgnoredDirs();
-    const skipDirs = ignoredDirs.map((d) => `--skip-dirs "${d}"`).join(' ');
+    const skipDirs = ignoredDirs.map((/** @type {string} */ d) => `--skip-dirs "${d}"`).join(' ');
     const trivyCmd = `trivy fs --scanners vuln,misconfig,secret,license --severity CRITICAL,HIGH,MEDIUM --format json ${skipDirs} .`;
 
     const result = await withTimeout(execCommandAsync(trivyCmd, { timeout: 60000 }), 60000, 'trivy 超时 (60s)');
@@ -165,10 +168,10 @@ async function runTrivy() {
     if (result.success) {
       try {
         const json = JSON.parse(result.stdout);
-        const vulns = json.Results?.flatMap((r) => r.Vulnerabilities || []) || [];
-        const criticals = vulns.filter((v) => v.Severity === 'CRITICAL');
-        const highs = vulns.filter((v) => v.Severity === 'HIGH');
-        const mediums = vulns.filter((v) => v.Severity === 'MEDIUM');
+        const vulns = json.Results?.flatMap((/** @type {any} */ r) => r.Vulnerabilities || []) || [];
+        const criticals = vulns.filter((/** @type {any} */ v) => v.Severity === 'CRITICAL');
+        const highs = vulns.filter((/** @type {any} */ v) => v.Severity === 'HIGH');
+        const mediums = vulns.filter((/** @type {any} */ v) => v.Severity === 'MEDIUM');
         if (criticals.length > 0 || highs.length > 0 || mediums.length > 0) {
           return formatResult(
             'trivy',
@@ -181,8 +184,8 @@ async function runTrivy() {
     }
 
     return formatResult('trivy', DECISION.ALLOW, 'Trivy 扫描通过');
-  } catch (e) {
-    return formatResult('trivy', DECISION.SKIP, `Trivy 跳过: ${e.message}`);
+  } catch (/** @type {unknown} */ e) {
+    return formatResult('trivy', DECISION.SKIP, `Trivy 跳过: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
@@ -230,8 +233,10 @@ async function runFullTests() {
         } else {
           results.push(formatResult('full-test-py', DECISION.ALLOW, 'Python 全量测试通过'));
         }
-      } catch (e) {
-        results.push(formatResult('full-test-py', DECISION.SKIP, `Python 测试跳过: ${e.message}`));
+      } catch (/** @type {unknown} */ e) {
+        results.push(
+          formatResult('full-test-py', DECISION.SKIP, `Python 测试跳过: ${e instanceof Error ? e.message : String(e)}`),
+        );
       }
     }
   }
@@ -249,7 +254,7 @@ async function runFullTests() {
         const files = trackedFiles.stdout
           .trim()
           .split('\n')
-          .map((f) => `./${f}`)
+          .map((/** @type {string} */ f) => `./${f}`)
           .join(' ');
         testCmd = `bun test ${files}`;
       }
@@ -263,8 +268,10 @@ async function runFullTests() {
       } else {
         results.push(formatResult('full-test-js', DECISION.ALLOW, 'JS 全量测试通过'));
       }
-    } catch (e) {
-      results.push(formatResult('full-test-js', DECISION.SKIP, `JS 测试跳过: ${e.message}`));
+    } catch (/** @type {unknown} */ e) {
+      results.push(
+        formatResult('full-test-js', DECISION.SKIP, `JS 测试跳过: ${e instanceof Error ? e.message : String(e)}`),
+      );
     }
   }
 
@@ -287,7 +294,11 @@ async function runHookTests() {
   }
 
   try {
-    const result = await withTimeout(execCommandAsync(`bun test "${TESTS_DIR}"`, { timeout: 30000 }), 30000, 'Hook 测试超时 (30s)');
+    const result = await withTimeout(
+      execCommandAsync(`bun test "${TESTS_DIR}"`, { timeout: 30000 }),
+      30000,
+      'Hook 测试超时 (30s)',
+    );
 
     if (!result.success) {
       return formatResult('hook-tests', DECISION.DENY, `Hook 自身测试失败`, {
@@ -296,18 +307,19 @@ async function runHookTests() {
     }
 
     return formatResult('hook-tests', DECISION.ALLOW, 'Hook 自身测试通过');
-  } catch (e) {
-    return formatResult('hook-tests', DECISION.SKIP, `Hook 测试跳过: ${e.message}`);
+  } catch (/** @type {unknown} */ e) {
+    return formatResult('hook-tests', DECISION.SKIP, `Hook 测试跳过: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
 /**
  * 生成安全报告 summary
  */
+/** @param {any[]} results */
 function generateSummary(results) {
   const summary = results
-    .map((r) => {
-      const icon = { allow: '✅', deny: '❌', skip: '⏭️', warn: '⚠️' }[r.decision] || '📋';
+    .map((/** @type {any} */ r) => {
+      const icon = { allow: '✅', deny: '❌', skip: '⏭️', warn: '⚠️' }[/** @type {string} */ (r.decision)] || '📋';
       return `${icon} [${r.checkId}] ${r.message}`;
     })
     .join('\n');

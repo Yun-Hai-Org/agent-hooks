@@ -35,6 +35,7 @@ const FILE_WRITE_PATTERNS = [
   { pattern: /\bprintf\b.*>/, name: 'printf 重定向' },
 ];
 
+/** @param {Record<string, unknown>} data */
 function log(data) {
   try {
     if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
@@ -43,6 +44,7 @@ function log(data) {
   } catch {}
 }
 
+/** @param {string} cwd */
 function getCurrentBranch(cwd) {
   try {
     return execSync('git branch --show-current', { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
@@ -51,6 +53,7 @@ function getCurrentBranch(cwd) {
   }
 }
 
+/** @param {string} cwd */
 function isInsideWorktree(cwd) {
   try {
     const gitPath = join(cwd, '.git');
@@ -61,10 +64,12 @@ function isInsideWorktree(cwd) {
   }
 }
 
+/** @param {string} command */
 function isSafeCommand(command) {
   return SAFE_COMMAND_PATTERNS.some((pattern) => pattern.test(command));
 }
 
+/** @param {string} command */
 function isFileWriteCommand(command) {
   if (!command) return false;
   // 排除 /dev/null 重定向（丢弃输出，不是写文件）
@@ -78,6 +83,7 @@ function isFileWriteCommand(command) {
   return FILE_WRITE_PATTERNS.some(({ pattern }) => pattern.test(commandWithoutDevNull));
 }
 
+/** @param {string} command */
 function getWritePatternName(command) {
   if (!command) return null;
   // 排除 /dev/null 重定向（丢弃输出，不是写文件）
@@ -88,6 +94,7 @@ function getWritePatternName(command) {
   return null;
 }
 
+/** @param {string} reason */
 function deny(reason) {
   return JSON.stringify({
     hookSpecificOutput: {
@@ -175,8 +182,8 @@ async function main() {
       cwd: workingDir,
     });
     return console.log(deny(`🔒 [branch-gate] 禁止在 ${branch} 分支写入文件。请切换到功能分支后再试。`));
-  } catch (e) {
-    log({ level: 'ERROR', error: e.message });
+  } catch (/** @type {unknown} */ e) {
+    log({ level: 'ERROR', error: e instanceof Error ? e.message : String(e) });
     console.log(allow());
   }
 }
