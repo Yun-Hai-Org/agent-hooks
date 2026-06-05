@@ -17,6 +17,9 @@ import { join } from 'path';
 const MAIN_BRANCHES = ['main', 'master'];
 const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
 
+// 安全命令白名单（主分支上允许执行的只读 git 命令）
+const SAFE_COMMAND_PATTERNS = [/^\s*git\s+(checkout|branch|stash|log|status|show|diff)\b/];
+
 // 文件写入型命令模式
 const FILE_WRITE_PATTERNS = [
   { pattern: />\s*\S+/, name: '重定向写入 (>)' },
@@ -58,20 +61,29 @@ function isInsideWorktree(cwd) {
   }
 }
 
+function isSafeCommand(command) {
+  return SAFE_COMMAND_PATTERNS.some((pattern) => pattern.test(command));
+}
+
 function isFileWriteCommand(command) {
   if (!command) return false;
+  // 排除 /dev/null 重定向（丢弃输出，不是写文件）
+  const commandWithoutDevNull = command.replace(/\d*\s*>\s*\/dev\/null/g, '');
   // 快速检查：如果没有重定向或文件操作关键字，直接返回 false
-  if (!/[>]|tee|sed\s+-i|\bcp\b|\bmv\b|\bdd\b|\binstall\b/.test(command)) {
+  // 注意：排除 >&（重定向到文件描述符，如 2>&1）不是文件写入
+  if (!/>(?!&)|tee|sed\s+-i|\bcp\b|\bmv\b|\bdd\b|\binstall\b/.test(commandWithoutDevNull)) {
     return false;
   }
   // 详细检查文件写入模式
-  return FILE_WRITE_PATTERNS.some(({ pattern }) => pattern.test(command));
+  return FILE_WRITE_PATTERNS.some(({ pattern }) => pattern.test(commandWithoutDevNull));
 }
 
 function getWritePatternName(command) {
   if (!command) return null;
+  // 排除 /dev/null 重定向（丢弃输出，不是写文件）
+  const commandWithoutDevNull = command.replace(/\d*\s*>\s*\/dev\/null/g, '');
   for (const { pattern, name } of FILE_WRITE_PATTERNS) {
-    if (pattern.test(command)) return name;
+    if (pattern.test(commandWithoutDevNull)) return name;
   }
   return null;
 }
@@ -126,6 +138,12 @@ async function main() {
     // 主分支上的操作 - 根据工具类型处理
     if (tool_name === 'Bash') {
       const command = tool_input?.command || '';
+
+      // 安全命令白名单放行
+      if (isSafeCommand(command)) {
+        return console.log(allow());
+      }
+
       // Fast bail-out: 非文件写入命令直接放行
       if (!isFileWriteCommand(command)) {
         return console.log(allow());
@@ -171,10 +189,12 @@ if (isDirectRun) {
 
 export {
   MAIN_BRANCHES,
+  SAFE_COMMAND_PATTERNS,
   FILE_WRITE_PATTERNS,
   log,
   getCurrentBranch,
   isInsideWorktree,
+  isSafeCommand,
   isFileWriteCommand,
   getWritePatternName,
   allow,

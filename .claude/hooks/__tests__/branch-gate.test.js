@@ -5,10 +5,12 @@ import { Readable } from 'stream';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import {
   MAIN_BRANCHES,
+  SAFE_COMMAND_PATTERNS,
   FILE_WRITE_PATTERNS,
   log,
   getCurrentBranch,
   isInsideWorktree,
+  isSafeCommand,
   isFileWriteCommand,
   getWritePatternName,
   allow,
@@ -398,6 +400,23 @@ describe('branch-gate', () => {
       expect(isFileWriteCommand('install -m 755 source target')).toBe(true);
     });
 
+    it('isFileWriteCommand 不应该把 2>/dev/null 误判为文件写入', () => {
+      expect(isFileWriteCommand('git checkout -b feat/epic-1 2>/dev/null')).toBe(false);
+    });
+
+    it('isFileWriteCommand 不应该把 >/dev/null 误判为文件写入', () => {
+      expect(isFileWriteCommand('command >/dev/null')).toBe(false);
+    });
+
+    it('isFileWriteCommand 应该检测 2>/dev/null 之外的真正重定向', () => {
+      expect(isFileWriteCommand('echo "test" > file.txt 2>/dev/null')).toBe(true);
+    });
+
+    it('isFileWriteCommand 不应该把 2>&1 误判为文件写入', () => {
+      // 2>&1 是 stderr 重定向到 stdout，不是写文件
+      expect(isFileWriteCommand('git log 2>&1')).toBe(false);
+    });
+
     it('getWritePatternName 应该返回匹配的模式名称', () => {
       expect(getWritePatternName('echo "test" > file.txt')).toBe('重定向写入 (>)');
       expect(getWritePatternName('ls -la')).toBe(null);
@@ -414,6 +433,52 @@ describe('branch-gate', () => {
       expect(getWritePatternName('mv old.txt new.txt')).toBe('mv 移动');
       expect(getWritePatternName('dd if=/dev/zero of=file.bin')).toBe('dd 命令');
       expect(getWritePatternName('install -m 755 source target')).toBe('install 命令');
+    });
+
+    it('getWritePatternName 不应该把 2>/dev/null 误判为文件写入', () => {
+      expect(getWritePatternName('git checkout -b feat/epic-1 2>/dev/null')).toBe(null);
+    });
+
+    it('isSafeCommand 应该允许 git checkout', () => {
+      expect(isSafeCommand('git checkout -b feat/epic-1')).toBe(true);
+    });
+
+    it('isSafeCommand 应该允许 git branch', () => {
+      expect(isSafeCommand('git branch')).toBe(true);
+      expect(isSafeCommand('git branch -a')).toBe(true);
+    });
+
+    it('isSafeCommand 应该允许 git stash', () => {
+      expect(isSafeCommand('git stash')).toBe(true);
+    });
+
+    it('isSafeCommand 应该允许 git log', () => {
+      expect(isSafeCommand('git log --oneline')).toBe(true);
+    });
+
+    it('isSafeCommand 应该允许 git status', () => {
+      expect(isSafeCommand('git status')).toBe(true);
+    });
+
+    it('isSafeCommand 应该允许 git show', () => {
+      expect(isSafeCommand('git show HEAD')).toBe(true);
+    });
+
+    it('isSafeCommand 应该允许 git diff', () => {
+      expect(isSafeCommand('git diff')).toBe(true);
+    });
+
+    it('isSafeCommand 不应该允许 git commit', () => {
+      expect(isSafeCommand('git commit -m "test"')).toBe(false);
+    });
+
+    it('isSafeCommand 不应该允许 git push', () => {
+      expect(isSafeCommand('git push origin main')).toBe(false);
+    });
+
+    it('isSafeCommand 不应该允许非 git 命令', () => {
+      expect(isSafeCommand('echo hello > file.txt')).toBe(false);
+      expect(isSafeCommand('ls -la')).toBe(false);
     });
 
     it('allow 应该返回正确的 JSON', () => {
