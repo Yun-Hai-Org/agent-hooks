@@ -162,3 +162,183 @@ describe('block-dangerous-commands', () => {
     expect(r.blocked).toBe(false);
   });
 });
+
+describe('block-dangerous-commands - main 函数直接调用', () => {
+  const { Readable } = require('stream');
+  const fs = require('fs');
+  const path = require('path');
+
+  async function runMain(input) {
+    const { main } = await import('../block-dangerous-commands.js');
+
+    // 模拟 stdin
+    const originalStdin = process.stdin;
+    process.stdin = Readable.from([input]);
+
+    // 捕获 console.log 输出
+    const originalLog = console.log;
+    let output = '';
+    console.log = (msg) => {
+      output += msg + '\n';
+    };
+
+    try {
+      await main();
+    } finally {
+      process.stdin = originalStdin;
+      console.log = originalLog;
+    }
+
+    return output.trim();
+  }
+
+  it('应该拒绝危险命令 (rm -rf ~)', async () => {
+    const input = JSON.stringify({
+      tool_name: 'Bash',
+      tool_input: { command: 'rm -rf ~/' },
+      session_id: 'test',
+      cwd: process.cwd(),
+      permission_mode: 'default',
+    });
+
+    const output = await runMain(input);
+    const result = JSON.parse(output);
+    expect(result.hookSpecificOutput.permissionDecision).toBe('deny');
+    expect(result.hookSpecificOutput.permissionDecisionReason).toContain('rm targeting home directory');
+  });
+
+  it('应该允许安全命令 (ls -la)', async () => {
+    const input = JSON.stringify({
+      tool_name: 'Bash',
+      tool_input: { command: 'ls -la' },
+      session_id: 'test',
+      cwd: process.cwd(),
+      permission_mode: 'default',
+    });
+
+    const output = await runMain(input);
+    expect(output).toBe('{}');
+  });
+
+  it('应该忽略非 Bash 工具', async () => {
+    const input = JSON.stringify({
+      tool_name: 'Read',
+      tool_input: { file_path: '/etc/passwd' },
+      session_id: 'test',
+      cwd: process.cwd(),
+      permission_mode: 'default',
+    });
+
+    const output = await runMain(input);
+    expect(output).toBe('{}');
+  });
+
+  it('应该处理无效 JSON 输入', async () => {
+    const output = await runMain('invalid json');
+    expect(output).toBe('{}');
+  });
+
+  it('应该处理空 tool_input', async () => {
+    const input = JSON.stringify({
+      tool_name: 'Bash',
+      tool_input: null,
+      session_id: 'test',
+      cwd: process.cwd(),
+      permission_mode: 'default',
+    });
+
+    const output = await runMain(input);
+    expect(output).toBe('{}');
+  });
+
+  it('应该记录日志到日志文件', async () => {
+    const input = JSON.stringify({
+      tool_name: 'Bash',
+      tool_input: { command: 'rm -rf /' },
+      session_id: 'test-logging',
+      cwd: process.cwd(),
+      permission_mode: 'default',
+    });
+
+    await runMain(input);
+
+    // 检查日志文件是否被创建
+    const logDir = path.join(process.env.HOME || '', '.claude', 'hooks-logs');
+    const today = new Date().toISOString().slice(0, 10);
+    const logFile = path.join(logDir, `${today}.jsonl`);
+
+    expect(fs.existsSync(logFile)).toBe(true);
+
+    // 检查日志内容
+    const logContent = fs.readFileSync(logFile, 'utf-8');
+    expect(logContent).toContain('test-logging');
+    expect(logContent).toContain('BLOCKED');
+  });
+
+  it('应该处理 ERROR 级别的日志', async () => {
+    // 触发 JSON 解析错误，这会调用 log({ level: 'ERROR', ... })
+    const output = await runMain('invalid json {{{');
+    expect(output).toBe('{}');
+
+    // 验证日志被记录
+    const logDir = path.join(process.env.HOME || '', '.claude', 'hooks-logs');
+    const today = new Date().toISOString().slice(0, 10);
+    const logFile = path.join(logDir, `${today}.jsonl`);
+
+    const logContent = fs.readFileSync(logFile, 'utf-8');
+    expect(logContent).toContain('ERROR');
+    expect(logContent).toContain('JSON');
+  });
+});
+
+describe('block-dangerous-commands - log 函数', () => {
+  const fs = require('fs');
+  const path = require('path');
+
+  it('应该创建日志目录（如果不存在）', async () => {
+    const { log } = await import('../block-dangerous-commands.js');
+
+    const sessionId = 'log-test-' + Date.now();
+
+    // 直接调用 log 函数
+    log({
+      level: 'TEST',
+      session_id: sessionId,
+      message: 'test log entry',
+    });
+
+    // 验证日志文件存在
+    const logDir = path.join(process.env.HOME || '', '.claude', 'hooks-logs');
+    const today = new Date().toISOString().slice(0, 10);
+    const logFile = path.join(logDir, `${today}.jsonl`);
+
+    expect(fs.existsSync(logFile)).toBe(true);
+
+    // 验证日志内容
+    const logContent = fs.readFileSync(logFile, 'utf-8');
+    expect(logContent).toContain(sessionId);
+    expect(logContent).toContain('TEST');
+    expect(logContent).toContain('test log entry');
+  });
+
+  it('应该处理日志写入错误', async () => {
+    const { log } = await import('../block-dangerous-commands.js');
+
+    // 保存原始的 HOME
+    const originalHome = process.env.HOME;
+
+    // 设置一个无效的 HOME 路径来触发错误
+    process.env.HOME = '/invalid/path/that/does/not/exist';
+
+    // 这应该不会抛出异常（log 函数内部有 try-catch）
+    expect(() => {
+      log({
+        level: 'ERROR_TEST',
+        message: 'this should not crash',
+      });
+    }).not.toThrow();
+
+    // 恢复原始的 HOME
+    process.env.HOME = originalHome;
+  });
+});

@@ -45,6 +45,40 @@ export function execCommand(command, options = {}) {
   }
 }
 
+// 异步版本的命令执行（支持 withTimeout 正确中断）
+export function execCommandAsync(command, options = {}) {
+  return new Promise((resolve) => {
+    const { exec } = require('child_process');
+    const timeout = options.timeout || 30000;
+
+    const child = exec(command, {
+      encoding: 'utf-8',
+      timeout,
+      ...options,
+    }, (error, stdout, stderr) => {
+      if (error) {
+        resolve({
+          success: false,
+          stdout: stdout || '',
+          stderr: stderr || error.message,
+        });
+      } else {
+        resolve({ success: true, stdout, stderr: '' });
+      }
+    });
+
+    // 超时保护
+    setTimeout(() => {
+      child.kill('SIGTERM');
+      resolve({
+        success: false,
+        stdout: '',
+        stderr: `Command timed out after ${timeout}ms`,
+      });
+    }, timeout + 1000);
+  });
+}
+
 // ─── 带超时的 Promise ────────────────────────────────────────────────────────
 
 export function withTimeout(promise, ms, timeoutMessage = '操作超时') {

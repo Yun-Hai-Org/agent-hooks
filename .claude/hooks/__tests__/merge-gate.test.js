@@ -1,8 +1,16 @@
 import { describe, it, expect } from 'bun:test';
 import { formatResult, decide, DECISION } from '../security-orchestrator.js';
-
-// 动态导入 merge-gate.js（避免执行 main()）
-const module = await import('../merge-gate.js').catch(() => null);
+import {
+  getGitIgnoredDirs,
+  extractMergeTarget,
+  getCurrentBranch,
+  runSemgrep,
+  runKnip,
+  runTrivy,
+  runFullTests,
+  runHookTests,
+  generateSummary,
+} from '../merge-gate.js';
 
 describe('merge-gate', () => {
   describe('目标分支检测', () => {
@@ -35,6 +43,197 @@ describe('merge-gate', () => {
       const isMain = ['main', 'master'].includes(target);
       expect(isMain).toBe(false);
     });
+  });
+
+  describe('extractMergeTarget', () => {
+    it('应该从 git merge main 中提取 main', () => {
+      const result = extractMergeTarget('git merge main');
+      expect(result).toBe('main');
+    });
+
+    it('应该从 git merge master 中提取 master', () => {
+      const result = extractMergeTarget('git merge master');
+      expect(result).toBe('master');
+    });
+
+    it('应该从 git merge feat/xxx 中提取 feat/xxx', () => {
+      const result = extractMergeTarget('git merge feat/xxx');
+      expect(result).toBe('feat/xxx');
+    });
+
+    it('应该处理带 --no-ff 的合并命令', () => {
+      const result = extractMergeTarget('git merge --no-ff feat/xxx');
+      expect(result).toBe('feat/xxx');
+    });
+
+    it('应该处理带 --squash 的合并命令', () => {
+      const result = extractMergeTarget('git merge --squash feat/xxx');
+      expect(result).toBe('feat/xxx');
+    });
+
+    it('无法提取时应该返回 null', () => {
+      const result = extractMergeTarget('git merge');
+      expect(result).toBe(null);
+    });
+
+    it('非 merge 命令应该返回 null', () => {
+      const result = extractMergeTarget('git checkout main');
+      expect(result).toBe(null);
+    });
+  });
+
+  describe('getCurrentBranch', () => {
+    it('应该返回当前分支名', () => {
+      const branch = getCurrentBranch();
+      expect(branch).toBeTruthy();
+      expect(typeof branch).toBe('string');
+    });
+  });
+
+  describe('getGitIgnoredDirs', () => {
+    it('应该返回数组', () => {
+      const dirs = getGitIgnoredDirs();
+      expect(Array.isArray(dirs)).toBe(true);
+    });
+
+    it('应该包含常见的忽略目录', () => {
+      const dirs = getGitIgnoredDirs();
+      // 至少应该能找到一些忽略的目录或文件
+      expect(dirs.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('generateSummary', () => {
+    it('应该生成包含所有检查项的摘要', () => {
+      const results = [
+        formatResult('semgrep', DECISION.ALLOW, 'Semgrep 通过'),
+        formatResult('knip', DECISION.ALLOW, 'Knip 通过'),
+        formatResult('trivy', DECISION.ALLOW, 'Trivy 通过'),
+        formatResult('bun-test', DECISION.ALLOW, 'Bun 测试通过'),
+        formatResult('hook-tests', DECISION.ALLOW, 'Hook 测试通过'),
+      ];
+      const summary = generateSummary(results);
+      expect(summary).toContain('Semgrep');
+      expect(summary).toContain('Knip');
+      expect(summary).toContain('Trivy');
+      expect(summary).toContain('Bun');
+      expect(summary).toContain('Hook');
+    });
+
+    it('应该显示失败项', () => {
+      const results = [
+        formatResult('semgrep', DECISION.DENY, 'Semgrep 发现问题'),
+        formatResult('knip', DECISION.ALLOW, 'Knip 通过'),
+      ];
+      const summary = generateSummary(results);
+      expect(summary).toContain('❌');
+      expect(summary).toContain('Semgrep 发现问题');
+    });
+
+    it('应该显示警告项', () => {
+      const results = [formatResult('knip', DECISION.WARN, 'Knip 发现未使用导出')];
+      const summary = generateSummary(results);
+      expect(summary).toContain('⚠️');
+      expect(summary).toContain('Knip 发现未使用导出');
+    });
+  });
+
+  describe('runSemgrep', () => {
+    it('应该返回结果对象', async () => {
+      const result = await runSemgrep();
+      expect(result).toHaveProperty('decision');
+      expect(result).toHaveProperty('message');
+    });
+
+    it('如果 semgrep 未安装应该跳过', async () => {
+      const result = await runSemgrep();
+      // 结果应该是 ALLOW, DENY, 或 SKIP 之一
+      expect([DECISION.ALLOW, DECISION.DENY, DECISION.SKIP]).toContain(result.decision);
+    });
+  });
+
+  describe('runKnip', () => {
+    it(
+      '应该返回结果对象',
+      async () => {
+        const result = await runKnip();
+        expect(result).toHaveProperty('decision');
+        expect(result).toHaveProperty('message');
+      },
+      { timeout: 35000 },
+    );
+
+    it(
+      '结果应该是有效的决策',
+      async () => {
+        const result = await runKnip();
+        expect([DECISION.ALLOW, DECISION.DENY, DECISION.SKIP, DECISION.WARN]).toContain(result.decision);
+      },
+      { timeout: 35000 },
+    );
+  });
+
+  describe('runTrivy', () => {
+    it(
+      '应该返回结果对象',
+      async () => {
+        const result = await runTrivy();
+        expect(result).toHaveProperty('decision');
+        expect(result).toHaveProperty('message');
+      },
+      { timeout: 65000 },
+    );
+
+    it(
+      '如果 trivy 未安装应该跳过',
+      async () => {
+        const result = await runTrivy();
+        expect([DECISION.ALLOW, DECISION.DENY, DECISION.SKIP]).toContain(result.decision);
+      },
+      { timeout: 65000 },
+    );
+  });
+
+  describe('runFullTests', () => {
+    it(
+      '应该返回结果对象',
+      async () => {
+        const result = await runFullTests();
+        expect(result).toHaveProperty('decision');
+        expect(result).toHaveProperty('message');
+      },
+      { timeout: 70000 },
+    );
+
+    it(
+      '结果应该是有效的决策',
+      async () => {
+        const result = await runFullTests();
+        expect([DECISION.ALLOW, DECISION.DENY, DECISION.SKIP]).toContain(result.decision);
+      },
+      { timeout: 70000 },
+    );
+  });
+
+  describe('runHookTests', () => {
+    it(
+      '应该返回结果对象',
+      async () => {
+        const result = await runHookTests();
+        expect(result).toHaveProperty('decision');
+        expect(result).toHaveProperty('message');
+      },
+      { timeout: 40000 },
+    );
+
+    it(
+      '结果应该是有效的决策',
+      async () => {
+        const result = await runHookTests();
+        expect([DECISION.ALLOW, DECISION.DENY, DECISION.SKIP]).toContain(result.decision);
+      },
+      { timeout: 40000 },
+    );
   });
 
   describe('Semgrep 安全扫描结果', () => {

@@ -2,6 +2,18 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { spawn } from 'child_process';
 import { writeFileSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
+import {
+  extractCommitMessage,
+  getCurrentBranch,
+  getStagedFiles,
+  checkBranch,
+  checkCommitMessage,
+  checkSensitiveFiles,
+  checkDependencyAudit,
+  checkTypeScript,
+  checkRelatedTests,
+} from '../commit-gate.js';
+import { DECISION } from '../security-orchestrator.js';
 
 // commit-gate 测试 - 测试真实函数和完整流程
 describe('commit-gate', () => {
@@ -416,6 +428,56 @@ describe('commit-gate', () => {
     it('应该检测 tsconfig.json', () => {
       const hasTsconfig = existsSync(join(process.cwd(), 'tsconfig.json'));
       expect(typeof hasTsconfig).toBe('boolean');
+    });
+  });
+
+  // ─── 直接函数测试 ─────────────────────────────────────────────────────
+
+  describe('直接函数测试', () => {
+    it('extractCommitMessage 应该提取标准格式', () => {
+      const msg = extractCommitMessage('git commit -m "feat: 新增功能"');
+      expect(msg).toBe('feat: 新增功能');
+    });
+
+    it('extractCommitMessage 应该提取单引号格式', () => {
+      const msg = extractCommitMessage("git commit -m 'fix: 修复bug'");
+      expect(msg).toBe('fix: 修复bug');
+    });
+
+    it('extractCommitMessage 无效命令返回 null', () => {
+      const msg = extractCommitMessage('git push origin main');
+      expect(msg).toBeNull();
+    });
+
+    it('getCurrentBranch 应该返回字符串或 null', () => {
+      const branch = getCurrentBranch();
+      expect(typeof branch === 'string' || branch === null).toBe(true);
+    });
+
+    it('getStagedFiles 应该返回数组', () => {
+      const files = getStagedFiles();
+      expect(Array.isArray(files)).toBe(true);
+    });
+
+    it('checkBranch 在非 main 分支应该允许', () => {
+      const result = checkBranch();
+      expect(result.decision === DECISION.ALLOW || result.decision === DECISION.WARN).toBe(true);
+    });
+
+    it('checkCommitMessage 有效格式应该允许', () => {
+      const result = checkCommitMessage('git commit -m "feat: test"');
+      expect(result.decision).toBe(DECISION.ALLOW);
+    });
+
+    it('checkCommitMessage 无效格式应该拒绝', () => {
+      const result = checkCommitMessage('git commit -m "bad message"');
+      expect(result.decision).toBe(DECISION.DENY);
+    });
+
+    it('checkSensitiveFiles 应该返回有效结果', () => {
+      const result = checkSensitiveFiles();
+      expect(result).toBeDefined();
+      expect(result.decision).toBeDefined();
     });
   });
 });

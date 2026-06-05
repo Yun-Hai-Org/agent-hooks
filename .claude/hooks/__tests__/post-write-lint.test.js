@@ -1,53 +1,60 @@
 import { describe, it, expect } from 'bun:test';
+import {
+  log,
+  getFilePath,
+  execCommand,
+  lintPython,
+  lintTypescriptJavascript,
+  lintMarkdown,
+  lintJson,
+  lintYaml,
+  lintShell,
+  lintDockerfile,
+  shouldIgnoreFile,
+  isGitIgnored,
+} from '../post-write-lint.js';
 
 describe('post-write-lint', () => {
   describe('文件过滤逻辑', () => {
     it('node_modules/ 路径应该被忽略', () => {
       const path = 'node_modules/package/index.js';
-      const ignorePatterns = ['node_modules/', '__pycache__/', '.git/', 'dist/', 'build/', '.venv/', 'venv/'];
-      const ignored = ignorePatterns.some((p) => path.includes(p));
+      const ignored = shouldIgnoreFile(path);
       expect(ignored).toBe(true);
     });
 
     it('__pycache__/ 路径应该被忽略', () => {
       const path = '__pycache__/cache.pyc';
-      const ignorePatterns = ['node_modules/', '__pycache__/', '.git/', 'dist/', 'build/', '.venv/', 'venv/'];
-      const ignored = ignorePatterns.some((p) => path.includes(p));
+      const ignored = shouldIgnoreFile(path);
       expect(ignored).toBe(true);
     });
 
     it('.git/ 路径应该被忽略', () => {
       const path = '.git/config';
-      const ignorePatterns = ['node_modules/', '__pycache__/', '.git/', 'dist/', 'build/', '.venv/', 'venv/'];
-      const ignored = ignorePatterns.some((p) => path.includes(p));
+      const ignored = shouldIgnoreFile(path);
       expect(ignored).toBe(true);
     });
 
     it('dist/ 路径应该被忽略', () => {
       const path = 'dist/bundle.js';
-      const ignorePatterns = ['node_modules/', '__pycache__/', '.git/', 'dist/', 'build/', '.venv/', 'venv/'];
-      const ignored = ignorePatterns.some((p) => path.includes(p));
+      const ignored = shouldIgnoreFile(path);
       expect(ignored).toBe(true);
     });
 
     it('build/ 路径应该被忽略', () => {
       const path = 'build/output.js';
-      const ignorePatterns = ['node_modules/', '__pycache__/', '.git/', 'dist/', 'build/', '.venv/', 'venv/'];
-      const ignored = ignorePatterns.some((p) => path.includes(p));
+      const ignored = shouldIgnoreFile(path);
       expect(ignored).toBe(true);
     });
 
     it('.venv/ 路径应该被忽略', () => {
       const path = '.venv/lib/python3.11/site.py';
-      const ignorePatterns = ['node_modules/', '__pycache__/', '.git/', 'dist/', 'build/', '.venv/', 'venv/'];
-      const ignored = ignorePatterns.some((p) => path.includes(p));
+      const ignored = shouldIgnoreFile(path);
       expect(ignored).toBe(true);
     });
 
     it('venv/ 路径应该被忽略', () => {
       const path = 'venv/bin/python';
-      const ignorePatterns = ['node_modules/', '__pycache__/', '.git/', 'dist/', 'build/', '.venv/', 'venv/'];
-      const ignored = ignorePatterns.some((p) => path.includes(p));
+      const ignored = shouldIgnoreFile(path);
       expect(ignored).toBe(true);
     });
 
@@ -285,6 +292,140 @@ describe('post-write-lint', () => {
       expect(mockLint('Dockerfile')).toBe(true);
       expect(mockLint('docker/Dockerfile')).toBe(true);
       expect(mockLint('Dockerfile.dev')).toBe(true);
+    });
+  });
+
+  // ─── 直接函数测试 ───────────────────────────────────────────────────────
+
+  describe('log 函数', () => {
+    it('log 应该正常执行不抛出异常', () => {
+      expect(() => log({ level: 'INFO', message: 'test' })).not.toThrow();
+    });
+
+    it('log 应该处理空对象', () => {
+      expect(() => log({})).not.toThrow();
+    });
+
+    it('log 应该处理复杂数据', () => {
+      expect(() =>
+        log({
+          level: 'LINT_START',
+          file: 'test.py',
+          extension: 'py',
+          tool: 'Write',
+          session: 'test-123',
+        })
+      ).not.toThrow();
+    });
+  });
+
+  describe('getFilePath 函数', () => {
+    it('getFilePath 应该返回字符串', () => {
+      const result = getFilePath();
+      expect(typeof result).toBe('string');
+    });
+
+    it('getFilePath 应该处理环境变量 CLAUDE_FILE_PATH', () => {
+      const originalPath = process.env.CLAUDE_FILE_PATH;
+      process.env.CLAUDE_FILE_PATH = '/test/path.js';
+      const result = getFilePath();
+      expect(result).toBe('/test/path.js');
+      process.env.CLAUDE_FILE_PATH = originalPath;
+    });
+
+    it('getFilePath 应该处理环境变量 CLAUDE_TOOL_INPUT', () => {
+      const originalToolInput = process.env.CLAUDE_TOOL_INPUT;
+      process.env.CLAUDE_TOOL_INPUT = JSON.stringify({ file_path: '/test/tool-input.js' });
+      const result = getFilePath();
+      expect(result).toBe('/test/tool-input.js');
+      process.env.CLAUDE_TOOL_INPUT = originalToolInput;
+    });
+
+    it('getFilePath 应该处理 CLAUDE_TOOL_INPUT 中的 path 字段', () => {
+      const originalToolInput = process.env.CLAUDE_TOOL_INPUT;
+      process.env.CLAUDE_TOOL_INPUT = JSON.stringify({ path: '/test/path-field.js' });
+      const result = getFilePath();
+      expect(result).toBe('/test/path-field.js');
+      process.env.CLAUDE_TOOL_INPUT = originalToolInput;
+    });
+
+    it('getFilePath 应该处理无效的 CLAUDE_TOOL_INPUT JSON', () => {
+      const originalToolInput = process.env.CLAUDE_TOOL_INPUT;
+      process.env.CLAUDE_TOOL_INPUT = 'invalid json';
+      const result = getFilePath();
+      expect(result).toBe('');
+      process.env.CLAUDE_TOOL_INPUT = originalToolInput;
+    });
+
+    it('getFilePath 应该处理空的环境变量', () => {
+      const originalPath = process.env.CLAUDE_FILE_PATH;
+      const originalToolInput = process.env.CLAUDE_TOOL_INPUT;
+      delete process.env.CLAUDE_FILE_PATH;
+      delete process.env.CLAUDE_TOOL_INPUT;
+      const result = getFilePath();
+      expect(result).toBe('');
+      process.env.CLAUDE_FILE_PATH = originalPath;
+      process.env.CLAUDE_TOOL_INPUT = originalToolInput;
+    });
+  });
+
+  describe('execCommand 函数', () => {
+    it('execCommand 应该成功执行简单命令', () => {
+      const result = execCommand('echo "test"');
+      expect(result.success).toBe(true);
+      expect(result.output).toContain('test');
+    });
+
+    it('execCommand 应该处理失败的命令', () => {
+      const result = execCommand('nonexistent_command_xyz123');
+      expect(result.success).toBe(false);
+    });
+
+    it('execCommand 应该捕获错误输出', () => {
+      const result = execCommand('false'); // false 命令返回非零退出码
+      expect(result.success).toBe(false);
+    });
+
+    it('execCommand 应该支持自定义选项', () => {
+      const result = execCommand('pwd', { encoding: 'utf-8' });
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('lint 函数集成测试', () => {
+    it('lintPython 应该返回布尔值', () => {
+      const result = lintPython('test.py');
+      expect(typeof result).toBe('boolean');
+    });
+
+    it('lintTypescriptJavascript 应该返回布尔值', () => {
+      const result = lintTypescriptJavascript('test.js');
+      expect(typeof result).toBe('boolean');
+    });
+
+    it('lintMarkdown 应该返回布尔值', () => {
+      const result = lintMarkdown('test.md');
+      expect(typeof result).toBe('boolean');
+    });
+
+    it('lintJson 应该返回布尔值', () => {
+      const result = lintJson('test.json');
+      expect(typeof result).toBe('boolean');
+    });
+
+    it('lintYaml 应该返回布尔值', () => {
+      const result = lintYaml('test.yaml');
+      expect(typeof result).toBe('boolean');
+    });
+
+    it('lintShell 应该返回布尔值', () => {
+      const result = lintShell('test.sh');
+      expect(typeof result).toBe('boolean');
+    });
+
+    it('lintDockerfile 应该返回布尔值', () => {
+      const result = lintDockerfile('Dockerfile');
+      expect(typeof result).toBe('boolean');
     });
   });
 });

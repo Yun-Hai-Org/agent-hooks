@@ -10,6 +10,7 @@ import {
   isGitRepo,
   getCurrentBranch,
   safeMain,
+  readStdin,
 } from '../security-orchestrator.js';
 
 describe('security-orchestrator', () => {
@@ -88,6 +89,127 @@ describe('security-orchestrator', () => {
     const r = execCommand('echo "hello"');
     expect(r.success).toBe(true);
     expect(r.stdout).toContain('hello');
+  });
+
+  it('execCommand 应该能处理命令失败', () => {
+    const r = execCommand('exit 1');
+    expect(r.success).toBe(false);
+  });
+
+  it('execCommand 应该能捕获 stderr', () => {
+    // 使用一个会失败的命令来触发 stderr 捕获
+    const r = execCommand('false');
+    expect(r.success).toBe(false);
+    // stderr 可能为空，但至少应该返回 success: false
+  });
+
+  it('readStdin 应该能读取 JSON 输入', async () => {
+    const { Readable } = await import('stream');
+    const testInput = JSON.stringify({ test: 'data' });
+
+    // 模拟 stdin
+    const originalStdin = process.stdin;
+    const mockStdin = new Readable();
+    mockStdin.push(testInput);
+    mockStdin.push(null); // 结束流
+
+    Object.defineProperty(process, 'stdin', {
+      value: mockStdin,
+      writable: true,
+      configurable: true,
+    });
+
+    const result = await readStdin();
+    expect(result).toEqual({ test: 'data' });
+
+    // 恢复原始 stdin
+    Object.defineProperty(process, 'stdin', {
+      value: originalStdin,
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  it('readStdin 应该能处理 stdin 的 data 事件', async () => {
+    const { EventEmitter } = await import('events');
+    const mockStdin = new EventEmitter();
+    mockStdin.setEncoding = () => {};
+
+    const originalStdin = process.stdin;
+    Object.defineProperty(process, 'stdin', {
+      value: mockStdin,
+      writable: true,
+      configurable: true,
+    });
+
+    const promise = readStdin();
+
+    // 模拟 data 事件
+    mockStdin.emit('data', '{"key":');
+    mockStdin.emit('data', '"value"}');
+    mockStdin.emit('end');
+
+    const result = await promise;
+    expect(result).toEqual({ key: 'value' });
+
+    // 恢复原始 stdin
+    Object.defineProperty(process, 'stdin', {
+      value: originalStdin,
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  it('readStdin 应该能处理 stdin 的 error 事件', async () => {
+    const { EventEmitter } = await import('events');
+    const mockStdin = new EventEmitter();
+    mockStdin.setEncoding = () => {};
+
+    const originalStdin = process.stdin;
+    Object.defineProperty(process, 'stdin', {
+      value: mockStdin,
+      writable: true,
+      configurable: true,
+    });
+
+    const promise = readStdin();
+
+    // 模拟 error 事件
+    mockStdin.emit('error', new Error('stdin error'));
+
+    await expect(promise).rejects.toThrow('stdin error');
+
+    // 恢复原始 stdin
+    Object.defineProperty(process, 'stdin', {
+      value: originalStdin,
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  it('readStdin 应该能处理无效 JSON', async () => {
+    const { Readable } = await import('stream');
+
+    // 模拟 stdin
+    const originalStdin = process.stdin;
+    const mockStdin = new Readable();
+    mockStdin.push('invalid json');
+    mockStdin.push(null);
+
+    Object.defineProperty(process, 'stdin', {
+      value: mockStdin,
+      writable: true,
+      configurable: true,
+    });
+
+    await expect(readStdin()).rejects.toThrow('JSON 解析失败');
+
+    // 恢复原始 stdin
+    Object.defineProperty(process, 'stdin', {
+      value: originalStdin,
+      writable: true,
+      configurable: true,
+    });
   });
 
   it('isGitIgnored - git 忽略的文件应该返回 true', () => {

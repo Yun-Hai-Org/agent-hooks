@@ -81,8 +81,8 @@ function deny(reason) {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
-      permissionDecisionReason: reason
-    }
+      permissionDecisionReason: reason,
+    },
   });
 }
 
@@ -139,11 +139,11 @@ async function main() {
         command: command.slice(0, 200),
         pattern: patternName,
         session_id,
-        cwd: workingDir
+        cwd: workingDir,
       });
-      return console.log(deny(
-        `🔒 [branch-gate] 禁止在 ${branch} 分支执行文件写入操作 (${patternName})。请切换到功能分支后再试。`
-      ));
+      return console.log(
+        deny(`🔒 [branch-gate] 禁止在 ${branch} 分支执行文件写入操作 (${patternName})。请切换到功能分支后再试。`),
+      );
     }
 
     // Write/Edit 工具 - 直接拒绝
@@ -154,16 +154,30 @@ async function main() {
       branch,
       file: filePath,
       session_id,
-      cwd: workingDir
+      cwd: workingDir,
     });
-    return console.log(deny(
-      `🔒 [branch-gate] 禁止在 ${branch} 分支写入文件。请切换到功能分支后再试。`
-    ));
-
+    return console.log(deny(`🔒 [branch-gate] 禁止在 ${branch} 分支写入文件。请切换到功能分支后再试。`));
   } catch (e) {
     log({ level: 'ERROR', error: e.message });
     console.log(allow());
   }
 }
 
-main();
+// 只在直接运行时执行 main，导入时不执行
+const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1]);
+if (isDirectRun) {
+  main();
+}
+
+export {
+  MAIN_BRANCHES,
+  FILE_WRITE_PATTERNS,
+  log,
+  getCurrentBranch,
+  isInsideWorktree,
+  isFileWriteCommand,
+  getWritePatternName,
+  allow,
+  deny,
+  main,
+};

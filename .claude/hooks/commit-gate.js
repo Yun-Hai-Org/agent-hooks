@@ -313,4 +313,10 @@ async function main() {
   });
 }
 
-main();
+// 只在直接运行时执行 main，导入时不执行
+const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1]);
+if (isDirectRun) {
+  main();
+}
+
+export { extractCommitMessage, getCurrentBranch, getStagedFiles, checkBranch, checkCommitMessage, checkSensitiveFiles, checkDependencyAudit, checkTypeScript, checkRelatedTests };

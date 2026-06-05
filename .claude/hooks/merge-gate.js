@@ -18,6 +18,7 @@ import {
   formatHookOutput,
   log,
   execCommand,
+  execCommandAsync,
   readStdin,
   safeMain,
   withTimeout,
@@ -53,10 +54,11 @@ function getGitIgnoredDirs() {
 
 /**
  * 从 git merge 命令中提取目标分支
+ * 支持带参数的命令，如 git merge --no-ff feat/xxx
  */
 function extractMergeTarget(cmd) {
-  // git merge feature/xxx
-  const m = cmd.match(/\bgit\s+merge\b\s+([^\s-][^\s]*)/);
+  // 匹配 git merge，跳过所有 --xxx 参数，然后捕获第一个不以 - 开头的词
+  const m = cmd.match(/\bgit\s+merge\b(?:\s+--[^\s]+)*\s+([^\s-][^\s]*)/);
   return m ? m[1] : null;
 }
 
@@ -84,14 +86,7 @@ async function runSemgrep() {
     const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
     const semgrepCmd = `semgrep --config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten --severity ERROR,WARNING,INFO --json ${excludeFlags} .`;
 
-    const result = await withTimeout(
-      new Promise((resolve) => {
-        const r = execCommand(semgrepCmd, { timeout: 60000 });
-        resolve(r);
-      }),
-      60000,
-      'semgrep 超时 (60s)',
-    );
+    const result = await withTimeout(execCommandAsync(semgrepCmd, { timeout: 60000 }), 60000, 'semgrep 超时 (60s)');
 
     if (!result.success && result.stderr) {
       // semgrep may exit non-zero with findings
@@ -123,10 +118,7 @@ async function runSemgrep() {
 async function runKnip() {
   try {
     const result = await withTimeout(
-      new Promise((resolve) => {
-        const r = execCommand('bunx knip --reporter json', { timeout: 30000 });
-        resolve(r);
-      }),
+      execCommandAsync('bunx knip --reporter json', { timeout: 30000 }),
       30000,
       'knip 超时 (30s)',
     );
@@ -168,14 +160,7 @@ async function runTrivy() {
     const skipDirs = ignoredDirs.map((d) => `--skip-dirs "${d}"`).join(' ');
     const trivyCmd = `trivy fs --scanners vuln,misconfig,secret,license --severity CRITICAL,HIGH,MEDIUM --format json ${skipDirs} .`;
 
-    const result = await withTimeout(
-      new Promise((resolve) => {
-        const r = execCommand(trivyCmd, { timeout: 60000 });
-        resolve(r);
-      }),
-      60000,
-      'trivy 超时 (60s)',
-    );
+    const result = await withTimeout(execCommandAsync(trivyCmd, { timeout: 60000 }), 60000, 'trivy 超时 (60s)');
 
     if (result.success) {
       try {
@@ -223,10 +208,7 @@ async function runFullTests() {
     } else {
       try {
         const pyResult = await withTimeout(
-          new Promise((resolve) => {
-            const r = execCommand('uv run python -m pytest -x -q', { timeout: 60000 });
-            resolve(r);
-          }),
+          execCommandAsync('uv run python -m pytest -x -q', { timeout: 60000 }),
           60000,
           'pytest 超时 (60s)',
         );
@@ -271,14 +253,7 @@ async function runFullTests() {
           .join(' ');
         testCmd = `bun test ${files}`;
       }
-      const jsResult = await withTimeout(
-        new Promise((resolve) => {
-          const r = execCommand(testCmd, { timeout: 60000 });
-          resolve(r);
-        }),
-        60000,
-        'bun test 超时 (60s)',
-      );
+      const jsResult = await withTimeout(execCommandAsync(testCmd, { timeout: 60000 }), 60000, 'bun test 超时 (60s)');
       if (!jsResult.success) {
         results.push(
           formatResult('full-test-js', DECISION.DENY, `JS 全量测试失败`, {
@@ -312,14 +287,7 @@ async function runHookTests() {
   }
 
   try {
-    const result = await withTimeout(
-      new Promise((resolve) => {
-        const r = execCommand(`bun test "${TESTS_DIR}"`, { timeout: 30000 });
-        resolve(r);
-      }),
-      30000,
-      'Hook 测试超时 (30s)',
-    );
+    const result = await withTimeout(execCommandAsync(`bun test "${TESTS_DIR}"`, { timeout: 30000 }), 30000, 'Hook 测试超时 (30s)');
 
     if (!result.success) {
       return formatResult('hook-tests', DECISION.DENY, `Hook 自身测试失败`, {
@@ -426,4 +394,20 @@ async function main() {
   });
 }
 
-main();
+// 只在直接运行时执行 main()，导入时不执行
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}
+
+// 导出函数供测试使用
+export {
+  getGitIgnoredDirs,
+  extractMergeTarget,
+  getCurrentBranch,
+  runSemgrep,
+  runKnip,
+  runTrivy,
+  runFullTests,
+  runHookTests,
+  generateSummary,
+};

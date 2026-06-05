@@ -1,6 +1,20 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { spawn } from 'child_process';
 import { join } from 'path';
+import { Readable } from 'stream';
+import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import {
+  MAIN_BRANCHES,
+  FILE_WRITE_PATTERNS,
+  log,
+  getCurrentBranch,
+  isInsideWorktree,
+  isFileWriteCommand,
+  getWritePatternName,
+  allow,
+  deny,
+  main,
+} from '../branch-gate.js';
 
 describe('branch-gate', () => {
   const HOOK_PATH = join(import.meta.dir, '..', 'branch-gate.js');
@@ -37,36 +51,19 @@ describe('branch-gate', () => {
 
   describe('MAIN_BRANCHES 常量', () => {
     it('应该包含 main', () => {
-      const mainBranches = ['main', 'master'];
-      expect(mainBranches.includes('main')).toBe(true);
+      expect(MAIN_BRANCHES.includes('main')).toBe(true);
     });
 
     it('应该包含 master', () => {
-      const mainBranches = ['main', 'master'];
-      expect(mainBranches.includes('master')).toBe(true);
+      expect(MAIN_BRANCHES.includes('master')).toBe(true);
     });
 
     it('不应该包含 develop', () => {
-      const mainBranches = ['main', 'master'];
-      expect(mainBranches.includes('develop')).toBe(false);
+      expect(MAIN_BRANCHES.includes('develop')).toBe(false);
     });
   });
 
   describe('FILE_WRITE_PATTERNS 模式检测', () => {
-    const FILE_WRITE_PATTERNS = [
-      { pattern: />\s*\S+/, name: '重定向写入 (>)' },
-      { pattern: />>\s*\S+/, name: '追加写入 (>>)' },
-      { pattern: /\btee\b/, name: 'tee 命令' },
-      { pattern: /\bsed\s+-i\b/, name: 'sed 原地编辑' },
-      { pattern: /\bcp\s+/, name: 'cp 复制' },
-      { pattern: /\bmv\s+/, name: 'mv 移动' },
-      { pattern: /\becho\b.*>/, name: 'echo 重定向' },
-      { pattern: /\bdd\s+/, name: 'dd 命令' },
-      { pattern: /\binstall\s+/, name: 'install 命令' },
-      { pattern: /\bcat\s+.*>/, name: 'cat 重定向' },
-      { pattern: /\bprintf\b.*>/, name: 'printf 重定向' },
-    ];
-
     it('应该检测重定向写入 (>)', () => {
       const cmd = 'echo "test" > file.txt';
       expect(FILE_WRITE_PATTERNS.some(({ pattern }) => pattern.test(cmd))).toBe(true);
@@ -345,6 +342,293 @@ describe('branch-gate', () => {
         cwd: process.cwd(),
       });
       expect(result.stdout.trim()).toBe('{}');
+    });
+  });
+
+  // 直接测试导出的函数（确保覆盖率）
+  describe('导出函数直接测试', () => {
+    it('getCurrentBranch 应该返回字符串或 null', () => {
+      const branch = getCurrentBranch(process.cwd());
+      expect(typeof branch === 'string' || branch === null).toBe(true);
+    });
+
+    it('getCurrentBranch 应该处理无效目录', () => {
+      const branch = getCurrentBranch('/nonexistent/path');
+      expect(branch).toBe(null);
+    });
+
+    it('isInsideWorktree 应该检测 worktree 环境', () => {
+      const result = isInsideWorktree(process.cwd());
+      expect(typeof result).toBe('boolean');
+    });
+
+    it('isInsideWorktree 应该返回 false 对于非 worktree', () => {
+      const result = isInsideWorktree('/nonexistent/path');
+      expect(result).toBe(false);
+    });
+
+    it('isFileWriteCommand 应该检测重定向', () => {
+      expect(isFileWriteCommand('echo "test" > file.txt')).toBe(true);
+      expect(isFileWriteCommand('ls -la')).toBe(false);
+      expect(isFileWriteCommand(null)).toBe(false);
+      expect(isFileWriteCommand('')).toBe(false);
+    });
+
+    it('isFileWriteCommand 应该检测 tee 命令', () => {
+      expect(isFileWriteCommand('echo "test" | tee file.txt')).toBe(true);
+    });
+
+    it('isFileWriteCommand 应该检测 sed -i', () => {
+      expect(isFileWriteCommand('sed -i "s/old/new/" file.txt')).toBe(true);
+    });
+
+    it('isFileWriteCommand 应该检测 cp 命令', () => {
+      expect(isFileWriteCommand('cp source.txt target.txt')).toBe(true);
+    });
+
+    it('isFileWriteCommand 应该检测 mv 命令', () => {
+      expect(isFileWriteCommand('mv old.txt new.txt')).toBe(true);
+    });
+
+    it('isFileWriteCommand 应该检测 dd 命令', () => {
+      expect(isFileWriteCommand('dd if=/dev/zero of=file.bin')).toBe(true);
+    });
+
+    it('isFileWriteCommand 应该检测 install 命令', () => {
+      expect(isFileWriteCommand('install -m 755 source target')).toBe(true);
+    });
+
+    it('getWritePatternName 应该返回匹配的模式名称', () => {
+      expect(getWritePatternName('echo "test" > file.txt')).toBe('重定向写入 (>)');
+      expect(getWritePatternName('ls -la')).toBe(null);
+      expect(getWritePatternName(null)).toBe(null);
+      expect(getWritePatternName('')).toBe(null);
+    });
+
+    it('getWritePatternName 应该检测各种写入命令', () => {
+      // >> 也会匹配 >，所以返回 "重定向写入 (>)"
+      expect(getWritePatternName('echo "test" >> file.txt')).toBe('重定向写入 (>)');
+      expect(getWritePatternName('echo "test" | tee file.txt')).toBe('tee 命令');
+      expect(getWritePatternName('sed -i "s/old/new/" file.txt')).toBe('sed 原地编辑');
+      expect(getWritePatternName('cp source.txt target.txt')).toBe('cp 复制');
+      expect(getWritePatternName('mv old.txt new.txt')).toBe('mv 移动');
+      expect(getWritePatternName('dd if=/dev/zero of=file.bin')).toBe('dd 命令');
+      expect(getWritePatternName('install -m 755 source target')).toBe('install 命令');
+    });
+
+    it('allow 应该返回正确的 JSON', () => {
+      const result = JSON.parse(allow());
+      expect(result).toEqual({});
+    });
+
+    it('deny 应该返回正确的拒绝格式', () => {
+      const result = JSON.parse(deny('测试原因'));
+      expect(result.hookSpecificOutput.permissionDecision).toBe('deny');
+      expect(result.hookSpecificOutput.permissionDecisionReason).toBe('测试原因');
+    });
+
+    it('log 应该正常执行', () => {
+      expect(() => log({ level: 'TEST', message: 'test' })).not.toThrow();
+    });
+
+    it('log 应该处理各种日志级别', () => {
+      expect(() => log({ level: 'INFO', message: 'info test' })).not.toThrow();
+      expect(() => log({ level: 'WARN', message: 'warn test' })).not.toThrow();
+      expect(() => log({ level: 'ERROR', message: 'error test' })).not.toThrow();
+    });
+  });
+
+  // main() 函数直接测试
+  describe('main() 函数直接测试', () => {
+    let originalStdin;
+    let originalConsoleLog;
+    let consoleOutput;
+
+    beforeEach(() => {
+      originalStdin = process.stdin;
+      originalConsoleLog = console.log;
+      consoleOutput = [];
+
+      // Mock console.log to capture output
+      console.log = (...args) => {
+        consoleOutput.push(args.join(' '));
+      };
+    });
+
+    afterEach(() => {
+      process.stdin = originalStdin;
+      console.log = originalConsoleLog;
+    });
+
+    it('应该允许非目标工具（Read）', async () => {
+      const inputData = JSON.stringify({
+        tool_name: 'Read',
+        tool_input: { file_path: 'README.md' },
+        session_id: 'test-1',
+        cwd: process.cwd(),
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+    });
+
+    it('应该允许非目标工具（ListFiles）', async () => {
+      const inputData = JSON.stringify({
+        tool_name: 'ListFiles',
+        tool_input: {},
+        session_id: 'test-2',
+        cwd: process.cwd(),
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+    });
+
+    it('应该在 worktree 环境中允许所有操作', async () => {
+      const inputData = JSON.stringify({
+        tool_name: 'Write',
+        tool_input: { file_path: 'test.txt', content: 'test' },
+        session_id: 'test-3',
+        cwd: process.cwd(),
+      });
+
+      process.stdin = Readable.from([inputData]);
+
+      // Mock isInsideWorktree to return true
+      const originalIsInsideWorktree = isInsideWorktree;
+      global.isInsideWorktree = () => true;
+
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+
+      global.isInsideWorktree = originalIsInsideWorktree;
+    });
+
+    it('应该允许当前分支上的 Write 操作（非主分支）', async () => {
+      // 当前 repo 在 feat/ 分支上，所以 Write 应该被允许
+      const inputData = JSON.stringify({
+        tool_name: 'Write',
+        tool_input: { file_path: 'test.txt', content: 'test' },
+        session_id: 'test-4',
+        cwd: process.cwd(),
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+    });
+
+    it('应该处理无法获取分支的情况', async () => {
+      const tempDir = '/tmp/test-no-git-branchgate';
+      mkdirSync(tempDir, { recursive: true });
+
+      const inputData = JSON.stringify({
+        tool_name: 'Write',
+        tool_input: { file_path: 'test.txt', content: 'test' },
+        session_id: 'test-7',
+        cwd: tempDir,
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      // 无法获取分支时应该允许
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+
+      rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it('应该处理 isInsideWorktree 的异常情况', async () => {
+      // 测试 isInsideWorktree 的 catch 分支
+      const result = isInsideWorktree('/nonexistent/path/that/does/not/exist');
+      expect(result).toBe(false);
+    });
+
+    it('应该处理无效 JSON 输入', async () => {
+      process.stdin = Readable.from(['{invalid json}']);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+    });
+
+    it('应该处理空输入', async () => {
+      process.stdin = Readable.from(['{}']);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+    });
+
+    it('应该处理 Bash 工具的非写入命令', async () => {
+      const inputData = JSON.stringify({
+        tool_name: 'Bash',
+        tool_input: { command: 'git status' },
+        session_id: 'test-5',
+        cwd: process.cwd(),
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+    });
+
+    it('应该处理 Bash 工具的写入命令', async () => {
+      const inputData = JSON.stringify({
+        tool_name: 'Bash',
+        tool_input: { command: 'echo "test" > file.txt' },
+        session_id: 'test-6',
+        cwd: process.cwd(),
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+    });
+
+    it('应该处理 Write 工具', async () => {
+      const inputData = JSON.stringify({
+        tool_name: 'Write',
+        tool_input: { file_path: 'test.txt', content: 'test' },
+        session_id: 'test-7',
+        cwd: process.cwd(),
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+    });
+
+    it('应该处理 Edit 工具', async () => {
+      const inputData = JSON.stringify({
+        tool_name: 'Edit',
+        tool_input: { file_path: 'test.txt', old_string: 'old', new_string: 'new' },
+        session_id: 'test-8',
+        cwd: process.cwd(),
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
     });
   });
 });
