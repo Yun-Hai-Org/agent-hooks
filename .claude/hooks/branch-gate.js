@@ -17,6 +17,9 @@ import { join } from 'path';
 const MAIN_BRANCHES = ['main', 'master'];
 const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
 
+// 主分支上允许写入的目录白名单（如 BMAD 规划制品）
+const ALLOWED_PATHS_ON_MAIN = ['_bmad-output/'];
+
 // 安全命令白名单（主分支上允许执行的只读 git 命令）
 const SAFE_COMMAND_PATTERNS = [/^\s*git\s+(checkout|branch|stash|log|status|show|diff)\b/];
 
@@ -67,6 +70,11 @@ function isInsideWorktree(cwd) {
 /** @param {string} command */
 function isSafeCommand(command) {
   return SAFE_COMMAND_PATTERNS.some((pattern) => pattern.test(command));
+}
+
+/** @param {string} filePath */
+function isAllowedPathOnMain(filePath) {
+  return ALLOWED_PATHS_ON_MAIN.some((allowed) => filePath.startsWith(allowed));
 }
 
 /** @param {string} command */
@@ -155,8 +163,19 @@ async function main() {
       if (!isFileWriteCommand(command)) {
         return console.log(allow());
       }
-      // 文件写入命令 - 拒绝
+      // 文件写入命令 - 检查白名单
       const patternName = getWritePatternName(command);
+      if (ALLOWED_PATHS_ON_MAIN.some((p) => command.includes(p))) {
+        log({
+          level: 'INFO',
+          reason: 'allowed path in bash command on main',
+          command: command.slice(0, 200),
+          tool: tool_name,
+          session_id,
+        });
+        return console.log(allow());
+      }
+      // 不在白名单 - 拒绝
       log({
         level: 'BLOCKED',
         tool: tool_name,
@@ -171,8 +190,13 @@ async function main() {
       );
     }
 
-    // Write/Edit 工具 - 直接拒绝
+    // Write/Edit 工具 - 检查白名单后决定
     const filePath = tool_input?.file_path || '';
+    if (isAllowedPathOnMain(filePath)) {
+      log({ level: 'INFO', reason: 'allowed path on main', file: filePath, tool: tool_name, session_id });
+      return console.log(allow());
+    }
+    // 不在白名单 - 拒绝
     log({
       level: 'BLOCKED',
       tool: tool_name,
@@ -196,12 +220,14 @@ if (isDirectRun) {
 
 export {
   MAIN_BRANCHES,
+  ALLOWED_PATHS_ON_MAIN,
   SAFE_COMMAND_PATTERNS,
   FILE_WRITE_PATTERNS,
   log,
   getCurrentBranch,
   isInsideWorktree,
   isSafeCommand,
+  isAllowedPathOnMain,
   isFileWriteCommand,
   getWritePatternName,
   allow,

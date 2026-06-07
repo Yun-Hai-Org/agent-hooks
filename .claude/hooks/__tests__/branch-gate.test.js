@@ -1,16 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { join } from 'path';
 import { Readable } from 'stream';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import {
   MAIN_BRANCHES,
+  ALLOWED_PATHS_ON_MAIN,
   SAFE_COMMAND_PATTERNS,
   FILE_WRITE_PATTERNS,
   log,
   getCurrentBranch,
   isInsideWorktree,
   isSafeCommand,
+  isAllowedPathOnMain,
   isFileWriteCommand,
   getWritePatternName,
   allow,
@@ -62,6 +64,42 @@ describe('branch-gate', () => {
 
     it('不应该包含 develop', () => {
       expect(MAIN_BRANCHES.includes('develop')).toBe(false);
+    });
+  });
+
+  describe('ALLOWED_PATHS_ON_MAIN 常量', () => {
+    it('应该包含 _bmad-output/', () => {
+      expect(ALLOWED_PATHS_ON_MAIN).toContain('_bmad-output/');
+    });
+
+    it('应该是数组', () => {
+      expect(Array.isArray(ALLOWED_PATHS_ON_MAIN)).toBe(true);
+    });
+  });
+
+  describe('isAllowedPathOnMain 白名单检查', () => {
+    it('应该允许 _bmad-output/ 开头的路径', () => {
+      expect(isAllowedPathOnMain('_bmad-output/planning-artifacts/prd.md')).toBe(true);
+    });
+
+    it('应该允许 _bmad-output/ 子目录深路径', () => {
+      expect(isAllowedPathOnMain('_bmad-output/implementation-artifacts/sprint-plan.md')).toBe(true);
+    });
+
+    it('不应该允许普通代码文件', () => {
+      expect(isAllowedPathOnMain('src/app.js')).toBe(false);
+    });
+
+    it('不应该允许空字符串', () => {
+      expect(isAllowedPathOnMain('')).toBe(false);
+    });
+
+    it('不应该允许相似但不同的路径', () => {
+      expect(isAllowedPathOnMain('bmad-output/file.md')).toBe(false);
+    });
+
+    it('不应该允许 .claude/ 下的文件', () => {
+      expect(isAllowedPathOnMain('.claude/settings.json')).toBe(false);
     });
   });
 
@@ -553,7 +591,7 @@ describe('branch-gate', () => {
       expect(consoleOutput[0]).toBe('{}');
     });
 
-    it('应该在 worktree 环境中允许所有操作', async () => {
+    it('应该在 worktree 环境中允许 Write 操作', async () => {
       // 使用临时目录模拟 worktree（在 /tmp 中创建 .git 文件）
       const tempDir = '/tmp/test-worktree-branchgate';
       mkdirSync(tempDir, { recursive: true });
@@ -563,6 +601,69 @@ describe('branch-gate', () => {
         tool_name: 'Write',
         tool_input: { file_path: 'test.txt', content: 'test' },
         session_id: 'test-3',
+        cwd: tempDir,
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+
+      rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it('应该在 worktree 环境中允许 Edit 操作', async () => {
+      const tempDir = '/tmp/test-worktree-edit-branchgate';
+      mkdirSync(tempDir, { recursive: true });
+      writeFileSync(join(tempDir, '.git'), 'gitdir: /tmp/test-worktree-edit-branchgate/.git/worktrees/test\n');
+
+      const inputData = JSON.stringify({
+        tool_name: 'Edit',
+        tool_input: { file_path: 'test.txt', old_string: 'old', new_string: 'new' },
+        session_id: 'test-wt-edit',
+        cwd: tempDir,
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+
+      rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it('应该在 worktree 环境中允许 Bash 写入命令', async () => {
+      const tempDir = '/tmp/test-worktree-bash-branchgate';
+      mkdirSync(tempDir, { recursive: true });
+      writeFileSync(join(tempDir, '.git'), 'gitdir: /tmp/test-worktree-bash-branchgate/.git/worktrees/test\n');
+
+      const inputData = JSON.stringify({
+        tool_name: 'Bash',
+        tool_input: { command: 'echo "test" > file.txt' },
+        session_id: 'test-wt-bash',
+        cwd: tempDir,
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+
+      rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it('应该在 worktree 环境中允许非写入 Bash 命令', async () => {
+      const tempDir = '/tmp/test-worktree-bash-ro-branchgate';
+      mkdirSync(tempDir, { recursive: true });
+      writeFileSync(join(tempDir, '.git'), 'gitdir: /tmp/test-worktree-bash-ro-branchgate/.git/worktrees/test\n');
+
+      const inputData = JSON.stringify({
+        tool_name: 'Bash',
+        tool_input: { command: 'ls -la' },
+        session_id: 'test-wt-bash-ro',
         cwd: tempDir,
       });
 
@@ -709,6 +810,97 @@ describe('branch-gate', () => {
 
       expect(consoleOutput).toHaveLength(1);
       expect(consoleOutput[0]).toBe('{}');
+    });
+
+    it('Write 工具写入白名单目录应该允许', async () => {
+      // 使用临时目录模拟 main 分支
+      const tempDir = '/tmp/test-allowlist-write-branchgate';
+      mkdirSync(tempDir, { recursive: true });
+      // 创建 git 仓库并切换到 main 分支
+      execSync('git init -b main', { cwd: tempDir, stdio: 'pipe' });
+
+      const inputData = JSON.stringify({
+        tool_name: 'Write',
+        tool_input: { file_path: '_bmad-output/planning-artifacts/prd.md', content: '# PRD' },
+        session_id: 'test-allowlist-write',
+        cwd: tempDir,
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+
+      rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it('Edit 工具编辑白名单目录应该允许', async () => {
+      const tempDir = '/tmp/test-allowlist-edit-branchgate';
+      mkdirSync(tempDir, { recursive: true });
+      execSync('git init -b main', { cwd: tempDir, stdio: 'pipe' });
+
+      const inputData = JSON.stringify({
+        tool_name: 'Edit',
+        tool_input: {
+          file_path: '_bmad-output/implementation-artifacts/sprint-plan.md',
+          old_string: 'old',
+          new_string: 'new',
+        },
+        session_id: 'test-allowlist-edit',
+        cwd: tempDir,
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+
+      rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it('Bash 写入白名单目录应该允许', async () => {
+      const tempDir = '/tmp/test-allowlist-bash-branchgate';
+      mkdirSync(tempDir, { recursive: true });
+      execSync('git init -b main', { cwd: tempDir, stdio: 'pipe' });
+
+      const inputData = JSON.stringify({
+        tool_name: 'Bash',
+        tool_input: { command: 'echo "content" > _bmad-output/test.md' },
+        session_id: 'test-allowlist-bash',
+        cwd: tempDir,
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+
+      rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it('Write 工具写入非白名单目录在 main 分支应该拒绝', async () => {
+      const tempDir = '/tmp/test-deny-write-branchgate';
+      mkdirSync(tempDir, { recursive: true });
+      execSync('git init -b main', { cwd: tempDir, stdio: 'pipe' });
+
+      const inputData = JSON.stringify({
+        tool_name: 'Write',
+        tool_input: { file_path: 'src/app.js', content: 'const x = 1;' },
+        session_id: 'test-deny-write',
+        cwd: tempDir,
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.hookSpecificOutput?.permissionDecision).toBe('deny');
+
+      rmSync(tempDir, { recursive: true, force: true });
     });
   });
 });
