@@ -91,10 +91,24 @@ Hook 按执行时机分为四个安全门：
 
 ## 开发流程
 
-1. 在 feature 分支上开发（禁止在 master/main 上直接修改文件）
+1. 在 feature 分支或 worktree 中开发（禁止在 master/main 上直接修改代码文件，`_bmad-output/` 目录除外）
 2. 文件写入后自动触发 lint + format + git add
 3. 提交时自动校验 commit 格式：`类型: 描述`（类型：feat/fix/refactor/docs/test/chore/style/perf）
 4. 合并到 main 时自动运行全量安全扫描和测试
+
+## 自动化保障（无需手动执行）
+
+Claude 可以直接执行 `git commit` 和 `git merge`，以下检查由 hook **自动运行**，
+**不需要 Claude 手动预先执行**：
+
+| 阶段          | 自动执行的检查                                                  | Claude 需要手动做？ |
+| ------------- | --------------------------------------------------------------- | :-----------------: |
+| 文件写入后    | ESLint + Ruff + Prettier + shellcheck + hadolint + 自动 git add |      ❌ 不需要      |
+| git commit 时 | 分支检查 + 提交格式 + 敏感文件 + 依赖审计 + 类型检查 + 关联测试 |      ❌ 不需要      |
+| git merge 时  | Semgrep + Trivy + Knip + 全量测试 + Hook 自测                   |      ❌ 不需要      |
+
+**原则：提交门和合并门是安全最终保障，Claude 只需写好代码和提交信息，直接 commit/merge 即可。**
+**禁止 Claude 在提交前手动运行 `bun test` 或其他质量检查 — 这些由 hook 自动完成，手动运行会导致重复执行。**
 
 ## 工具限制
 
