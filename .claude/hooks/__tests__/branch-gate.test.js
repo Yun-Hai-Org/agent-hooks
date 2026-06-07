@@ -808,8 +808,14 @@ describe('branch-gate', () => {
       process.stdin = Readable.from([inputData]);
       await main();
 
+      const currentBranch = getCurrentBranch(process.cwd());
       expect(consoleOutput).toHaveLength(1);
-      expect(consoleOutput[0]).toBe('{}');
+      if (MAIN_BRANCHES.includes(currentBranch)) {
+        const output = JSON.parse(consoleOutput[0]);
+        expect(output.hookSpecificOutput?.permissionDecision).toBe('deny');
+      } else {
+        expect(consoleOutput[0]).toBe('{}');
+      }
     });
 
     it('Write 工具写入白名单目录应该允许', async () => {
