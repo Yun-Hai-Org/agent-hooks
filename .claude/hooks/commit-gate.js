@@ -182,8 +182,8 @@ async function checkTypeScript(cwd) {
       return;
     }
     // 只检查暂存的非测试文件
-    const files = nonTestJsTsFiles.map((/** @type {string} */ f) => `"${f}"`).join(' ');
-    const r = execCommand(`bunx tsc --noEmit --allowJs --checkJs ${files}`, { cwd, timeout: 30000 });
+    // 不指定文件，使用 tsconfig.json 配置检查
+    const r = execCommand('bunx tsc --noEmit', { cwd, timeout: 30000 });
     resolve({ tool: 'tsc', ...r });
   });
 

@@ -134,7 +134,7 @@ async function runTypeCheck(cwd) {
 async function runSemgrep(cwd) {
   const hasSemgrep = execCommand('which semgrep', { cwd });
   if (!hasSemgrep.success) {
-    return formatResult('semgrep', DECISION.SKIP, 'semgrep 未安装，跳过');
+    return formatResult('semgrep', DECISION.DENY, 'semgrep 未安装，请先安装 semgrep');
   }
 
   try {
@@ -214,7 +214,7 @@ async function runKnip(cwd) {
 async function runTrivy(cwd) {
   const hasTrivy = execCommand('which trivy', { cwd });
   if (!hasTrivy.success) {
-    return formatResult('trivy', DECISION.SKIP, 'trivy 未安装，跳过');
+    return formatResult('trivy', DECISION.DENY, 'trivy 未安装，请先安装 trivy');
   }
 
   try {
