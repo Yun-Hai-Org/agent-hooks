@@ -1,0 +1,4 @@
+GitHub/
+node_modules/
+.claude/worktrees/
+_tsc-output.txt
