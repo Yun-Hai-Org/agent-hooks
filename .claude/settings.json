@@ -1,12 +1,36 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun .claude/hooks/resolve-hook-path.js session-start.js",
+            "statusMessage": "检查工具健康状态..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun .claude/hooks/resolve-hook-path.js user-prompt-filter.js",
+            "statusMessage": "扫描提示词中的敏感信息..."
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/block-dangerous-commands.js",
+            "command": "bun .claude/hooks/resolve-hook-path.js block-dangerous-commands.js",
             "statusMessage": "检查危险命令和工具限制..."
           }
         ]
@@ -16,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/branch-gate.js",
+            "command": "bun .claude/hooks/resolve-hook-path.js branch-gate.js",
             "statusMessage": "检查分支保护（master/main 写入限制）..."
           }
         ]
@@ -26,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/protect-secrets.js",
+            "command": "bun .claude/hooks/resolve-hook-path.js protect-secrets.js",
             "statusMessage": "检查敏感文件和内容..."
           }
         ]
@@ -36,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/commit-gate.js",
+            "command": "bun .claude/hooks/resolve-hook-path.js commit-gate.js",
             "statusMessage": "检查提交规范..."
           }
         ]
@@ -46,8 +70,20 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/merge-gate.js",
+            "command": "bun .claude/hooks/resolve-hook-path.js merge-gate.js",
             "statusMessage": "检查合并操作..."
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun .claude/hooks/resolve-hook-path.js notification-hook.js",
+            "statusMessage": "发送安全事件通知..."
           }
         ]
       }
@@ -58,12 +94,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/post-write-lint.js",
+            "command": "bun .claude/hooks/resolve-hook-path.js post-write-lint.js",
             "statusMessage": "执行代码质量检查..."
           },
           {
             "type": "command",
-            "command": "bun .claude/hooks/auto-stage.js",
+            "command": "bun .claude/hooks/resolve-hook-path.js auto-stage.js",
             "statusMessage": "自动暂存修改文件..."
           }
         ]

@@ -4,6 +4,7 @@ import {
   decide,
   formatHookOutput,
   checkToolAvailable,
+  detectToolchain,
   execCommand,
   isGitIgnored,
   withTimeout,
@@ -230,6 +231,38 @@ describe('security-orchestrator', () => {
     expect(r).toBe(false);
   });
 
+  // ─── Story 6.3: isGitIgnored cwd 参数集成测试 ─────────────────────────────
+
+  it('isGitIgnored - 指定 cwd 参数应正确检测 gitignored 文件', () => {
+    const { mkdirSync, writeFileSync, rmSync } = require('fs');
+    const { join } = require('path');
+    const { execSync } = require('child_process');
+    const tmpDir = join(require('os').tmpdir(), `gitignore-orch-test-${Date.now()}`);
+    mkdirSync(tmpDir, { recursive: true });
+    execSync('git init', { cwd: tmpDir });
+    execSync('git config user.email "test@test.com"', { cwd: tmpDir });
+    execSync('git config user.name "Test"', { cwd: tmpDir });
+    writeFileSync(join(tmpDir, '.gitignore'), '*.log\ndist/\n');
+    writeFileSync(join(tmpDir, 'README.md'), '# test');
+    execSync('git add . && git commit -m "init"', { cwd: tmpDir });
+    try {
+      writeFileSync(join(tmpDir, 'app.log'), 'log');
+      mkdirSync(join(tmpDir, 'dist'), { recursive: true });
+      writeFileSync(join(tmpDir, 'dist', 'out.js'), 'code');
+      expect(isGitIgnored('app.log', tmpDir)).toBe(true);
+      expect(isGitIgnored('dist/out.js', tmpDir)).toBe(true);
+      expect(isGitIgnored('src/main.js', tmpDir)).toBe(false);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('isGitIgnored - 无 cwd 参数时使用 process.cwd()', () => {
+    // 本项目 .gitignore 包含 GitHub/
+    const r = isGitIgnored('GitHub/some-file.js');
+    expect(r).toBe(true);
+  });
+
   describe('withTimeout - 超时控制', () => {
     it('应该在超时前完成的 Promise 返回结果', async () => {
       const fastPromise = new Promise((resolve) => setTimeout(() => resolve('done'), 10));
@@ -327,6 +360,60 @@ describe('security-orchestrator', () => {
       process.exit = originalExit;
       // safeMain 使用 exit(0) 实现优雅降级（不阻断 Claude）
       expect(exitCode).toBe(0);
+    });
+  });
+
+  describe('detectToolchain - 工具链检测', () => {
+    it('当前项目应检测到 bun (package.json + bun.lock)', () => {
+      const toolchain = detectToolchain(process.cwd());
+      expect(toolchain.js).toBe('bun');
+    });
+
+    it('当前项目应检测到 uv (pyproject.toml)', () => {
+      const toolchain = detectToolchain(process.cwd());
+      expect(toolchain.python).toBe('uv');
+    });
+
+    it('不存在的目录应返回 null', () => {
+      const toolchain = detectToolchain('/nonexistent/path/xyz');
+      expect(toolchain.js).toBeNull();
+      expect(toolchain.python).toBeNull();
+    });
+
+    it('无 cwd 参数时使用 process.cwd()', () => {
+      const toolchain = detectToolchain();
+      expect(toolchain).toBeDefined();
+      expect(toolchain.js).toBeDefined();
+      expect(toolchain.python).toBeDefined();
+    });
+
+    it('仅有 package.json 无 bun.lock 时 js 应为 node', () => {
+      const { mkdirSync, writeFileSync, rmSync } = require('fs');
+      const { join } = require('path');
+      const tmpDir = join(require('os').tmpdir(), `toolchain-test-${Date.now()}`);
+      mkdirSync(tmpDir, { recursive: true });
+      writeFileSync(join(tmpDir, 'package.json'), '{}');
+      try {
+        const toolchain = detectToolchain(tmpDir);
+        expect(toolchain.js).toBe('node');
+        expect(toolchain.python).toBeNull();
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('空目录应返回全 null', () => {
+      const { mkdirSync, rmSync } = require('fs');
+      const { join } = require('path');
+      const tmpDir = join(require('os').tmpdir(), `toolchain-empty-${Date.now()}`);
+      mkdirSync(tmpDir, { recursive: true });
+      try {
+        const toolchain = detectToolchain(tmpDir);
+        expect(toolchain.js).toBeNull();
+        expect(toolchain.python).toBeNull();
+      } finally {
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
     });
   });
 });

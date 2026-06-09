@@ -13,6 +13,7 @@
 
 import { appendFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
+import { LOG_DIR } from './security-orchestrator.js';
 
 const SAFETY_LEVEL = 'strict';
 
@@ -259,7 +260,6 @@ const ALLOW_PATTERNS = [
 
 const LEVELS = /** @type {{ [key: string]: number }} */ ({ critical: 1, high: 2, strict: 3 });
 const EMOJIS = /** @type {{ [key: string]: string }} */ ({ critical: '🚨', high: '⛔', strict: '⚠️' });
-const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
 
 /** @param {Record<string, unknown>} data */
 function log(data) {

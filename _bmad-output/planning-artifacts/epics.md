@@ -2,6 +2,8 @@
 stepsCompleted: [step-01-validate-prerequisites, step-02-design-epics]
 inputDocuments:
   - '_bmad-output/planning-artifacts/prd.md'
+  - '_bmad-output/planning-artifacts/architecture.md'
+  - '_bmad-output/planning-artifacts/ux-design-specification.md'
   - '_bmad-output/planning-artifacts/research/technical-claude-code-hooks-research-2026-06-03.md'
   - '_bmad-output/brainstorming/brainstorming-session-20260601-085633.md'
 ---
@@ -127,31 +129,31 @@ NFR38: 全局钩子和项目级钩子共存时，项目级配置优先
 
 ### FR Coverage Map
 
-| FR | Epic | 说明 |
-|----|------|------|
-| FR1-FR3 | (已有) | 危险命令基础防护 — 已实现 |
-| FR4-FR6 | Epic 1 | 敏感文件保护增强 |
-| FR7 | Epic 1 | Terraform 状态文件保护 |
-| FR8 | Epic 1 | API 密钥内容扫描扩展 |
-| FR9 | Epic 2 | Shell 脚本校验 |
-| FR10 | Epic 2 | Dockerfile 校验 |
-| FR11 | Epic 3 | JSON Schema 增强 |
-| FR12 | Epic 3 | YAML Schema 增强 |
-| FR13 | Epic 3 | TOML 校验 |
-| FR14 | Epic 4 | SQL 校验 |
-| FR15 | Epic 4 | CSS 校验 |
-| FR16 | Epic 2-4 | 校验输出格式（贯穿各校验器） |
-| FR17 | Epic 6 | 配置化启用/禁用 |
-| FR18-FR25 | (已有) | Git 工作流安全 — 已实现 |
-| FR26-FR30 | Epic 6 | 配置管理基础设施 |
-| FR31 | (已有) | 即时反馈 — 已实现 |
-| FR32 | Epic 5 | Slack/飞书通知 |
-| FR33 | (已有) | JSONL 日志 — 已实现 |
-| FR34 | Epic 5 | SessionStart 健康检查 |
-| FR35 | Epic 5 | Notification 事件 |
-| FR36 | Epic 1 | UserPromptSubmit 事件 |
-| FR37 | Epic 5 | SessionStart 事件 |
-| FR38-FR40 | (已有) | 协议/fail-open/渐进信任 — 已实现 |
+| FR        | Epic     | 说明                             |
+| --------- | -------- | -------------------------------- |
+| FR1-FR3   | (已有)   | 危险命令基础防护 — 已实现        |
+| FR4-FR6   | Epic 1   | 敏感文件保护增强                 |
+| FR7       | Epic 1   | Terraform 状态文件保护           |
+| FR8       | Epic 1   | API 密钥内容扫描扩展             |
+| FR9       | Epic 2   | Shell 脚本校验                   |
+| FR10      | Epic 2   | Dockerfile 校验                  |
+| FR11      | Epic 3   | JSON Schema 增强                 |
+| FR12      | Epic 3   | YAML Schema 增强                 |
+| FR13      | Epic 3   | TOML 校验                        |
+| FR14      | Epic 4   | SQL 校验                         |
+| FR15      | Epic 4   | CSS 校验                         |
+| FR16      | Epic 2-4 | 校验输出格式（贯穿各校验器）     |
+| FR17      | Epic 6   | 配置化启用/禁用                  |
+| FR18-FR25 | (已有)   | Git 工作流安全 — 已实现          |
+| FR26-FR30 | Epic 6   | 配置管理基础设施                 |
+| FR31      | (已有)   | 即时反馈 — 已实现                |
+| FR32      | Epic 5   | Slack/飞书通知                   |
+| FR33      | (已有)   | JSONL 日志 — 已实现              |
+| FR34      | Epic 5   | SessionStart 健康检查            |
+| FR35      | Epic 5   | Notification 事件                |
+| FR36      | Epic 1   | UserPromptSubmit 事件            |
+| FR37      | Epic 5   | SessionStart 事件                |
+| FR38-FR40 | (已有)   | 协议/fail-open/渐进信任 — 已实现 |
 
 ## Epic List
 
@@ -162,6 +164,7 @@ NFR38: 全局钩子和项目级钩子共存时，项目级配置优先
 **FRs covered:** FR4, FR5, FR6, FR7, FR8, FR36
 
 **实现内容：**
+
 - protect-secrets.js 扩展：新增 8 个敏感文件模式（.tfstate、.tfvars、.git-credentials、FIDO2 SSH 密钥等）
 - API 密钥内容扫描扩展：新增 8 个提供商（OpenAI、Anthropic、HuggingFace、Discord、Telegram、Vault、Azure Storage、通用 PRIVATE KEY）
 - Bash 拦截扩展：新增 5 个模式（kubectl get secret、terraform output、openssl rsa -in 等）
@@ -176,6 +179,7 @@ NFR38: 全局钩子和项目级钩子共存时，项目级配置优先
 **FRs covered:** FR9, FR10, FR16
 
 **实现内容：**
+
 - `lintShell()` 函数：集成 shellcheck + shfmt，覆盖 .sh/.bash/.zsh
 - `lintDockerfile()` 函数：集成 hadolint，按文件名匹配 Dockerfile/Containerfile
 - 清晰的错误信息和修复建议输出
@@ -189,6 +193,7 @@ NFR38: 全局钩子和项目级钩子共存时，项目级配置优先
 **FRs covered:** FR11, FR12, FR13
 
 **实现内容：**
+
 - JSON 增强：prettier 格式化 + check-jsonschema Schema 验证
 - YAML 增强：prettier 格式化 + check-jsonschema Schema 验证
 - TOML 校验：`lintToml()` 集成 taplo
@@ -202,6 +207,7 @@ NFR38: 全局钩子和项目级钩子共存时，项目级配置优先
 **FRs covered:** FR14, FR15
 
 **实现内容：**
+
 - SQL 校验：`lintSql()` 集成 SQLFluff（via uv run）
 - CSS 校验：`lintCss()` 集成 stylelint + prettier，覆盖 .css/.scss/.less
 
@@ -214,6 +220,7 @@ NFR38: 全局钩子和项目级钩子共存时，项目级配置优先
 **FRs covered:** FR32, FR34, FR35, FR37
 
 **实现内容：**
+
 - Notification 钩子：安全事件推送到 Slack/飞书（Webhook）
 - SessionStart 钩子：钩子健康检查，探测所有校验工具可用性
 - 健康状态报告输出
@@ -227,6 +234,7 @@ NFR38: 全局钩子和项目级钩子共存时，项目级配置优先
 **FRs covered:** FR17, FR26-FR30 + NFR24-NFR26 + NFR33-NFR38
 
 **实现内容：**
+
 - gitignore 兼容：security-orchestrator 新增 `isGitIgnored()` 函数
 - post-write-lint / merge-gate 跳过 .gitignore 文件
 - settings.json 改用相对路径，支持全局模式（~/.claude/hooks/）
@@ -247,29 +255,335 @@ Epic 5 (通知+健康)     ← 独立可交付，P1
 Epic 6 (基础设施)      ← 建议最后做，为所有 Epic 提供全局模式和 gitignore 支持
 ```
 
-## Epic Details
+## Epic 详情
 
-<!-- Repeat for each epic in epics_list (N = 1, 2, 3...) -->
+---
 
-## Epic {{N}}: {{epic_title_N}}
+### Epic 1: 敏感信息保护全面增强 🔴 P0
 
-{{epic_goal_N}}
+**目标：** 增强 protect-secrets 钩子的检测能力，新增 8 个敏感文件模式、8 个 API 密钥扫描模式、5 个 Bash 危险命令拦截模式，以及 Terraform 状态文件保护。将安全覆盖从 30 条扩展到 50+ 条。
 
-<!-- Repeat for each story (M = 1, 2, 3...) within epic N -->
+---
 
-### Story {{N}}.{{M}}: {{story_title_N_M}}
+#### Story 1.1: 新增敏感文件与 Terraform 状态文件保护模式
 
-As a {{user_type}},
-I want {{capability}},
-So that {{value_benefit}}.
+As a **Claude Code 开发者**,
+I want **protect-secrets 钩子覆盖更多敏感文件类型（.env.\*、证书、私钥、SSH 配置）以及 Terraform 状态文件（.tfstate/.tfvars）**,
+So that **AI 无法读取或写入这些文件，防止敏感信息泄露和基础设施被篡改**.
 
 **Acceptance Criteria:**
 
-<!-- for each AC on this story -->
+- **Given** Claude 尝试读取 `**/.env.production` 或 `**/.env.local`
+- **When** protect-secrets PreToolUse 钩子触发
+- **Then** 钩子返回 deny 决策，阻止该操作
+- **And** 拦截消息包含文件路径、敏感文件类别名和 CRITICAL 级别
 
-**Given** {{precondition}}
-**When** {{action}}
-**Then** {{expected_outcome}}
-**And** {{additional_criteria}}
+- **Given** Claude 尝试写入 `**/*.tfstate` 或 `**/*.tfvars`
+- **When** protect-secrets PreToolUse 钩子触发
+- **Then** 钩子返回 deny 决策，阻止该操作
+- **And** 共新增 8 个敏感文件模式，全部有对应测试用例
 
-<!-- End story repeat -->
+---
+
+#### Story 1.2: 新增 API 密钥扫描模式
+
+As a **Claude Code 开发者**,
+I want **protect-secrets 在 PostToolUse 阶段扫描写入文件中的 API 密钥（OpenAI、Anthropic、HuggingFace、Discord、Telegram、Vault 等 8 种模式）**,
+So that **AI 写入代码时不慎泄露的 API 密钥在保存时被自动发现**.
+
+**Acceptance Criteria:**
+
+- **Given** Claude 写入的文件包含 `sk-` 开头或 `sk-ant-` 开头的密钥
+- **When** protect-secrets 后处理扫描触发
+- **Then** 输出检测报告，列出发现的密钥类型和位置
+- **And** 共新增 8 个 API 密钥模式，覆盖主流 AI 平台和基础设施工具
+
+- **Given** 文件内容不包含任何 API 密钥模式
+- **When** protect-secrets 后处理扫描触发
+- **Then** 静默通过，不输出报告
+
+---
+
+#### Story 1.3: 新增 Bash 危险命令拦截模式
+
+As a **Claude Code 开发者**,
+I want **protect-secrets 增加 5 个 Bash 危险命令拦截模式**,
+So that **AI 无法执行破坏性操作**.
+
+**Acceptance Criteria:**
+
+- **Given** Claude 尝试执行 `rm -rf /`、`dd if=/dev/zero of=/dev/sda` 或 `:(){ :|:& };:`
+- **When** protect-secrets PreToolUse 钩子触发
+- **Then** 钩子返回 deny 决策，阻止该操作
+- **And** 拦截消息包含风险级别 CRITICAL 和明确的拦截原因
+
+- **Given** 共新增 5 个 Bash 危险命令模式
+- **When** 测试执行
+- **Then** 每个模式至少有 1 个正向测试和 1 个负向测试
+
+---
+
+### Epic 2: Shell 与 Dockerfile 质量校验 🔴 P0
+
+**目标：** 在 post-write-lint.js 中新增 lintShell() 和 lintDockerfile()，支持 .sh/.bash/.zsh 的 shellcheck+shfmt 自动校验，以及 Dockerfile/Containerfile 的 hadolint 校验。
+
+---
+
+#### Story 2.1: Shell 脚本校验（lintShell）
+
+As a **Claude Code 开发者**,
+I want **保存 .sh/.bash/.zsh 文件后自动运行 shellcheck + shfmt**,
+So that **Shell 脚本的语法错误和安全隐患在写入时就被发现和自动修复**.
+
+**Acceptance Criteria:**
+
+- **Given** Claude 写入 `backup.sh` 文件
+- **When** post-write-lint PostToolUse 钩子触发
+- **Then** 先运行 `shfmt -w` 自动格式化，再运行 `shellcheck` 静态分析
+- **And** lint 输出包含文件路径、行号、规则 ID（如 SC2115）、描述和 MEDIUM 级别
+
+- **Given** shellcheck 未安装
+- **When** lintShell() 调用 checkToolAvailable('shellcheck') 返回 false
+- **Then** 函数返回 true（fail-open），输出 ⏭️ 跳过消息
+
+---
+
+#### Story 2.2: Dockerfile 校验（lintDockerfile）
+
+As a **Claude Code 开发者**,
+I want **保存 Dockerfile 或 Containerfile 后自动运行 hadolint**,
+So that **AI 编写的 Dockerfile 遵循安全最佳实践**.
+
+**Acceptance Criteria:**
+
+- **Given** Claude 写入名为 `Dockerfile`、`Containerfile` 或 `*.dockerfile` 的文件
+- **When** post-write-lint PostToolUse 钩子触发
+- **Then** 运行 hadolint 进行静态分析
+- **And** 安全相关规则（如 DL3006、DL3023、DL3025）标记为 HIGH 级别
+
+- **Given** hadolint 未安装
+- **When** lintDockerfile() 调用 checkToolAvailable('hadolint') 返回 false
+- **Then** 函数返回 true（fail-open），输出 ⏭️ 跳过消息
+
+---
+
+### Epic 3: 配置文件质量守护 🟡 P1
+
+**目标：** 增强 JSON/YAML 的 Schema 验证能力，新增 TOML 校验，覆盖配置文件常见格式。
+
+---
+
+#### Story 3.1: JSON/YAML Schema 增强
+
+As a **Claude Code 开发者**,
+I want **保存 JSON/YAML 文件后自动 prettier 格式化并运行 check-jsonschema 验证**,
+So that **JSON/YAML 文件格式一致且符合项目 Schema 约束**.
+
+**Acceptance Criteria:**
+
+- **Given** Claude 写入 `.json`、`.yaml` 或 `.yml` 文件
+- **When** post-write-lint PostToolUse 钩子触发
+- **Then** 运行 `prettier --write` 格式化 + `check-jsonschema` 验证
+- **And** lint 输出包含文件路径、Schema 验证结果
+
+- **Given** 对应的 Schema 文件不存在
+- **When** check-jsonschema 无法找到 schema
+- **Then** 仅运行 prettier 格式化，Schema 验证跳过
+
+---
+
+#### Story 3.2: TOML 校验（lintToml）
+
+As a **Claude Code 开发者**,
+I want **保存 .toml 文件后自动 taplo 校验**,
+So that **TOML 配置文件格式正确性在写入时就被检查**.
+
+**Acceptance Criteria:**
+
+- **Given** Claude 写入 `.toml` 文件
+- **When** post-write-lint PostToolUse 钩子触发
+- **Then** 运行 `taplo format --check` 校验 TOML 格式
+- **And** lint 输出包含文件路径和具体的格式问题
+
+- **Given** taplo 未安装
+- **When** lintToml() 调用 checkToolAvailable('taplo') 返回 false
+- **Then** 函数返回 true（fail-open），输出 ⏭️ 跳过消息
+
+---
+
+### Epic 4: 数据库与样式文件质量 🟡 P1
+
+**目标：** 新增 SQL 和 CSS 校验器，覆盖 .sql 文件的 SQLFluff 校验以及 .css/.scss/.less 文件的 stylelint + prettier 校验。
+
+---
+
+#### Story 4.1: SQL 校验（lintSql）
+
+As a **Claude Code 开发者**,
+I want **保存 .sql 文件后自动 SQLFluff 校验**,
+So that **SQL 脚本语法正确且符合项目 SQL 风格规范**.
+
+**Acceptance Criteria:**
+
+- **Given** Claude 写入 `.sql` 文件
+- **When** post-write-lint PostToolUse 钩子触发
+- **Then** 运行 `sqlfluff lint` 进行 SQL 语法和风格校验
+- **And** lint 输出包含文件路径、行号、规则 ID 和描述
+
+- **Given** SQLFluff 未安装
+- **When** lintSql() 调用 checkToolAvailable('sqlfluff') 返回 false
+- **Then** 函数返回 true（fail-open），输出 ⏭️ 跳过消息
+
+---
+
+#### Story 4.2: CSS 校验（lintCss）
+
+As a **Claude Code 开发者**,
+I want **保存 .css/.scss/.less 文件后自动 stylelint + prettier 校验**,
+So that **CSS 代码风格统一且符合项目样式规范**.
+
+**Acceptance Criteria:**
+
+- **Given** Claude 写入 `.css`、`.scss` 或 `.less` 文件
+- **When** post-write-lint PostToolUse 钩子触发
+- **Then** 运行 `prettier --write` 格式化 + `stylelint` 静态分析
+- **And** lint 输出包含文件路径、行号、规则 ID 和描述
+
+- **Given** stylelint 未安装
+- **When** lintCss() 调用 checkToolAvailable('stylelint') 返回 false
+- **Then** 函数返回 true（fail-open），输出 ⏭️ 跳过消息
+
+---
+
+### Epic 5: 智能通知与会话健康 🟡 P1
+
+**目标：** 利用新钩子事件类型（SessionStart、UserPromptSubmit、Notification），构建完整的安全治理闭环。
+
+---
+
+#### Story 5.1: SessionStart 健康检查钩子
+
+As a **Claude Code 开发者**,
+I want **每次 Claude Code 启动时自动检查所有保护工具是否已安装和可用**,
+So that **我知道哪些安全保护已就绪，哪些因工具未安装而不可用**.
+
+**Acceptance Criteria:**
+
+- **Given** Claude Code 会话启动
+- **When** SessionStart 事件触发
+- **Then** 运行 session-start.js 钩子，扫描所有工具的可执行性
+- **And** 输出健康检查报告：`🟢 shellcheck ✔ (v0.10.0)` 或 `🔴 SQLFluff ❌（未安装）`
+
+- **Given** 检查超时（>2秒）
+- **When** 超时触发
+- **Then** 优雅降级，不阻止会话启动
+
+---
+
+#### Story 5.2: UserPromptSubmit 敏感词过滤钩子
+
+As a **Claude Code 开发者**,
+I want **输入提示词时自动扫描是否包含 API 密钥等敏感信息**,
+So that **我不小心在提示词中暴露敏感信息时被立即阻止**.
+
+**Acceptance Criteria:**
+
+- **Given** 用户输入的提示词包含 API 密钥模式
+- **When** UserPromptSubmit 事件触发
+- **Then** 钩子返回 deny 决策，阻止该提示提交
+- **And** 拦截消息：`🛡️ [user-prompt-filter] 提示中含有敏感信息，已阻止`
+
+- **Given** 钩子内部异常崩溃
+- **When** 异常捕获
+- **Then** 返回 allow（fail-open），不阻塞用户输入
+
+---
+
+#### Story 5.3: Notification 安全事件通知钩子
+
+As a **Claude Code 开发者**,
+I want **安全拦截事件发生时自动发送通知到企业微信/飞书**,
+So that **团队能实时收到安全告警**.
+
+**Acceptance Criteria:**
+
+- **Given** 其他 PreToolUse 钩子产生 deny 决策
+- **When** Notification 事件触发
+- **Then** notification-hook.js 通过 Webhook 发送通知（企业微信 Markdown 卡片）
+
+- **Given** 同一事件 5 分钟内重复触发
+- **When** 频控检查
+- **Then** 不重复发送通知
+
+- **Given** Webhook URL 未配置或发送失败
+- **When** 钩子执行
+- **Then** 静默跳过，优雅降级，不阻塞主流程
+
+---
+
+### Epic 6: 基础设施现代化改造 🟡 P1
+
+**目标：** 将钩子系统从项目级扩展到全局模式，支持 gitignore 智能跳过，路径重写为相对路径。
+
+---
+
+#### Story 6.1: settings.json 相对路径与全局模式改造
+
+As a **Claude Code 开发者**,
+I want **settings.json 使用相对路径，支持全局钩子和项目级钩子共存**,
+So that **钩子系统可迁移到全局 `~/.claude/hooks/`，项目级配置优先**.
+
+**Acceptance Criteria:**
+
+- **Given** settings.json 中所有 hook command 使用相对路径
+- **When** Claude Code 加载配置
+- **Then** 路径格式为 `bun .claude/hooks/xxx.js`（非绝对路径）
+- **And** merge-gate.js 使用 `import.meta.url` 定位 `__tests__/` 目录
+
+- **Given** 全局钩子和项目级钩子同时存在
+- **When** 两者冲突
+- **Then** 项目级配置优先
+
+---
+
+#### Story 6.2: Git 命令 cwd 显式传递与工具链检测增强
+
+As a **Claude Code 开发者**,
+I want **所有钩子中的 git 命令显式传入 cwd 参数，工具链检测基于项目类型自动切换**,
+So that **钩子在跨目录迁移时依然能正确运行**.
+
+**Acceptance Criteria:**
+
+- **Given** 钩子执行涉及 git 命令
+- **When** 调用 execCommand()
+- **Then** 显式传入从 stdin 获取的 cwd 参数，而非依赖进程 cwd
+
+- **Given** 项目包含 package.json + bun.lock 或 pyproject.toml
+- **When** 工具链检测触发
+- **Then** 自动使用 bun/uv 作为对应工具运行时
+
+- **Given** protect-secrets.js 读取 HOME 环境变量
+- **When** HOME 变量为空
+- **Then** 使用 `process.env.HOME || ''` fallback
+
+---
+
+#### Story 6.3: Gitignore 兼容性改造
+
+As a **Claude Code 开发者**,
+I want **post-write-lint 跳过 .gitignore 中的文件，merge-gate 排除 .gitignore 中的目录**,
+So that **不对 git 忽略的生成文件和临时文件做无意义校验**.
+
+**Acceptance Criteria:**
+
+- **Given** 文件在 .gitignore 中（如 `*.log`、构建产物）
+- **When** post-write-lint 校验前调用 isGitIgnored()
+- **Then** 跳过该文件的校验，不输出 lint 结果
+
+- **Given** merge-gate 执行 Semgrep 和 Trivy 扫描
+- **When** 扫描命令执行
+- **Then** Semgrep 添加 --exclude 标志，Trivy 添加 --skip-dirs 标志
+
+- **Given** protect-secrets 处理 .gitignore 中的敏感文件
+- **When** 文件匹配敏感文件模式
+- **Then** 不受 .gitignore 影响，正常保护

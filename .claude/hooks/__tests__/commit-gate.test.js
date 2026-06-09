@@ -14,6 +14,7 @@ import {
   checkRelatedTests,
 } from '../commit-gate.js';
 import { DECISION } from '../security-orchestrator.js';
+import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
 
 // commit-gate 测试 - 测试真实函数和完整流程
 describe('commit-gate', () => {
@@ -478,6 +479,59 @@ describe('commit-gate', () => {
       const result = checkSensitiveFiles();
       expect(result).toBeDefined();
       expect(result.decision).toBeDefined();
+    });
+  });
+
+  // ─── cwd 传递测试 (Story 6.2) ────────────────────────────────────────────
+
+  describe('cwd 显式传递', () => {
+    let repoPath;
+
+    beforeEach(() => {
+      repoPath = createTempGitRepo('feat/test-cwd');
+    });
+
+    afterEach(() => {
+      if (repoPath) cleanupTempGitRepo(repoPath);
+    });
+
+    it('getCurrentBranch(cwd) 应该在指定目录获取分支', () => {
+      const branch = getCurrentBranch(repoPath);
+      expect(branch).toBe('feat/test-cwd');
+    });
+
+    it('getCurrentBranch(cwd) 在非 git 目录应该返回 null', () => {
+      const branch = getCurrentBranch('/tmp');
+      expect(branch).toBeNull();
+    });
+
+    it('getStagedFiles(cwd) 应该在指定目录获取暂存文件', () => {
+      writeFile(repoPath, 'test.js', 'console.log("test")');
+      const { execSync } = require('child_process');
+      execSync('git add test.js', { cwd: repoPath });
+      const files = getStagedFiles(repoPath);
+      expect(files).toContain('test.js');
+    });
+
+    it('getStagedFiles(cwd) 在无暂存文件时返回空数组', () => {
+      const files = getStagedFiles(repoPath);
+      expect(files).toEqual([]);
+    });
+
+    it('checkBranch(cwd) 应该在 feature 分支允许', () => {
+      const result = checkBranch(repoPath);
+      expect(result.decision).toBe(DECISION.ALLOW);
+      expect(result.message).toContain('feat/test-cwd');
+    });
+
+    it('checkBranch(cwd) 在 main 分支应该拒绝', () => {
+      const mainRepo = createTempGitRepo('main');
+      try {
+        const result = checkBranch(mainRepo);
+        expect(result.decision).toBe(DECISION.DENY);
+      } finally {
+        cleanupTempGitRepo(mainRepo);
+      }
     });
   });
 });

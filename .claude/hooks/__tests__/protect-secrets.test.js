@@ -41,15 +41,75 @@ describe('protect-secrets', () => {
     });
 
     it('SENSITIVE_FILES 应该至少有 20 条规则', () => {
-      expect(SENSITIVE_FILES.length).toBeGreaterThanOrEqual(20);
+      expect(SENSITIVE_FILES.length).toBeGreaterThanOrEqual(30);
     });
 
     it('BASH_PATTERNS 应该至少有 20 条规则', () => {
-      expect(BASH_PATTERNS.length).toBeGreaterThanOrEqual(20);
+      expect(BASH_PATTERNS.length).toBeGreaterThanOrEqual(27);
     });
 
     it('CONTENT_PATTERNS 应该至少有 15 条规则', () => {
       expect(CONTENT_PATTERNS.length).toBeGreaterThanOrEqual(15);
+    });
+
+    it('CONTENT_PATTERNS 中应该有 API 密钥扫描模式 (Story 1.2)', () => {
+      const apiKeyIds = [
+        'openai-project-key',
+        'openai-org-key',
+        'anthropic-api-key',
+        'huggingface-token',
+        'discord-bot-token',
+        'telegram-bot-token',
+        'vault-token',
+        'datadog-api-key',
+        'pagerduty-token',
+      ];
+      for (const id of apiKeyIds) {
+        const p = CONTENT_PATTERNS.find((f) => f.id === id);
+        expect(p).toBeDefined();
+        expect(p.level).toBe('critical');
+      }
+    });
+
+    it('SENSITIVE_FILES 中应该有 Terraform 状态文件模式', () => {
+      const p = SENSITIVE_FILES.find((f) => f.id === 'tfstate');
+      expect(p).toBeDefined();
+      expect(p.regex.test('terraform.tfstate')).toBe(true);
+      expect(p.regex.test('terraform.tfstate.backup')).toBe(true);
+    });
+
+    it('SENSITIVE_FILES 中应该有 Terraform 变量文件模式', () => {
+      const p = SENSITIVE_FILES.find((f) => f.id === 'tfvars');
+      expect(p).toBeDefined();
+      expect(p.regex.test('terraform.tfvars')).toBe(true);
+      expect(p.regex.test('prod.tfvars')).toBe(true);
+    });
+
+    it('SENSITIVE_FILES 中应该有 SSH 配置模式', () => {
+      const p = SENSITIVE_FILES.find((f) => f.id === 'ssh-config');
+      expect(p).toBeDefined();
+      expect(p.regex.test('.ssh/config')).toBe(true);
+    });
+
+    it('SENSITIVE_FILES 中应该有公钥文件模式', () => {
+      const p = SENSITIVE_FILES.find((f) => f.id === 'pub-key');
+      expect(p).toBeDefined();
+      expect(p.regex.test('id_rsa.pub')).toBe(true);
+    });
+
+    it('BASH_PATTERNS 中应该有 Terraform 文件模式', () => {
+      const p = BASH_PATTERNS.find((f) => f.id === 'cat-tfstate');
+      expect(p).toBeDefined();
+      expect(p.regex.test('cat terraform.tfstate')).toBe(true);
+    });
+
+    it('BASH_PATTERNS 中应该有 5 个危险命令拦截模式', () => {
+      const ids = ['rm-recursive-root', 'rm-recursive-home', 'dd-disk-wipe', 'fork-bomb', 'mkfs-format'];
+      for (const id of ids) {
+        const p = BASH_PATTERNS.find((f) => f.id === id);
+        expect(p).toBeDefined();
+        expect(p.level).toBe('critical');
+      }
     });
   });
 
@@ -172,6 +232,62 @@ describe('protect-secrets', () => {
       expect(result.blocked).toBe(true);
     });
 
+    // === NEW: Terraform (CRITICAL) ===
+    it('terraform.tfstate 应该被阻止 (critical)', () => {
+      const result = checkFilePath('terraform.tfstate');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('prod/terraform.tfstate 应该被阻止', () => {
+      const result = checkFilePath('prod/terraform.tfstate');
+      expect(result.blocked).toBe(true);
+    });
+
+    it('terraform.tfstate.backup 应该被阻止', () => {
+      const result = checkFilePath('terraform.tfstate.backup');
+      expect(result.blocked).toBe(true);
+    });
+
+    it('terraform.tfvars 应该被阻止 (critical)', () => {
+      const result = checkFilePath('terraform.tfvars');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('prod/terraform.tfvars 应该被阻止', () => {
+      const result = checkFilePath('prod/terraform.tfvars');
+      expect(result.blocked).toBe(true);
+    });
+
+    it('prod.tfvars 应该被阻止', () => {
+      const result = checkFilePath('prod.tfvars');
+      expect(result.blocked).toBe(true);
+    });
+
+    // === NEW: SSH 配置 (CRITICAL) ===
+    it('.ssh/config 应该被阻止 (critical)', () => {
+      const result = checkFilePath('.ssh/config');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('home/user/.ssh/config 应该被阻止', () => {
+      const result = checkFilePath('home/user/.ssh/config');
+      expect(result.blocked).toBe(true);
+    });
+
+    it('id_rsa.pub 应该被阻止 (critical)', () => {
+      const result = checkFilePath('id_rsa.pub');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('server.pub 应该被阻止 (critical)', () => {
+      const result = checkFilePath('server.pub');
+      expect(result.blocked).toBe(true);
+    });
+
     // HIGH 级别
     it('credentials.json 应该被阻止 (high)', () => {
       const result = checkFilePath('credentials.json');
@@ -234,6 +350,17 @@ describe('protect-secrets', () => {
 
     it('.env.example 不应该被阻止 (白名单)', () => {
       const result = checkFilePath('.env.example');
+      expect(result.blocked).toBe(false);
+    });
+
+    // === NEW: 正常 Terraform 代码文件 ===
+    it('main.tf 不应该被阻止', () => {
+      const result = checkFilePath('main.tf');
+      expect(result.blocked).toBe(false);
+    });
+
+    it('variables.tf 不应该被阻止', () => {
+      const result = checkFilePath('variables.tf');
       expect(result.blocked).toBe(false);
     });
 
@@ -338,6 +465,82 @@ describe('protect-secrets', () => {
       expect(result.blocked).toBe(true);
     });
 
+    // === API 密钥扫描模式 (Story 1.2) ===
+    it('OpenAI Project API Key 应该被检测', () => {
+      const result = checkContent('OPENAI_API_KEY=sk-proj-abcde12345fghij67890klmnop');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('openai-project-key');
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('OpenAI Organization API Key 应该被检测', () => {
+      const result = checkContent('OPENAI_KEY sk-org-abcde12345fghij67890klmnop');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('openai-org-key');
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('Anthropic API Key 应该被检测', () => {
+      const result = checkContent('ANTHROPIC_KEY=sk-ant-abcdefghijklmnopqrstuvwxyz123456');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('anthropic-api-key');
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('Hugging Face Token 应该被检测', () => {
+      const result = checkContent('HF_TOKEN=hf_abcdefghijklmnopqrstuvwxyz');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('huggingface-token');
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('Discord Bot Token 应该被检测', () => {
+      const result = checkContent('token: MTExMTExMTExMTExMTExMTEx.GxXxXx.AAAAAAAAAAaaaaaaaaaaAAAAAAAAAA');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('discord-bot-token');
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('Telegram Bot Token 应该被检测', () => {
+      const result = checkContent('TG_TOKEN=1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('telegram-bot-token');
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('HashiCorp Vault Token 应该被检测', () => {
+      const result = checkContent('VAULT_TOKEN=hvs.abcdefghijklmnopqrstuvwxyz');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('vault-token');
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('Datadog API Key 应该被检测', () => {
+      const result = checkContent('DD_API_KEY=abcdef1234567890abcdef1234567890');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('datadog-api-key');
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('Datadog API Key (datadog 前缀) 应该被检测', () => {
+      const result = checkContent('datadog_API_KEY:abcdef1234567890abcdef1234567890');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('datadog-api-key');
+    });
+
+    it('PagerDuty Token 应该被检测', () => {
+      const result = checkContent('PD_TOKEN=ptd_abcdefghijklmnopqrstuvwxyz');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('pagerduty-token');
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('PagerDuty Token (pdd 前缀) 应该被检测', () => {
+      const result = checkContent('token: pdd_abcdefghijklmnopqrstuvwxyz');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('pagerduty-token');
+    });
+
     // Slack Token
     it('Slack Token 应该被检测', () => {
       const result = checkContent('xoxb-1234567890-abcdefghijklmnop');
@@ -383,6 +586,167 @@ describe('protect-secrets', () => {
     it('cat .aws/credentials 应该被阻止', () => {
       const result = checkBashCommand('cat .aws/credentials');
       expect(result.blocked).toBe(true);
+    });
+
+    // === NEW: Terraform Bash 命令 ===
+    it('cat terraform.tfstate 应该被阻止', () => {
+      const result = checkBashCommand('cat terraform.tfstate');
+      expect(result.blocked).toBe(true);
+    });
+
+    it('cp terraform.tfvars /tmp 应该被阻止', () => {
+      const result = checkBashCommand('cp terraform.tfvars /tmp');
+      expect(result.blocked).toBe(true);
+    });
+
+    it('cat variables.tfvars 应该被阻止', () => {
+      const result = checkBashCommand('cat variables.tfvars');
+      expect(result.blocked).toBe(true);
+    });
+
+    // === NEW: Destructive commands (Story 1.3) ===
+
+    // rm-recursive-root: 正向测试
+    it('rm -rf / 应该被阻止 (critical)', () => {
+      const result = checkBashCommand('rm -rf /');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.level).toBe('critical');
+      expect(result.pattern.id).toBe('rm-recursive-root');
+    });
+
+    it('rm -rf /* 应该被阻止', () => {
+      const result = checkBashCommand('rm -rf /*');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('rm-recursive-root');
+    });
+
+    it('rm -fr / 应该被阻止 (flag 顺序不同)', () => {
+      const result = checkBashCommand('rm -fr /');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('rm-recursive-root');
+    });
+
+    // rm-recursive-root: 负向测试
+    it('rm -rf ./build 不应该被阻止 (非根目录)', () => {
+      const result = checkBashCommand('rm -rf ./build');
+      expect(result.blocked).toBe(false);
+    });
+
+    it('rm -rf node_modules 不应该被阻止', () => {
+      const result = checkBashCommand('rm -rf node_modules');
+      expect(result.blocked).toBe(false);
+    });
+
+    it('rm file.txt 不应该被阻止 (非递归删除)', () => {
+      const result = checkBashCommand('rm file.txt');
+      expect(result.blocked).toBe(false);
+    });
+
+    // rm-recursive-home: 正向测试
+    it('rm -rf ~ 应该被阻止 (critical)', () => {
+      const result = checkBashCommand('rm -rf ~');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.level).toBe('critical');
+      expect(result.pattern.id).toBe('rm-recursive-home');
+    });
+
+    it('rm -rf ~/* 应该被阻止', () => {
+      const result = checkBashCommand('rm -rf ~/*');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('rm-recursive-home');
+    });
+
+    // rm-recursive-home: 负向测试
+    it('rm -rf ~/projects/build 不应该被阻止 (子目录)', () => {
+      const result = checkBashCommand('rm -rf ~/projects/build');
+      expect(result.blocked).toBe(false);
+    });
+
+    // dd-disk-wipe: 正向测试
+    it('dd if=/dev/zero of=/dev/sda 应该被阻止 (critical)', () => {
+      const result = checkBashCommand('dd if=/dev/zero of=/dev/sda');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.level).toBe('critical');
+      expect(result.pattern.id).toBe('dd-disk-wipe');
+    });
+
+    it('dd if=/dev/urandom of=/dev/sdb1 应该被阻止', () => {
+      const result = checkBashCommand('dd if=/dev/urandom of=/dev/sdb1 bs=4M');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('dd-disk-wipe');
+    });
+
+    it('dd if=/dev/random of=disk.img 应该被阻止', () => {
+      const result = checkBashCommand('dd if=/dev/random of=disk.img');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('dd-disk-wipe');
+    });
+
+    // dd-disk-wipe: 负向测试
+    it('dd if=backup.img of=/dev/sda 不应该被阻止 (非 /dev/zero|random)', () => {
+      const result = checkBashCommand('dd if=backup.img of=/dev/sda');
+      expect(result.blocked).toBe(false);
+    });
+
+    it('dd if=/dev/sda of=backup.img 不应该被阻止 (读取而非写入)', () => {
+      const result = checkBashCommand('dd if=/dev/sda of=backup.img');
+      expect(result.blocked).toBe(false);
+    });
+
+    // fork-bomb: 正向测试
+    it('fork bomb 应该被阻止 (critical)', () => {
+      const result = checkBashCommand(':(){ :|:& };:');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.level).toBe('critical');
+      expect(result.pattern.id).toBe('fork-bomb');
+    });
+
+    it('fork bomb 带空格变体应该被阻止', () => {
+      const result = checkBashCommand(':() { :|:& };:');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('fork-bomb');
+    });
+
+    // fork-bomb: 负向测试
+    it('正常 echo 命令不应该被阻止', () => {
+      const result = checkBashCommand('echo "hello world"');
+      expect(result.blocked).toBe(false);
+    });
+
+    it('正常 bash 函数定义不应该被阻止', () => {
+      const result = checkBashCommand('greet() { echo "hi"; }');
+      expect(result.blocked).toBe(false);
+    });
+
+    // mkfs-format: 正向测试
+    it('mkfs.ext4 /dev/sda1 应该被阻止 (critical)', () => {
+      const result = checkBashCommand('mkfs.ext4 /dev/sda1');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.level).toBe('critical');
+      expect(result.pattern.id).toBe('mkfs-format');
+    });
+
+    it('mkfs.xfs /dev/sdb 应该被阻止', () => {
+      const result = checkBashCommand('mkfs.xfs -f /dev/sdb');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('mkfs-format');
+    });
+
+    it('mkfs -t ext4 /dev/sda1 应该被阻止', () => {
+      const result = checkBashCommand('mkfs -t ext4 /dev/sda1');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('mkfs-format');
+    });
+
+    // mkfs-format: 负向测试
+    it('ls /dev/sda 不应该被阻止', () => {
+      const result = checkBashCommand('ls /dev/sda');
+      expect(result.blocked).toBe(false);
+    });
+
+    it('mount /dev/sda1 /mnt 不应该被阻止', () => {
+      const result = checkBashCommand('mount /dev/sda1 /mnt');
+      expect(result.blocked).toBe(false);
     });
 
     // HIGH - 环境变量泄露
@@ -456,6 +820,17 @@ describe('protect-secrets', () => {
       expect(result.blocked).toBe(false);
     });
 
+    // === NEW: 正常 Terraform 命令 ===
+    it('terraform apply 应该被允许', () => {
+      const result = checkBashCommand('terraform apply');
+      expect(result.blocked).toBe(false);
+    });
+
+    it('terraform plan 应该被允许', () => {
+      const result = checkBashCommand('terraform plan');
+      expect(result.blocked).toBe(false);
+    });
+
     // 边界情况
     it('空命令应该返回未阻止', () => {
       expect(checkBashCommand('').blocked).toBe(false);
@@ -494,6 +869,32 @@ describe('protect-secrets', () => {
 
     it('Write .env.example 应该被允许 (白名单)', () => {
       const result = check('Write', { file_path: '.env.example', content: 'SECRET=example' });
+      expect(result.blocked).toBe(false);
+    });
+
+    // === NEW: Terraform 集成测试 ===
+    it('Write terraform.tfstate 应该被阻止', () => {
+      const result = check('Write', { file_path: 'terraform.tfstate', content: '{"version": 1}' });
+      expect(result.blocked).toBe(true);
+    });
+
+    it('Edit terraform.tfstate 应该被阻止', () => {
+      const result = check('Edit', { file_path: 'terraform.tfstate', new_string: '{"version": 2}' });
+      expect(result.blocked).toBe(true);
+    });
+
+    it('Read terraform.tfstate 应该被阻止', () => {
+      const result = check('Read', { file_path: 'terraform.tfstate' });
+      expect(result.blocked).toBe(true);
+    });
+
+    it('Read terraform.tfvars 应该被阻止', () => {
+      const result = check('Read', { file_path: 'terraform.tfvars' });
+      expect(result.blocked).toBe(true);
+    });
+
+    it('Read main.tf 应该被允许', () => {
+      const result = check('Read', { file_path: 'main.tf' });
       expect(result.blocked).toBe(false);
     });
 
@@ -551,6 +952,48 @@ describe('protect-secrets', () => {
 
     it('strict 应该是最大值', () => {
       expect(LEVELS.strict).toBe(3);
+    });
+  });
+
+  // ─── Story 6.3: Gitignore 兼容性 — protect-secrets 不受 gitignore 影响 ────
+
+  describe('Story 6.3: protect-secrets 不受 gitignore 影响', () => {
+    it('.env 文件即使被 gitignore 也应被阻止读取', () => {
+      // protect-secrets 的 checkFilePath 不检查 gitignore，只检查文件路径模式
+      const result = checkFilePath('.env');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('env-file');
+    });
+
+    it('.ssh/id_rsa 即使被 gitignore 也应被阻止', () => {
+      const result = checkFilePath('.ssh/id_rsa');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('.aws/credentials 即使被 gitignore 也应被阻止', () => {
+      const result = checkFilePath('.aws/credentials');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('aws-credentials');
+    });
+
+    it('check 不调用 isGitIgnored，不依赖 git 状态', () => {
+      // .env.test 在 EXCLUDE_PATTERNS 中，但 .env 不在
+      const resultBlocked = check('Write', { file_path: '.env', content: 'KEY=secret123' });
+      expect(resultBlocked.blocked).toBe(true);
+
+      // 普通文件不被阻止
+      const resultAllowed = check('Write', { file_path: 'src/config.js', content: 'module.exports = {}' });
+      expect(resultAllowed.blocked).toBe(false);
+    });
+
+    it('硬编码密码在 gitignored 文件中也应被阻止', () => {
+      const result = check('Write', {
+        file_path: 'ignored-dir/secrets.json',
+        content: 'password = "super_secret_123"',
+      });
+      expect(result.blocked).toBe(true);
+      expect(['critical', 'high']).toContain(result.pattern.level);
     });
   });
 });

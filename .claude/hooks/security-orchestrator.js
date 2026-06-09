@@ -6,13 +6,21 @@
 
 import { execSync } from 'child_process';
 import { existsSync, appendFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 // ─── 常量 ───────────────────────────────────────────────────────────────────
 
 export const DECISION = { ALLOW: 'allow', DENY: 'deny', WARN: 'warn', SKIP: 'skip' };
 export const SEVERITY = { CRITICAL: 'critical', HIGH: 'high', MODERATE: 'moderate', LOW: 'low', INFO: 'info' };
-const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
+
+// ─── 共享路径常量（基于 import.meta.url，支持全局模式）──────────────────────
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+export const HOOKS_DIR = __dirname;
+export const TESTS_DIR = join(__dirname, '__tests__');
+export const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
 
 // ─── 日志 ────────────────────────────────────────────────────────────────────
 
@@ -220,14 +228,51 @@ export function formatHookOutput(decision, reason) {
 
 /**
  * @param {string} toolName
+ * @param {string} [cwd]
  */
-export function checkToolAvailable(toolName) {
+export function checkToolAvailable(toolName, cwd) {
   try {
-    execSync(`which ${toolName}`, { stdio: 'pipe' });
+    execSync(`which ${toolName}`, { cwd, stdio: 'pipe' });
     return { available: true };
   } catch {
     return { available: false, message: `${toolName} 未安装或不在 PATH 中` };
   }
+}
+
+// ─── 工具链检测 ──────────────────────────────────────────────────────────────
+
+/**
+ * 检测项目工具链类型
+ * @param {string} [cwd] - 项目目录，默认为 process.cwd()
+ * @returns {{ js: string | null, python: string | null }} 工具链信息
+ *   js: 'bun' (package.json + bun.lock/bun.lockb 存在) 或 null
+ *   python: 'uv' (pyproject.toml 存在) 或 null
+ */
+export function detectToolchain(cwd) {
+  const dir = cwd || process.cwd();
+  const checks = {
+    js: /** @type {string | null} */ (null),
+    python: /** @type {string | null} */ (null),
+  };
+
+  try {
+    // 检测 JS 工具链：package.json + bun.lock/bun.lockb → bun
+    const hasPackageJson = existsSync(join(dir, 'package.json'));
+    if (hasPackageJson) {
+      const hasBunLock = existsSync(join(dir, 'bun.lock')) || existsSync(join(dir, 'bun.lockb'));
+      checks.js = hasBunLock ? 'bun' : 'node';
+    }
+  } catch {}
+
+  try {
+    // 检测 Python 工具链：pyproject.toml → uv
+    const hasPyproject = existsSync(join(dir, 'pyproject.toml'));
+    if (hasPyproject) {
+      checks.python = 'uv';
+    }
+  } catch {}
+
+  return checks;
 }
 
 // ─── Git 辅助函数 ────────────────────────────────────────────────────────────

@@ -22,26 +22,22 @@ import {
   readStdin,
   safeMain,
   withTimeout,
+  detectToolchain,
+  TESTS_DIR,
   DECISION,
 } from './security-orchestrator.js';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 
 const HOOK_NAME = 'merge-gate';
-
-// 获取当前脚本所在目录（支持全局模式和项目级模式）
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const HOOKS_DIR = __dirname;
-const TESTS_DIR = join(HOOKS_DIR, '__tests__');
 
 // ─── 工具函数 ─────────────────────────────────────────────────────────────────
 
 /**
  * 获取 git 忽略的目录列表（用于安全扫描排除）
+ * @param {string} [cwd]
  */
-function getGitIgnoredDirs() {
+function getGitIgnoredDirs(cwd) {
   const result = execCommand('git ls-files --others --ignored --exclude-standard --directory | head -20', {
+    cwd,
     timeout: 5000,
   });
   if (!result.success || !result.stdout.trim()) return [];
@@ -67,29 +63,90 @@ function extractMergeTarget(cmd) {
 
 /**
  * 获取当前分支名
+ * @param {string} [cwd]
  */
-function getCurrentBranch() {
-  const result = execCommand('git rev-parse --abbrev-ref HEAD');
+function getCurrentBranch(cwd) {
+  const result = execCommand('git rev-parse --abbrev-ref HEAD', { cwd });
   return result.success ? result.stdout.trim() : null;
 }
 
 // ─── 安全扫描 ─────────────────────────────────────────────────────────────────
 
 /**
- * Semgrep 安全扫描
+ * 整个项目类型检查（Python + TypeScript/JS）
+ * @param {string} [cwd]
  */
-async function runSemgrep() {
-  const hasSemgrep = execCommand('which semgrep');
+async function runTypeCheck(cwd) {
+  // Python 类型检查
+  const pyrightPromise = new Promise((resolve) => {
+    const hasPyright = execCommand('which pyright', { cwd });
+    if (hasPyright.success) {
+      const r = execCommand('pyright', { cwd, timeout: 60000 });
+      resolve({ tool: 'pyright', ...r });
+    } else {
+      const hasUv = execCommand('which uv', { cwd });
+      if (hasUv.success) {
+        const r = execCommand('uv run pyright', { cwd, timeout: 60000 });
+        resolve({ tool: 'pyright (uv)', ...r });
+      } else {
+        resolve({ tool: 'pyright', success: true, stdout: 'pyright not found, skip', stderr: '' });
+      }
+    }
+  });
+
+  // TypeScript/JS 类型检查
+  const tscPromise = new Promise((resolve) => {
+    const hasTsconfig = execCommand('test -f tsconfig.json', { cwd });
+    if (!hasTsconfig.success) {
+      resolve({ tool: 'tsc', success: true, stdout: 'no tsconfig.json, skip', stderr: '' });
+      return;
+    }
+    const r = execCommand('bunx tsc --noEmit', { cwd, timeout: 60000 });
+    resolve({ tool: 'tsc', ...r });
+  });
+
+  try {
+    const results = await Promise.allSettled([
+      withTimeout(pyrightPromise, 60000, 'pyright 超时 (60s)'),
+      withTimeout(tscPromise, 60000, 'tsc 超时 (60s)'),
+    ]);
+
+    const failures = [];
+    for (const r of results) {
+      if (r.status === 'fulfilled' && !r.value.success) {
+        failures.push(r.value);
+      }
+    }
+    if (failures.length > 0) {
+      const messages = failures.map((f) => `${f.tool}: ${(f.stderr || f.stdout).slice(0, 500)}`).join('\n');
+      return formatResult('type-check', DECISION.DENY, `类型检查失败:\n${messages}`, { failures });
+    }
+    return formatResult('type-check', DECISION.ALLOW, '类型检查通过');
+  } catch (e) {
+    return formatResult('type-check', DECISION.SKIP, `类型检查跳过: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+/**
+ * Semgrep 安全扫描
+ * @param {string} [cwd]
+ */
+async function runSemgrep(cwd) {
+  const hasSemgrep = execCommand('which semgrep', { cwd });
   if (!hasSemgrep.success) {
     return formatResult('semgrep', DECISION.SKIP, 'semgrep 未安装，跳过');
   }
 
   try {
-    const ignoredDirs = getGitIgnoredDirs();
+    const ignoredDirs = getGitIgnoredDirs(cwd);
     const excludeFlags = ignoredDirs.map((/** @type {string} */ d) => `--exclude "${d}"`).join(' ');
     const semgrepCmd = `semgrep --config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten --severity ERROR,WARNING,INFO --json ${excludeFlags} .`;
 
-    const result = await withTimeout(execCommandAsync(semgrepCmd, { timeout: 60000 }), 60000, 'semgrep 超时 (60s)');
+    const result = await withTimeout(
+      execCommandAsync(semgrepCmd, { cwd, timeout: 60000 }),
+      60000,
+      'semgrep 超时 (60s)',
+    );
 
     if (!result.success && result.stderr) {
       // semgrep may exit non-zero with findings
@@ -117,11 +174,12 @@ async function runSemgrep() {
 
 /**
  * Knip 未使用代码检测
+ * @param {string} [cwd]
  */
-async function runKnip() {
+async function runKnip(cwd) {
   try {
     const result = await withTimeout(
-      execCommandAsync('bunx knip --reporter json', { timeout: 30000 }),
+      execCommandAsync('bunx knip --reporter json', { cwd, timeout: 30000 }),
       30000,
       'knip 超时 (30s)',
     );
@@ -151,19 +209,20 @@ async function runKnip() {
 
 /**
  * Trivy 漏洞扫描
+ * @param {string} [cwd]
  */
-async function runTrivy() {
-  const hasTrivy = execCommand('which trivy');
+async function runTrivy(cwd) {
+  const hasTrivy = execCommand('which trivy', { cwd });
   if (!hasTrivy.success) {
     return formatResult('trivy', DECISION.SKIP, 'trivy 未安装，跳过');
   }
 
   try {
-    const ignoredDirs = getGitIgnoredDirs();
+    const ignoredDirs = getGitIgnoredDirs(cwd);
     const skipDirs = ignoredDirs.map((/** @type {string} */ d) => `--skip-dirs "${d}"`).join(' ');
     const trivyCmd = `trivy fs --scanners vuln,misconfig,secret,license --severity CRITICAL,HIGH,MEDIUM --format json ${skipDirs} .`;
 
-    const result = await withTimeout(execCommandAsync(trivyCmd, { timeout: 60000 }), 60000, 'trivy 超时 (60s)');
+    const result = await withTimeout(execCommandAsync(trivyCmd, { cwd, timeout: 60000 }), 60000, 'trivy 超时 (60s)');
 
     if (result.success) {
       try {
@@ -194,30 +253,25 @@ async function runTrivy() {
 /**
  * 全量测试
  */
-async function runFullTests() {
-  // Check for Python project
-  const hasPytest =
-    execCommand('test -f pyproject.toml') || execCommand('test -f setup.py') || execCommand('test -f setup.cfg');
-  // Check for JS project
-  const hasPackageJson = execCommand('test -f package.json');
+async function runFullTests(cwd) {
+  const toolchain = detectToolchain(cwd);
 
   const results = [];
 
-  if (hasPytest.success) {
-    // 先检查 uv 和 pytest 是否可用
-    const hasUv = execCommand('which uv');
+  // Python 测试：基于 detectToolchain 结果
+  if (toolchain.python === 'uv') {
+    const hasUv = execCommand('which uv', { cwd });
     if (!hasUv.success) {
       results.push(formatResult('full-test-py', DECISION.SKIP, 'uv 未安装，跳过 Python 测试'));
     } else {
       try {
         const pyResult = await withTimeout(
-          execCommandAsync('uv run python -m pytest -x -q', { timeout: 60000 }),
+          execCommandAsync('uv run python -m pytest -x -q', { cwd, timeout: 60000 }),
           60000,
           'pytest 超时 (60s)',
         );
         if (!pyResult.success) {
           const output = pyResult.stderr || pyResult.stdout || '';
-          // pytest 未安装、无测试文件等非失败场景，不应判为 DENY
           if (
             output.includes('No module named pytest') ||
             output.includes('no tests ran') ||
@@ -241,13 +295,12 @@ async function runFullTests() {
     }
   }
 
-  if (hasPackageJson.success) {
+  // JS 测试：基于 detectToolchain 结果
+  if (toolchain.js === 'bun') {
     try {
-      // 仅测试 git 跟踪的测试文件，排除未跟踪的第三方代码
-      // bun test 要求以 ./ 开头的路径才能精确匹配文件
       const trackedFiles = execCommand(
         "git ls-files '*.test.js' '*.test.ts' '*.spec.js' '*.spec.ts' '*.test.jsx' '*.test.tsx'",
-        { timeout: 5000 },
+        { cwd, timeout: 5000 },
       );
       let testCmd = `bun test "${TESTS_DIR}"`;
       if (trackedFiles.success && trackedFiles.stdout.trim()) {
@@ -258,7 +311,11 @@ async function runFullTests() {
           .join(' ');
         testCmd = `bun test ${files}`;
       }
-      const jsResult = await withTimeout(execCommandAsync(testCmd, { timeout: 60000 }), 60000, 'bun test 超时 (60s)');
+      const jsResult = await withTimeout(
+        execCommandAsync(testCmd, { cwd, timeout: 60000 }),
+        60000,
+        'bun test 超时 (60s)',
+      );
       if (!jsResult.success) {
         results.push(
           formatResult('full-test-js', DECISION.DENY, `JS 全量测试失败`, {
@@ -287,15 +344,15 @@ async function runFullTests() {
 /**
  * Hook 自身测试
  */
-async function runHookTests() {
-  const check = execCommand(`test -d "${TESTS_DIR}"`);
+async function runHookTests(cwd) {
+  const check = execCommand(`test -d "${TESTS_DIR}"`, { cwd });
   if (!check.success) {
     return formatResult('hook-tests', DECISION.SKIP, 'Hook 测试目录不存在，跳过');
   }
 
   try {
     const result = await withTimeout(
-      execCommandAsync(`bun test "${TESTS_DIR}"`, { timeout: 30000 }),
+      execCommandAsync(`bun test "${TESTS_DIR}"`, { cwd, timeout: 30000 }),
       30000,
       'Hook 测试超时 (30s)',
     );
@@ -348,15 +405,20 @@ async function main() {
     }
 
     // 目标分支检测：检查是否合并到 main/master
-    const currentBranch = getCurrentBranch();
+    const currentBranch = getCurrentBranch(cwd);
     if (currentBranch !== 'main' && currentBranch !== 'master') {
       log(HOOK_NAME, { level: 'SKIP', reason: `当前分支 ${currentBranch} 非 main/master`, session_id, cwd });
       console.log('{}');
       return;
     }
 
-    // Phase 1: 安全扫描（并行）
-    const [semgrepResult, knipResult, trivyResult] = await Promise.allSettled([runSemgrep(), runKnip(), runTrivy()]);
+    // Phase 1: 安全扫描 + 类型检查（并行）
+    const [semgrepResult, knipResult, trivyResult, typeCheckResult] = await Promise.allSettled([
+      runSemgrep(cwd),
+      runKnip(cwd),
+      runTrivy(cwd),
+      runTypeCheck(cwd),
+    ]);
 
     const securityResults = [
       semgrepResult.status === 'fulfilled'
@@ -364,6 +426,9 @@ async function main() {
         : formatResult('semgrep', DECISION.SKIP, 'Semgrep 执行异常'),
       knipResult.status === 'fulfilled' ? knipResult.value : formatResult('knip', DECISION.SKIP, 'Knip 执行异常'),
       trivyResult.status === 'fulfilled' ? trivyResult.value : formatResult('trivy', DECISION.SKIP, 'Trivy 执行异常'),
+      typeCheckResult.status === 'fulfilled'
+        ? typeCheckResult.value
+        : formatResult('type-check', DECISION.SKIP, '类型检查执行异常'),
     ];
 
     // 检查安全扫描是否 deny
@@ -376,7 +441,7 @@ async function main() {
     }
 
     // Phase 2: 全量测试（串行）
-    const fullTestResult = await runFullTests();
+    const fullTestResult = await runFullTests(cwd);
     if (fullTestResult.decision === DECISION.DENY) {
       log(HOOK_NAME, { level: 'BLOCKED', phase: 'full-tests', session_id, cwd });
       console.log(formatHookOutput(DECISION.DENY, `🧪 全量测试失败:\n${fullTestResult.message}`));
@@ -384,7 +449,7 @@ async function main() {
     }
 
     // Phase 3: Hook 自身测试
-    const hookTestResult = await runHookTests();
+    const hookTestResult = await runHookTests(cwd);
     if (hookTestResult.decision === DECISION.DENY) {
       log(HOOK_NAME, { level: 'BLOCKED', phase: 'hook-tests', session_id, cwd });
       console.log(formatHookOutput(DECISION.DENY, `🔧 Hook 测试失败:\n${hookTestResult.message}`));
@@ -416,6 +481,7 @@ export {
   getGitIgnoredDirs,
   extractMergeTarget,
   getCurrentBranch,
+  runTypeCheck,
   runSemgrep,
   runKnip,
   runTrivy,

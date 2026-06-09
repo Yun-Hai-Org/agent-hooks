@@ -1,4 +1,8 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { execSync } from 'child_process';
 import { formatResult, decide, DECISION } from '../security-orchestrator.js';
 import {
   getGitIgnoredDirs,
@@ -413,6 +417,103 @@ describe('merge-gate', () => {
     it('应该拒绝无效的 JSON', () => {
       const input = '{invalid json}';
       expect(() => JSON.parse(input)).toThrow();
+    });
+  });
+
+  describe('cwd 显式传递 (Story 6.2)', () => {
+    it('getCurrentBranch(cwd) 应该在指定目录获取分支', async () => {
+      const { createTempGitRepo, cleanupTempGitRepo } = await import('./helpers.js');
+      const repoPath = createTempGitRepo('feat/merge-test');
+      try {
+        const branch = getCurrentBranch(repoPath);
+        expect(branch).toBe('feat/merge-test');
+      } finally {
+        cleanupTempGitRepo(repoPath);
+      }
+    });
+
+    it('getCurrentBranch(cwd) 在非 git 目录返回 null', () => {
+      const branch = getCurrentBranch('/tmp');
+      expect(branch).toBeNull();
+    });
+
+    it('getGitIgnoredDirs(cwd) 应该在指定目录运行', () => {
+      const dirs = getGitIgnoredDirs(process.cwd());
+      expect(Array.isArray(dirs)).toBe(true);
+    });
+
+    it('extractMergeTarget 不受 cwd 影响', () => {
+      expect(extractMergeTarget('git merge main')).toBe('main');
+      expect(extractMergeTarget('git merge --no-ff feat/xxx')).toBe('feat/xxx');
+    });
+  });
+
+  // ─── Story 6.3: Gitignore 兼容性集成测试 ──────────────────────────────────
+
+  describe('Story 6.3: getGitIgnoredDirs gitignore 集成', () => {
+    let repoDir;
+
+    beforeEach(() => {
+      repoDir = join(tmpdir(), `gitignore-merge-test-${Date.now()}`);
+      mkdirSync(repoDir, { recursive: true });
+      execSync('git init', { cwd: repoDir });
+      execSync('git config user.email "test@test.com"', { cwd: repoDir });
+      execSync('git config user.name "Test"', { cwd: repoDir });
+      writeFileSync(join(repoDir, '.gitignore'), 'node_modules/\nbuild/\ncoverage/\n');
+      writeFileSync(join(repoDir, 'README.md'), '# test');
+      execSync('git add . && git commit -m "init"', { cwd: repoDir });
+      // 创建被 gitignore 的目录
+      mkdirSync(join(repoDir, 'node_modules', 'pkg'), { recursive: true });
+      writeFileSync(join(repoDir, 'node_modules', 'pkg', 'index.js'), '');
+      mkdirSync(join(repoDir, 'build'), { recursive: true });
+      writeFileSync(join(repoDir, 'build', 'output.js'), '');
+      mkdirSync(join(repoDir, 'coverage'), { recursive: true });
+      writeFileSync(join(repoDir, 'coverage', 'lcov.info'), '');
+    });
+
+    afterEach(() => {
+      if (existsSync(repoDir)) rmSync(repoDir, { recursive: true, force: true });
+    });
+
+    it('应返回 .gitignore 中的目录列表', () => {
+      const dirs = getGitIgnoredDirs(repoDir);
+      expect(dirs.length).toBeGreaterThan(0);
+      // 至少应包含 node_modules、build、coverage 之一
+      const hasExpected = dirs.some((d) =>
+        ['node_modules', 'build', 'coverage'].some((name) => d.includes(name)),
+      );
+      expect(hasExpected).toBe(true);
+    });
+
+    it('Semgrep exclude 标志应包含 gitignored 目录', () => {
+      const dirs = getGitIgnoredDirs(repoDir);
+      const excludeFlags = dirs.map((d) => `--exclude "${d}"`).join(' ');
+      // 验证 excludeFlags 格式正确
+      if (dirs.length > 0) {
+        expect(excludeFlags).toContain('--exclude');
+      }
+    });
+
+    it('Trivy skip-dirs 标志应包含 gitignored 目录', () => {
+      const dirs = getGitIgnoredDirs(repoDir);
+      const skipDirs = dirs.map((d) => `--skip-dirs "${d}"`).join(' ');
+      if (dirs.length > 0) {
+        expect(skipDirs).toContain('--skip-dirs');
+      }
+    });
+
+    it('无 gitignore 文件时应返回空数组', () => {
+      const emptyDir = join(tmpdir(), `no-gitignore-${Date.now()}`);
+      mkdirSync(emptyDir, { recursive: true });
+      execSync('git init', { cwd: emptyDir });
+      writeFileSync(join(emptyDir, 'README.md'), '# test');
+      execSync('git add . && git commit -m "init"', { cwd: emptyDir });
+      try {
+        const dirs = getGitIgnoredDirs(emptyDir);
+        expect(Array.isArray(dirs)).toBe(true);
+      } finally {
+        rmSync(emptyDir, { recursive: true, force: true });
+      }
     });
   });
 });

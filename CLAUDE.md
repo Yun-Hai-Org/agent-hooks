@@ -96,6 +96,12 @@ Hook 按执行时机分为四个安全门：
 3. 提交时自动校验 commit 格式：`类型: 描述`（类型：feat/fix/refactor/docs/test/chore/style/perf）
 4. 合并到 main 时自动运行全量安全扫描和测试
 
+## 子代理开发规范
+
+- **实现完成后必须提交**：每个子代理完成 Story 实现和 code review 后，必须执行 `git add` 和 `git commit` 提交变更，避免工作目录累积大量未提交文件导致主会话被隔离保护阻止
+- **提交信息格式**：遵循 `类型: 描述` 格式（如 `feat: 实现 Story 1.1 敏感文件保护`）
+- **类型检查前置**：提交前确认 `bunx tsc --noEmit` 通过，避免 commit-gate 阻断
+
 ## 自动化保障（无需手动执行）
 
 Claude 可以直接执行 `git commit` 和 `git merge`，以下检查由 hook **自动运行**，

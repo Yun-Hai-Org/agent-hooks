@@ -19,8 +19,7 @@
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join, dirname, isAbsolute } from 'path';
 import { execSync } from 'child_process';
-
-const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
+import { LOG_DIR } from './security-orchestrator.js';
 
 /** @param {Record<string, unknown>} data */
 function log(data) {

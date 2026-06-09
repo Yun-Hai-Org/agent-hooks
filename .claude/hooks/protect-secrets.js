@@ -13,6 +13,7 @@
 
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
+import { LOG_DIR } from './security-orchestrator.js';
 
 const SAFETY_LEVEL = 'strict';
 
@@ -61,6 +62,15 @@ const SENSITIVE_FILES = [
   { level: 'critical', id: 'pem-key', regex: /\.pem$/i, reason: 'PEM key file' },
   { level: 'critical', id: 'key-file', regex: /\.key$/i, reason: 'Key file' },
   { level: 'critical', id: 'p12-key', regex: /\.(p12|pfx)$/i, reason: 'PKCS12 key file' },
+  { level: 'critical', id: 'pub-key', regex: /\.pub$/i, reason: 'Public key file may expose infrastructure details' },
+  {
+    level: 'critical',
+    id: 'tfstate',
+    regex: /\.tfstate(?:\.[^/]*)?$/i,
+    reason: 'Terraform state file contains infrastructure secrets',
+  },
+  { level: 'critical', id: 'tfvars', regex: /\.tfvars$/i, reason: 'Terraform variables file may contain secrets' },
+  { level: 'critical', id: 'ssh-config', regex: /(?:^|\/)\.ssh\/config$/, reason: 'SSH config file' },
 
   // HIGH
   { level: 'high', id: 'credentials-json', regex: /(?:^|\/)credentials\.json$/i, reason: 'Credentials file' },
@@ -136,6 +146,39 @@ const BASH_PATTERNS = [
     id: 'cat-aws-creds',
     regex: /\b(cat|less|head|tail|more)\s+[^|;]*\.aws\/credentials/i,
     reason: 'Reading AWS credentials',
+  },
+
+  // CRITICAL - Destructive commands
+  {
+    level: 'critical',
+    id: 'rm-recursive-root',
+    regex: /\brm\s+[^;&|]*-[a-z]*r[a-z]*f[a-z]*\s+\/(?:\s|$|[*])|\brm\s+[^;&|]*-[a-z]*f[a-z]*r[a-z]*\s+\/(?:\s|$|[*])/,
+    reason: 'Recursive force delete on root filesystem',
+  },
+  {
+    level: 'critical',
+    id: 'rm-recursive-home',
+    regex:
+      /\brm\s+[^;&|]*-[a-z]*r[a-z]*f[a-z]*\s+~(?:\/\*)?(?:\s|$)|\brm\s+[^;&|]*-[a-z]*f[a-z]*r[a-z]*\s+~(?:\/\*)?(?:\s|$)/,
+    reason: 'Recursive force delete on home directory',
+  },
+  {
+    level: 'critical',
+    id: 'dd-disk-wipe',
+    regex: /\bdd\s+.*if\s*=\s*\/dev\/(zero|random|urandom)\b/,
+    reason: 'dd disk wipe operation (writing from /dev/zero|random|urandom)',
+  },
+  {
+    level: 'critical',
+    id: 'fork-bomb',
+    regex: /:\(\)\s*\{\s*:\|:\s*&\s*\}\s*;?\s*:/,
+    reason: 'Fork bomb — will crash the system',
+  },
+  {
+    level: 'critical',
+    id: 'mkfs-format',
+    regex: /\bmkfs\b/,
+    reason: 'mkfs formats a filesystem — all data will be destroyed',
   },
 
   // HIGH - Environment exposure
@@ -269,6 +312,26 @@ const BASH_PATTERNS = [
     regex: /\bbase64\b[^|;]*(\.env|credentials|secrets|id_rsa|\.pem)/i,
     reason: 'Base64 encoding secrets',
   },
+
+  // Terraform
+  {
+    level: 'high',
+    id: 'cat-tfstate',
+    regex: /\b(cat|less|head|tail|more|bat|view)\s+[^|;]*\.tfstate\b/i,
+    reason: 'Reading Terraform state file exposes infrastructure data',
+  },
+  {
+    level: 'high',
+    id: 'cp-tfvars',
+    regex: /\b(cp|mv)\b[^;|&]*\.tfvars\b/i,
+    reason: 'Copying Terraform variables file',
+  },
+  {
+    level: 'high',
+    id: 'cat-tfvars',
+    regex: /\b(cat|less|head|tail|more|bat|view)\s+[^|;]*\.tfvars\b/i,
+    reason: 'Reading Terraform variables file',
+  },
 ];
 
 // Content patterns for scanning file content (Write/Edit)
@@ -374,11 +437,75 @@ const CONTENT_PATTERNS = [
   { level: 'critical', id: 'npmrc-auth-token', regex: /_authToken\s*=\s*[A-Za-z0-9_-]+/, reason: 'npm 认证令牌' },
   // Bearer token
   { level: 'high', id: 'bearer-token', regex: /Bearer\s+[A-Za-z0-9\/+=_-]{20,}/, reason: 'Bearer Token（硬编码）' },
+
+  // === API 密钥扫描模式 (Story 1.2) ===
+  // OpenAI Project API Key
+  {
+    level: 'critical',
+    id: 'openai-project-key',
+    regex: /sk-proj-[A-Za-z0-9]{20,}/,
+    reason: 'OpenAI Project API Key',
+  },
+  // OpenAI Organization API Key
+  {
+    level: 'critical',
+    id: 'openai-org-key',
+    regex: /sk-org-[A-Za-z0-9]{20,}/,
+    reason: 'OpenAI Organization API Key',
+  },
+  // Anthropic API Key
+  {
+    level: 'critical',
+    id: 'anthropic-api-key',
+    regex: /sk-ant-[A-Za-z0-9]{32,}/,
+    reason: 'Anthropic API Key',
+  },
+  // Hugging Face Token
+  {
+    level: 'critical',
+    id: 'huggingface-token',
+    regex: /hf_[A-Za-z0-9]{20,}/,
+    reason: 'Hugging Face Access Token',
+  },
+  // Discord Bot Token
+  {
+    level: 'critical',
+    id: 'discord-bot-token',
+    regex: /[MN][A-Za-z0-9_-]{23}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27}/,
+    reason: 'Discord Bot Token',
+  },
+  // Telegram Bot Token
+  {
+    level: 'critical',
+    id: 'telegram-bot-token',
+    regex: /[0-9]{8,10}:[A-Za-z0-9_-]{35,}/,
+    reason: 'Telegram Bot Token',
+  },
+  // HashiCorp Vault Token
+  {
+    level: 'critical',
+    id: 'vault-token',
+    regex: /hvs\.[A-Za-z0-9_-]{20,}/,
+    reason: 'HashiCorp Vault Service Token',
+  },
+  // Datadog API Key
+  {
+    level: 'critical',
+    id: 'datadog-api-key',
+    regex: /(?:datadog|DD)_API_KEY\s*[:=]\s*['"]?[a-fA-F0-9]{32}['"]?/,
+    reason: 'Datadog API Key',
+  },
+  // PagerDuty Token
+  {
+    level: 'critical',
+    id: 'pagerduty-token',
+    regex: /p[dt]d_[A-Za-z0-9]{20,}/,
+    reason: 'PagerDuty API Token',
+  },
 ];
 
 const LEVELS = { critical: 1, high: 2, strict: 3 };
 const EMOJIS = { critical: '🔐', high: '🛡️', strict: '⚠️' };
-const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
 
 /** @param {Record<string, unknown>} data */
 function log(data) {
