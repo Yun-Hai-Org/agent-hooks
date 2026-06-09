@@ -277,7 +277,7 @@ describe('session-start', () => {
       // 模拟 shellcheck 输出：第一行是标题，第二行是版本
       // 用 printf 模拟多行输出
       const version = getToolVersion(
-        'printf "ShellCheck - shell script analysis tool\\nversion: 0.10.0\\nLicense: GPL"'
+        'printf "ShellCheck - shell script analysis tool\\nversion: 0.10.0\\nLicense: GPL"',
       );
       expect(version).toBe('0.10.0');
     });

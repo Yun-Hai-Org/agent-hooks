@@ -79,4 +79,4 @@ MiMo-v2.5-pro
 ### File List
 
 - .claude/hooks/post-write-lint.js (修改 - lintShell 执行顺序 + emoji 修复)
-- .claude/hooks/__tests__/post-write-lint.test.js (修改 - 新增 10 个 lintShell 功能测试)
+- .claude/hooks/**tests**/post-write-lint.test.js (修改 - 新增 10 个 lintShell 功能测试)

@@ -79,18 +79,18 @@ So that **AI 写入代码时不慎泄露的 API 密钥在保存时被自动发�
 
 ### 新增 API 密钥模式设计
 
-| # | 平台 | 模式 ID | 正则 | 说明 |
-|---|------|---------|------|------|
-| 1 | OpenAI | `openai-api-key` | `sk-proj-[A-Za-z0-9]{20,}` | OpenAI Project API Key |
-| 2 | OpenAI | `openai-org-key` | `sk-org-[A-Za-z0-9]{20,}` | OpenAI Organization API Key |
-| 3 | Anthropic | `anthropic-api-key` | `sk-ant-[A-Za-z0-9]{32,}` | Anthropic API Key |
-| 4 | HuggingFace | `huggingface-token` | `hf_[A-Za-z0-9]{20,}` | HuggingFace Access Token |
-| 5 | Discord | `discord-bot-token` | `[MN][A-Za-z0-9_-]{23}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27}` | Discord Bot Token |
-| 6 | Telegram | `telegram-bot-token` | `[0-9]{8,10}:[A-Za-z0-9_-]{35,}` | Telegram Bot Token |
-| 7 | HashiCorp Vault | `vault-token` | `hvs\.[A-Za-z0-9_-]{20,}` | Vault Token |
-| 8 | Datadog | `datadog-api-key` | `(datadog|dd)_api_key['"]?\s*[:=]\s*['"]?[0-9a-f]{32}` | Datadog API Key（含上下文匹配） |
-| 9 | PagerDuty | `pagerduty-token` | `p[dt]d_[A-Za-z0-9]{20,}` | PagerDuty Token |
-| 10 | 通用 OpenAI | `openai-generic-key` | `sk-[A-Za-z0-9]{20,}` | 通用 OpenAI 模式（排除 sk-ant） |
+| #   | 平台            | 模式 ID              | 正则                                                         | 说明                                          |
+| --- | --------------- | -------------------- | ------------------------------------------------------------ | --------------------------------------------- | ------------------------------- |
+| 1   | OpenAI          | `openai-api-key`     | `sk-proj-[A-Za-z0-9]{20,}`                                   | OpenAI Project API Key                        |
+| 2   | OpenAI          | `openai-org-key`     | `sk-org-[A-Za-z0-9]{20,}`                                    | OpenAI Organization API Key                   |
+| 3   | Anthropic       | `anthropic-api-key`  | `sk-ant-[A-Za-z0-9]{32,}`                                    | Anthropic API Key                             |
+| 4   | HuggingFace     | `huggingface-token`  | `hf_[A-Za-z0-9]{20,}`                                        | HuggingFace Access Token                      |
+| 5   | Discord         | `discord-bot-token`  | `[MN][A-Za-z0-9_-]{23}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27}` | Discord Bot Token                             |
+| 6   | Telegram        | `telegram-bot-token` | `[0-9]{8,10}:[A-Za-z0-9_-]{35,}`                             | Telegram Bot Token                            |
+| 7   | HashiCorp Vault | `vault-token`        | `hvs\.[A-Za-z0-9_-]{20,}`                                    | Vault Token                                   |
+| 8   | Datadog         | `datadog-api-key`    | `(datadog                                                    | dd)\_api_key['"]?\s*[:=]\s*['"]?[0-9a-f]{32}` | Datadog API Key（含上下文匹配） |
+| 9   | PagerDuty       | `pagerduty-token`    | `p[dt]d_[A-Za-z0-9]{20,}`                                    | PagerDuty Token                               |
+| 10  | 通用 OpenAI     | `openai-generic-key` | `sk-[A-Za-z0-9]{20,}`                                        | 通用 OpenAI 模式（排除 sk-ant）               |
 
 注：实际可实现 8-10 种模式以覆盖更多主流平台。Epic 要求 8 种，可额外扩展 2 种。
 

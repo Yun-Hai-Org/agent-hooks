@@ -134,9 +134,14 @@ async function checkDependencyAudit(cwd) {
 
 /** @param {string} [cwd] */
 async function checkTypeScript(cwd) {
-  // 临时跳过类型检查
-  return formatResult('type-check', DECISION.SKIP, '临时跳过类型检查');
-}
+  const stagedFiles = getStagedFiles(cwd);
+  const stagedPyFiles = stagedFiles.filter((/** @type {string} */ f) => f.endsWith('.py'));
+  const stagedJsTsFiles = stagedFiles.filter((/** @type {string} */ f) => /\.(js|ts|jsx|tsx|mjs|cjs)$/i.test(f));
+
+  // 无代码文件时跳过
+  if (stagedPyFiles.length === 0 && stagedJsTsFiles.length === 0) {
+    return formatResult('type-check', DECISION.SKIP, '暂存区无代码文件，跳过类型检查');
+  }
 
   // Python 类型检查：只检查暂存的 .py 文件
   const pyrightPromise = new Promise((resolve) => {

@@ -13,9 +13,9 @@
 import { execSync } from 'child_process';
 import { existsSync, statSync, appendFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { LOG_DIR } from './security-orchestrator.js';
 
 const MAIN_BRANCHES = ['main', 'master'];
-const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
 
 // 主分支上允许写入的目录白名单（如 BMAD 规划制品）
 const ALLOWED_PATHS_ON_MAIN = ['_bmad-output/'];

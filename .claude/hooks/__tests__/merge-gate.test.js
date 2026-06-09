@@ -479,9 +479,7 @@ describe('merge-gate', () => {
       const dirs = getGitIgnoredDirs(repoDir);
       expect(dirs.length).toBeGreaterThan(0);
       // 至少应包含 node_modules、build、coverage 之一
-      const hasExpected = dirs.some((d) =>
-        ['node_modules', 'build', 'coverage'].some((name) => d.includes(name)),
-      );
+      const hasExpected = dirs.some((d) => ['node_modules', 'build', 'coverage'].some((name) => d.includes(name)));
       expect(hasExpected).toBe(true);
     });
 

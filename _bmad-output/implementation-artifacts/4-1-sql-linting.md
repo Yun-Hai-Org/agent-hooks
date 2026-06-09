@@ -47,6 +47,7 @@ So that **SQL 脚本语法正确且符合项目 SQL 风格规范**。
 ### 实现模式
 
 遵循现有 `lintXxx()` 函数的统一模式：
+
 - `checkToolAvailable` → `execCommand('which sqlfluff')`
 - fail-open 策略 → 工具未安装返回 `true`
 - 输出格式 → 带 emoji 前缀的 console.log
