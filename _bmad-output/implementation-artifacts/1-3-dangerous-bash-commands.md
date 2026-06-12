@@ -61,7 +61,7 @@ So that **AI 无法通过 Bash 命令执行破坏性操作或泄露敏感凭据�
 
 - [ ] **Task 1: 分析现有 block-dangerous-commands.js 的 PATTERNS 覆盖缺口 (AC: #1-#8)**
   - [ ] 已覆盖的 CRITICAL 模式（rm-home、rm-root、dd-disk、mkfs、fork-bomb）— 确认无需修改
-  - [ ] 已覆盖的 HIGH 模式（curl-pipe-sh、chmod-777、git-*、cat-env 等）— 确认无需修改
+  - [ ] 已覆盖的 HIGH 模式（curl-pipe-sh、chmod-777、git-\*、cat-env 等）— 确认无需修改
   - [ ] 未覆盖的信息泄露模式：kubectl get secret, terraform output, openssl rsa -in, base64 -d 管道, docker exec 打印环境变量
   - [ ] 未覆盖的破坏性命令：`> /dev/sda`, `find / -delete`, `mv / /tmp/`, fork bomb 变体, `chmod -R 777 /`
   - [ ] 确认 `curl | sudo bash` 和 `wget | sh` 已被现有 pattern 10 覆盖
@@ -100,18 +100,18 @@ So that **AI 无法通过 Bash 命令执行破坏性操作或泄露敏感凭据�
 
 ### 新增模式设计表
 
-| #  | 模式 ID               | 级别     | 正则                                                        | 拦截原因                                          |
-| -- | --------------------- | -------- | ----------------------------------------------------------- | ------------------------------------------------- |
-| 1  | `kubectl-get-secret`  | HIGH     | `/\bkubectl\s+get\s+secret/`                                | kubectl get secret exposes credentials            |
-| 2  | `terraform-output`    | HIGH     | `/\bterraform\s+output/`                                    | terraform output may expose secrets               |
-| 3  | `openssl-rsa-decrypt` | HIGH     | `/\bopenssl\s+(rsa\|pkey\|pkcs8)\s+-in\b/`                   | openssl decrypting private key                    |
-| 4  | `base64-decode-pipe`  | HIGH     | `/\bbase64\s+-[dD]\b.*\b(\||>&)/`                          | base64 decode pipeline may expose secrets         |
-| 5  | `docker-exec-env`     | HIGH     | `/\bdocker\s+exec\b.*\b(env\|printenv\|export)\b/`           | docker exec printing environment variables        |
-| 6  | `redirect-disk`       | CRITICAL | `/\b[>]\s*\/dev\/(sd\|nvme\|hd\|vd\|xvd)/`                 | redirecting output to disk device                 |
-| 7  | `find-delete-root`    | CRITICAL | `/\bfind\s+(\/\|\/[a-z]+)\s+.*-delete\b/`                 | find delete on root or system directory           |
-| 8  | `mv-root`             | CRITICAL | `/\bmv\b.+\s+\/(\s\|$)/` — 需要精确匹配,避免误报 `mv x /tmp/` | moving root or critical directory                 |
-| 9  | `fork-bomb-variant`   | CRITICAL | `/:\(\)\s*\{.*:.*:.*:.*\}.*:/`                              | fork bomb variant detected                        |
-| 10 | `chmod-777-root`      | CRITICAL | `/\bchmod\b.*777.*\s+\//`                                   | chmod 777 on root or system path                  |
+| #   | 模式 ID               | 级别     | 正则                                                          | 拦截原因                                   |
+| --- | --------------------- | -------- | ------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------- |
+| 1   | `kubectl-get-secret`  | HIGH     | `/\bkubectl\s+get\s+secret/`                                  | kubectl get secret exposes credentials     |
+| 2   | `terraform-output`    | HIGH     | `/\bterraform\s+output/`                                      | terraform output may expose secrets        |
+| 3   | `openssl-rsa-decrypt` | HIGH     | `/\bopenssl\s+(rsa\|pkey\|pkcs8)\s+-in\b/`                    | openssl decrypting private key             |
+| 4   | `base64-decode-pipe`  | HIGH     | `/\bbase64\s+-[dD]\b.\*\b(\|                                  | >&)/`                                      | base64 decode pipeline may expose secrets |
+| 5   | `docker-exec-env`     | HIGH     | `/\bdocker\s+exec\b.*\b(env\|printenv\|export)\b/`            | docker exec printing environment variables |
+| 6   | `redirect-disk`       | CRITICAL | `/\b[>]\s*\/dev\/(sd\|nvme\|hd\|vd\|xvd)/`                    | redirecting output to disk device          |
+| 7   | `find-delete-root`    | CRITICAL | `/\bfind\s+(\/\|\/[a-z]+)\s+.*-delete\b/`                     | find delete on root or system directory    |
+| 8   | `mv-root`             | CRITICAL | `/\bmv\b.+\s+\/(\s\|$)/` — 需要精确匹配,避免误报 `mv x /tmp/` | moving root or critical directory          |
+| 9   | `fork-bomb-variant`   | CRITICAL | `/:\(\)\s*\{.*:.*:.*:.*\}.*:/`                                | fork bomb variant detected                 |
+| 10  | `chmod-777-root`      | CRITICAL | `/\bchmod\b.*777.*\s+\//`                                     | chmod 777 on root or system path           |
 
 ### 现有覆盖确认（无需修改）
 
