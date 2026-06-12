@@ -56,7 +56,7 @@ development_status:
   # ========== 🟢 Sprint 2: 配置文件质量守护 (P1) ==========
   epic-3: in-progress
   3-1-json-yaml-schema: done
-  3-2-toml-linting: backlog
+  3-2-toml-linting: ready-for-dev
   epic-3-retrospective: optional
 
   # ========== 🟢 Sprint 2: 数据库与样式文件质量 (P1) ==========
