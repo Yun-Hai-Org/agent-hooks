@@ -43,7 +43,7 @@ development_status:
   # ========== 🟡 Sprint 1: 安全加固 (P0) ==========
   epic-1: in-progress
   1-1-sensitive-file-protection: review
-  1-2-api-key-scanning: in-progress
+  1-2-api-key-scanning: review
   1-3-dangerous-bash-commands: backlog
   epic-1-retrospective: optional
 
