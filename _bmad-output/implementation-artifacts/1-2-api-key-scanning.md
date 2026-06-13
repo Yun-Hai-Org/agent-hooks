@@ -1,6 +1,6 @@
 # Story 1.2: 新增 API 密钥扫描模式
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -34,9 +34,9 @@ So that **AI 写入代码时不慎泄露的 API 密钥在保存时被自动发�
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: 分析现有 CONTENT_PATTERNS 并设计新增 8 个 API 密钥模式 (AC: #1-#3)**
-  - [ ] 确认现有 CONTENT_PATTERNS 已覆盖的密钥类型（AWS、GitHub、GitLab、Slack、Stripe、Google 等）
-  - [ ] 设计 8 个新 API 密钥正则模式：
+- [x] **Task 1: 分析现有 CONTENT_PATTERNS 并设计新增 8 个 API 密钥模式 (AC: #1-#3)**
+  - [x] 确认现有 CONTENT_PATTERNS 已覆盖的密钥类型（AWS、GitHub、GitLab、Slack、Stripe、Google 等）
+  - [x] 设计 8 个新 API 密钥正则模式：
     - OpenAI API Key: `sk-proj-` 或 `sk-org-` 或 `sk-` 开头的模式
     - Anthropic API Key: `sk-ant-` 开头
     - HuggingFace Token: `hf_` 开头
@@ -46,26 +46,26 @@ So that **AI 写入代码时不慎泄露的 API 密钥在保存时被自动发�
     - Datadog API Key: `[0-9a-f]{32}`（匹配 datadog 上下文）
     - PagerDuty Token: `p\d{2}_[A-Za-z0-9]{20,}`
 
-- [ ] **Task 2: 在 protect-secrets.js 的 CONTENT_PATTERNS 数组新增 API 密钥模式 (AC: #1-#3)**
-  - [ ] 添加 OpenAI API Key 模式（`sk-proj-` / `sk-org-` / 通用 `sk-` 但排除 `sk-ant-`）
-  - [ ] 添加 Anthropic API Key 模式（`sk-ant-`）
-  - [ ] 添加 HuggingFace Token 模式（`hf_`）
-  - [ ] 添加 Discord Bot Token 模式
-  - [ ] 添加 Telegram Bot Token 模式
-  - [ ] 添加 HashiCorp Vault Token 模式
-  - [ ] 添加 Datadog API Key 模式
-  - [ ] 添加 PagerDuty Token 模式
-  - [ ] 所有模式使用 CRITICAL 级别
+- [x] **Task 2: 在 protect-secrets.js 的 CONTENT_PATTERNS 数组新增 API 密钥模式 (AC: #1-#3)**
+  - [x] 添加 OpenAI API Key 模式（`sk-proj-` / `sk-org-` / 通用 `sk-` 但排除 `sk-ant-`）
+  - [x] 添加 Anthropic API Key 模式（`sk-ant-`）
+  - [x] 添加 HuggingFace Token 模式（`hf_`）
+  - [x] 添加 Discord Bot Token 模式
+  - [x] 添加 Telegram Bot Token 模式
+  - [x] 添加 HashiCorp Vault Token 模式
+  - [x] 添加 Datadog API Key 模式
+  - [x] 添加 PagerDuty Token 模式
+  - [x] 所有模式使用 CRITICAL 级别
 
-- [ ] **Task 3: 编写测试用例 (AC: #1-#5)**
-  - [ ] 为每个新增 API 密钥模式编写正例测试（应被检测）
-  - [ ] 为排除列表中的文件编写反例测试（应跳过）
-  - [ ] 验证 checkContent 集成正常工作
-  - [ ] 验证 check 集成（Write/Edit 完整流程）
+- [x] **Task 3: 编写测试用例 (AC: #1-#5)**
+  - [x] 为每个新增 API 密钥模式编写正例测试（应被检测）
+  - [x] 为排除列表中的文件编写反例测试（应跳过）
+  - [x] 验证 checkContent 集成正常工作
+  - [x] 验证 check 集成（Write/Edit 完整流程）
 
-- [ ] **Task 4: 运行全量测试确认无回归 (AC: #5)**
-  - [ ] `bun test .claude/hooks/__tests__/protect-secrets.test.js`
-  - [ ] `bun test .claude/hooks/__tests__/`
+- [x] **Task 4: 运行全量测试确认无回归 (AC: #5)**
+  - [x] `bun test .claude/hooks/__tests__/protect-secrets.test.js`
+  - [x] `bun test .claude/hooks/__tests__/`
 
 ## Dev Notes
 
