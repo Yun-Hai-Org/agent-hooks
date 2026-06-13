@@ -50,19 +50,19 @@ development_status:
   # ========== 🟡 Sprint 1: Shell + Dockerfile (P0) ==========
   epic-2: in-progress
   2-1-shell-linting: done
-  2-2-dockerfile-linting: review
+  2-2-dockerfile-linting: done
   epic-2-retrospective: optional
 
   # ========== 🟢 Sprint 2: 配置文件质量守护 (P1) ==========
   epic-3: in-progress
   3-1-json-yaml-schema: done
-  3-2-toml-linting: review
+  3-2-toml-linting: done
   epic-3-retrospective: optional
 
   # ========== 🟢 Sprint 2: 数据库与样式文件质量 (P1) ==========
   epic-4: in-progress
   4-1-sql-linting: done
-  4-2-css-linting: review
+  4-2-css-linting: done
   epic-4-retrospective: optional
 
   # ========== 🟢 Sprint 2: 智能通知与会话健康 (P1) ==========
