@@ -113,6 +113,11 @@ export function buildFixFollowupMessage(gateResult, options = {}) {
     .slice(0, 9500);
 }
 
+/** @param {{ checkId: string; decision: string; message: string }[]} results */
+export function formatChecksForLog(results) {
+  return results.map((r) => ({ id: r.checkId, decision: r.decision, message: r.message }));
+}
+
 /**
  * @param {string} stderr
  */
@@ -159,6 +164,7 @@ export async function runAutoCommit(cwd, options = {}) {
       level: 'BLOCKED',
       branch,
       reason: gateResult.decision.reason?.slice(0, 500),
+      checks: formatChecksForLog(gateResult.results),
       session_id: options.sessionId,
       cwd,
     });
@@ -191,6 +197,7 @@ export async function runAutoCommit(cwd, options = {}) {
     message,
     sha,
     files: stagedFiles.length,
+    checks: formatChecksForLog(gateResult.results),
     session_id: options.sessionId,
     cwd,
   });
