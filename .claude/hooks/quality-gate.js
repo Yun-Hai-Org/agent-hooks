@@ -17,10 +17,13 @@ import {
   runFullProjectTests,
   runHookUnitTests,
   runHookAdversarialTests,
+  runHookAdversarialIfStaged,
 } from './checks/tests.js';
-import { runSemgrep, runKnip, runTrivy, runGitleaks } from './checks/security-scan.js';
+import { runSemgrep, runKnip, runTrivy, runGitleaks, runGitleaksStaged } from './checks/security-scan.js';
 import { runLintFull } from './checks/lint-full.js';
+import { runLintStaged } from './checks/lint-staged.js';
 import { runFormatFull } from './checks/format-full.js';
+import { runFormatStaged } from './checks/format-staged.js';
 import { runCoverage } from './checks/coverage.js';
 import { runCodeReview } from './checks/code-review.js';
 
@@ -64,12 +67,28 @@ export async function runQualityGate(options) {
       return { passed: false, results: syncResults, decision: syncDecision };
     }
 
-    const [auditResult, typeResult, testResult] = await Promise.all([
-      runDepAudit(cwd, { staged: true }),
-      runStagedTypecheck(cwd),
-      runRelatedTests(cwd),
-    ]);
-    const results = [...syncResults, auditResult, typeResult, testResult];
+    const [auditResult, typeResult, testResult, lintStaged, formatStaged, gitleaksStaged, codeReview, hookAdv] =
+      await Promise.all([
+        runDepAudit(cwd, { staged: true }),
+        runStagedTypecheck(cwd),
+        runRelatedTests(cwd),
+        runLintStaged(cwd),
+        runFormatStaged(cwd),
+        runGitleaksStaged(cwd),
+        runCodeReview(cwd, { staged: true }),
+        runHookAdversarialIfStaged(cwd),
+      ]);
+    const results = [
+      ...syncResults,
+      auditResult,
+      typeResult,
+      testResult,
+      lintStaged,
+      formatStaged,
+      gitleaksStaged,
+      codeReview,
+      hookAdv,
+    ];
     const finalDecision = decide(results);
     return { passed: finalDecision.decision !== DECISION.DENY, results, decision: finalDecision };
   }
@@ -133,6 +152,9 @@ export function summarizeCheckDetails(details) {
   }
   if (Array.isArray(details.matched) && details.matched.length > 0) {
     parts.push(`matched: ${details.matched.join(', ')}`);
+  }
+  if (typeof details.installHint === 'string' && details.installHint.trim()) {
+    parts.push(`安装: ${details.installHint.trim()}`);
   }
 
   const text = parts.join('\n---\n').trim();

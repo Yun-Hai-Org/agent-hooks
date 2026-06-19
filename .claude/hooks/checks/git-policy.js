@@ -16,10 +16,30 @@ const SENSITIVE_PATTERNS = [
 
 /** @param {string} cmd */
 export function extractCommitMessage(cmd) {
-  const mMatch = cmd.match(/\bgit\s+commit\b[^"]*?-m\s+["']([^"']+)["']/);
-  if (mMatch) return mMatch[1];
-  const mMatch2 = cmd.match(/\bgit\s+commit\b.*?\s-m\s+([^\s-][^\s]*)/);
-  if (mMatch2) return mMatch2[1];
+  if (!cmd || typeof cmd !== 'string') return null;
+
+  const normalized = cmd.replace(/\\"/g, '"').replace(/\\'/g, "'");
+  const commitMatch = normalized.match(/\bgit\s+commit\b/);
+  if (!commitMatch || commitMatch.index === undefined) return null;
+  const rest = normalized.slice(commitMatch.index);
+
+  const quotedDouble = rest.match(/\s-m\s+"((?:[^"\\]|\\.)*)"/);
+  if (quotedDouble) {
+    const inner = quotedDouble[1].replace(/\\"/g, '"').trim();
+    const heredocInner = inner.match(/(?:\$\(\s*)?cat\s+<<-?\s*['"]?(\w+)['"]?\s*\n([\s\S]*?)\n\1(?:\s*\))?/);
+    if (heredocInner) return heredocInner[2].trim();
+    return inner;
+  }
+
+  const quotedSingle = rest.match(/\s-m\s+'([^']*)'/);
+  if (quotedSingle) return quotedSingle[1].trim();
+
+  const heredoc = rest.match(/\$\(\s*cat\s+<<-?\s*['"]?(\w+)['"]?\s*\n([\s\S]*?)\n\1\s*\)/);
+  if (heredoc) return heredoc[2].trim();
+
+  const unquoted = rest.match(/\s-m\s+(\S+)/);
+  if (unquoted) return unquoted[1].replace(/^["']|["']$/g, '').trim();
+
   return null;
 }
 

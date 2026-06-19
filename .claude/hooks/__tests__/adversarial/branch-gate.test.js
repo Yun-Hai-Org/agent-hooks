@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { extractMergeTarget } from '../checks/git-policy.js';
-import { MAIN_BRANCHES, isInsideWorktree, isFileWriteCommand, deny } from '../branch-gate.js';
+import { extractMergeTarget } from '../../checks/git-policy.js';
+import { MAIN_BRANCHES, isInsideWorktree, isFileWriteCommand, deny } from '../../branch-gate.js';
 
 describe('adversarial: branch-gate bypass vectors', () => {
   it('extractMergeTarget 不应被多余空格欺骗', () => {

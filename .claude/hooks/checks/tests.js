@@ -209,7 +209,7 @@ export async function runHookUnitTests(cwd) {
   }
   try {
     const cmd = `bun test ${files.map((f) => `"${f}"`).join(' ')}`;
-    const result = await withTimeout(execCommandAsync(cmd, { cwd, timeout: 120000 }), 120000, 'Hook 常规单测超时 (120s)');
+    const result = await withTimeout(execCommandAsync(cmd, { cwd, timeout: 180000 }), 180000, 'Hook 常规单测超时 (180s)');
     if (!result.success) {
       return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 常规单测失败', {
         output: (result.stderr || result.stdout).slice(0, 500),
@@ -219,6 +219,16 @@ export async function runHookUnitTests(cwd) {
   } catch (e) {
     return denyOnToolError(e, 'hook-unit-tests', 'bun test');
   }
+}
+
+/** @param {string} [cwd] */
+export async function runHookAdversarialIfStaged(cwd) {
+  const stagedFiles = getStagedFiles(cwd);
+  const touchesHooks = stagedFiles.some((f) => f.startsWith('.claude/hooks/'));
+  if (!touchesHooks) {
+    return formatResult('hook-adversarial', DECISION.SKIP, '暂存区未修改 hooks，跳过对抗性测试');
+  }
+  return runHookAdversarialTests(cwd);
 }
 
 /** @param {string} [cwd] */

@@ -71,6 +71,13 @@ export function execCommandAsync(command, options = {}) {
     const { exec } = require('child_process');
     /** @type {number} */
     const timeout = options.timeout || 30000;
+    let settled = false;
+    /** @param {{ success: boolean; stdout: string; stderr: string }} result */
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
 
     const child = exec(
       command,
@@ -81,21 +88,20 @@ export function execCommandAsync(command, options = {}) {
       },
       (error, stdout, stderr) => {
         if (error) {
-          resolve({
+          finish({
             success: false,
             stdout: stdout || '',
             stderr: stderr || (error instanceof Error ? error.message : String(error)),
           });
         } else {
-          resolve({ success: true, stdout, stderr: '' });
+          finish({ success: true, stdout, stderr: '' });
         }
       },
     );
 
-    // 超时保护
     setTimeout(() => {
       child.kill('SIGTERM');
-      resolve({
+      finish({
         success: false,
         stdout: '',
         stderr: `Command timed out after ${timeout}ms`,

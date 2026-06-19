@@ -1,19 +1,25 @@
 #!/usr/bin/env bun
 /**
  * Gate Retry Stop - Stop hook
- * 人工发起 git push / git merge 被 gate 拒绝后，若 Agent 尝试结束本轮，
- * 则 block/followup 驱动修复，直到 full 检查通过（不自动执行 push/merge）。
+ * push/merge 被 gate 拒绝后，Stop 时 block/followup 驱动修复；
+ * merge 检查通过后可自动重试 git merge（GATE_AUTO_RETRY_MERGE=1，默认开启）。
  *
  * 环境变量：
  *   GATE_RETRY_STOP=0        关闭
  *   GATE_RETRY_MAX_LOOPS=8   Cursor 最大 follow-up
+ *   GATE_AUTO_RETRY_MERGE=0  关闭 merge 通过后自动执行
  */
 
-import { log } from './security-orchestrator.js';
+import { log, execCommand } from './security-orchestrator.js';
 import { runQualityGate } from './quality-gate.js';
 import { parseStopInput } from './auto-commit.js';
 import { getPendingGateFailure, clearPendingGateFailure } from './gate-pending.js';
-import { buildGateRetryStopMessage, buildGateRetryPassMessage } from './gate-fix.js';
+import {
+  buildGateRetryStopMessage,
+  buildGateRetryPassMessage,
+  buildGateRetryMergeSuccessMessage,
+  buildGateRetryMergeFailureMessage,
+} from './gate-fix.js';
 import { runFullOnSourceBranch } from './merge-gate.js';
 import {
   getPlatform,
@@ -28,6 +34,11 @@ const GATE_LABELS = { push: 'push-gate', merge: 'merge-gate' };
 
 export function isGateRetryStopEnabled() {
   const v = (process.env.GATE_RETRY_STOP ?? '1').toLowerCase();
+  return v !== '0' && v !== 'false' && v !== 'off';
+}
+
+export function isAutoRetryMergeEnabled() {
+  const v = (process.env.GATE_AUTO_RETRY_MERGE ?? '1').toLowerCase();
   return v !== '0' && v !== 'false' && v !== 'off';
 }
 
@@ -54,6 +65,13 @@ export async function rerunPendingGate(pending) {
 }
 
 /**
+ * @param {import('./gate-pending.js').GatePendingEntry} pending
+ */
+export function executePendingMerge(pending) {
+  return execCommand(pending.command, { cwd: pending.cwd, timeout: 120000 });
+}
+
+/**
  * @param {string} sessionId
  * @param {{ loopCount?: number }} [options]
  */
@@ -76,14 +94,37 @@ export async function runGateRetryStop(sessionId, options = {}) {
       gateName,
       command: pending.command,
       gateResult,
+      pendingType: pending.type,
     };
   }
 
   clearPendingGateFailure(sessionId);
+
+  if (pending.type === 'merge' && isAutoRetryMergeEnabled()) {
+    const mergeResult = executePendingMerge(pending);
+    if (mergeResult.success) {
+      const sha = execCommand('git rev-parse --short HEAD', { cwd: pending.cwd }).stdout?.trim();
+      return {
+        action: 'merged',
+        gateName,
+        command: pending.command,
+        mergeOutput: (mergeResult.stdout || mergeResult.stderr || '').trim(),
+        sha,
+      };
+    }
+    return {
+      action: 'merge-failed',
+      gateName,
+      command: pending.command,
+      mergeError: (mergeResult.stderr || mergeResult.stdout || 'merge failed').trim(),
+    };
+  }
+
   return {
     action: 'pass',
     gateName,
     command: pending.command,
+    pendingType: pending.type,
   };
 }
 
@@ -119,16 +160,39 @@ async function main() {
     if (result.action === 'block' && result.gateResult) {
       const followup = buildGateRetryStopMessage(result.gateName, result.command, result.gateResult, {
         loopCount,
+        pendingType: result.pendingType,
       });
       log(HOOK_NAME, { level: 'BLOCKED', gate: result.gateName, session_id: sessionId });
       console.log(formatStopContinueOutput(followup, hookEvent));
       return;
     }
 
+    if (result.action === 'merged') {
+      log(HOOK_NAME, { level: 'MERGED', gate: result.gateName, sha: result.sha, session_id: sessionId });
+      console.log(
+        formatStopSuccessOutput(
+          buildGateRetryMergeSuccessMessage(result.gateName, result.command, result.sha),
+          hookEvent,
+        ),
+      );
+      return;
+    }
+
+    if (result.action === 'merge-failed') {
+      log(HOOK_NAME, { level: 'MERGE_FAILED', gate: result.gateName, session_id: sessionId });
+      console.log(
+        formatStopContinueOutput(buildGateRetryMergeFailureMessage(result.command, result.mergeError), hookEvent),
+      );
+      return;
+    }
+
     if (result.action === 'pass') {
       log(HOOK_NAME, { level: 'PASSED', gate: result.gateName, session_id: sessionId });
       console.log(
-        formatStopSuccessOutput(buildGateRetryPassMessage(result.gateName, result.command), hookEvent),
+        formatStopSuccessOutput(
+          buildGateRetryPassMessage(result.gateName, result.command, result.pendingType),
+          hookEvent,
+        ),
       );
       return;
     }

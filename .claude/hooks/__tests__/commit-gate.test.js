@@ -445,6 +445,20 @@ describe('commit-gate', () => {
       expect(msg).toBe('fix: 修复bug');
     });
 
+    it('extractCommitMessage 应提取含空格的长 message', () => {
+      const msg = extractCommitMessage('git commit -m "fix: post-merge quality gate failures on master"');
+      expect(msg).toBe('fix: post-merge quality gate failures on master');
+    });
+
+    it('extractCommitMessage 应提取 HEREDOC message', () => {
+      const cmd = `git commit -m "$(cat <<'EOF'
+fix: hello world
+EOF
+)"`;
+      const msg = extractCommitMessage(cmd);
+      expect(msg).toBe('fix: hello world');
+    });
+
     it('extractCommitMessage 无效命令返回 null', () => {
       const msg = extractCommitMessage('git push origin main');
       expect(msg).toBeNull();
@@ -461,8 +475,13 @@ describe('commit-gate', () => {
     });
 
     it('checkBranch 在非 main 分支应该允许', () => {
-      const result = checkBranch();
-      expect(result.decision === DECISION.ALLOW || result.decision === DECISION.WARN).toBe(true);
+      const repoPath = createTempGitRepo('feat/test-branch-allow');
+      try {
+        const result = checkBranch(repoPath);
+        expect(result.decision).toBe(DECISION.ALLOW);
+      } finally {
+        cleanupTempGitRepo(repoPath);
+      }
     });
 
     it('checkCommitMessage 有效格式应该允许', () => {
