@@ -461,8 +461,13 @@ describe('commit-gate', () => {
     });
 
     it('checkBranch 在非 main 分支应该允许', () => {
-      const result = checkBranch();
-      expect(result.decision === DECISION.ALLOW || result.decision === DECISION.WARN).toBe(true);
+      const repoPath = createTempGitRepo('feat/test-branch-allow');
+      try {
+        const result = checkBranch(repoPath);
+        expect(result.decision).toBe(DECISION.ALLOW);
+      } finally {
+        cleanupTempGitRepo(repoPath);
+      }
     });
 
     it('checkCommitMessage 有效格式应该允许', () => {

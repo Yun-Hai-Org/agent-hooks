@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { isGitPushCommand, isGitCommitCommand, isGitMergeCommand } from '../checks/git-policy.js';
+import { isGitPushCommand, isGitCommitCommand, isGitMergeCommand } from '../../checks/git-policy.js';
 
 describe('adversarial: git-policy command detection', () => {
   it('应识别变体 git commit', () => {

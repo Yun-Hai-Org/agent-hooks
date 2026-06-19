@@ -8,4 +8,4 @@ jobs:
     if: false
     runs-on: ubuntu-latest
     steps:
-      - run: echo "P3: enable when staging URL exists (ZAP baseline / nuclei)"
+      - run: 'echo "P3 enable when staging URL exists (ZAP baseline / nuclei)"'

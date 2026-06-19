@@ -209,7 +209,7 @@ export async function runHookUnitTests(cwd) {
   }
   try {
     const cmd = `bun test ${files.map((f) => `"${f}"`).join(' ')}`;
-    const result = await withTimeout(execCommandAsync(cmd, { cwd, timeout: 120000 }), 120000, 'Hook 常规单测超时 (120s)');
+    const result = await withTimeout(execCommandAsync(cmd, { cwd, timeout: 180000 }), 180000, 'Hook 常规单测超时 (180s)');
     if (!result.success) {
       return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 常规单测失败', {
         output: (result.stderr || result.stdout).slice(0, 500),

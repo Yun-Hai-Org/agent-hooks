@@ -2,7 +2,8 @@ import { execCommand, formatResult, DECISION } from '../security-orchestrator.js
 
 /** @param {string} tool @param {string} [cwd] */
 export function isToolInstalled(tool, cwd) {
-  return execCommand(`which ${tool}`, { cwd }).success;
+  const env = { ...process.env };
+  return execCommand(`command -v ${tool}`, { cwd, env }).success;
 }
 
 /**
