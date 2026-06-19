@@ -591,7 +591,7 @@ describe('branch-gate', () => {
       expect(consoleOutput[0]).toBe('{}');
     });
 
-    it('应该在 worktree 环境中允许 Write 操作', async () => {
+    it('worktree 环境无 git 分支信息时 fail-open allow', async () => {
       // 使用临时目录模拟 worktree（在 /tmp 中创建 .git 文件）
       const tempDir = '/tmp/test-worktree-branchgate';
       mkdirSync(tempDir, { recursive: true });
@@ -613,7 +613,7 @@ describe('branch-gate', () => {
       rmSync(tempDir, { recursive: true, force: true });
     });
 
-    it('应该在 worktree 环境中允许 Edit 操作', async () => {
+    it('worktree 环境无 git 分支信息时 fail-open allow Edit', async () => {
       const tempDir = '/tmp/test-worktree-edit-branchgate';
       mkdirSync(tempDir, { recursive: true });
       writeFileSync(join(tempDir, '.git'), 'gitdir: /tmp/test-worktree-edit-branchgate/.git/worktrees/test\n');

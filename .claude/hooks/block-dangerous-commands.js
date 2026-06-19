@@ -14,6 +14,7 @@
 import { appendFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { LOG_DIR } from './security-orchestrator.js';
+import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
 
 const SAFETY_LEVEL = 'strict';
 
@@ -296,52 +297,44 @@ function checkCommand(cmd, safetyLevel = SAFETY_LEVEL) {
 }
 
 async function main() {
-  let input = '';
-  for await (const chunk of process.stdin) input += chunk;
+  await (async () => {
+    try {
+      const data = await readHookInput();
+      const { tool_input, session_id, cwd } = data;
 
-  try {
-    const data = JSON.parse(input);
-    const { tool_name, tool_input, session_id, cwd, permission_mode } = data;
-
-    // 非 Bash 工具快速退出
-    if (tool_name !== 'Bash') {
-      return console.log('{}');
-    }
-
-    const cmd = tool_input?.command || '';
-    const result = checkCommand(cmd);
-
-    if (result.blocked) {
-      const p = result.pattern;
-      if (!p) {
-        console.log('{}');
+      if (!isShellHookInput(data)) {
+        console.log(formatAllowOutput());
         return;
       }
-      log({
-        level: 'BLOCKED',
-        id: p.id,
-        priority: p.level,
-        cmd: cmd.slice(0, 200),
-        session_id,
-        cwd,
-        permission_mode,
-      });
-      return console.log(
-        JSON.stringify({
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            permissionDecision: 'deny',
-            permissionDecisionReason: `${EMOJIS[p.level]} [${p.id}] ${p.reason}`,
-          },
-        }),
-      );
-    }
 
-    console.log('{}');
-  } catch (/** @type {unknown} */ e) {
-    log({ level: 'ERROR', error: e instanceof Error ? e.message : String(e) });
-    console.log('{}');
-  }
+      const cmd = tool_input?.command || '';
+      const result = checkCommand(cmd);
+
+      if (result.blocked) {
+        const p = result.pattern;
+        if (!p) {
+          console.log(formatAllowOutput());
+          return;
+        }
+        const reason = `${EMOJIS[p.level]} [${p.id}] ${p.reason}`;
+        log({
+          level: 'BLOCKED',
+          id: p.id,
+          priority: p.level,
+          cmd: cmd.slice(0, 200),
+          session_id,
+          cwd,
+        });
+        console.log(formatDenyOutput('deny', reason));
+        return;
+      }
+
+      console.log(formatAllowOutput());
+    } catch (/** @type {unknown} */ e) {
+      log({ level: 'ERROR', error: e instanceof Error ? e.message : String(e) });
+      console.log(formatAllowOutput());
+    }
+  })();
 }
 
 // 只在直接运行时执行 main，导入时不执行

@@ -56,6 +56,7 @@ describe('protect-secrets', () => {
       const apiKeyIds = [
         'openai-project-key',
         'openai-org-key',
+        'openai-legacy-key',
         'anthropic-api-key',
         'huggingface-token',
         'discord-bot-token',
@@ -539,6 +540,72 @@ describe('protect-secrets', () => {
       const result = checkContent('token: pdd_abcdefghijklmnopqrstuvwxyz');
       expect(result.blocked).toBe(true);
       expect(result.pattern.id).toBe('pagerduty-token');
+    });
+
+    // === Review Follow-ups (AI) — Story 1.2 ===
+    // #1 (HIGH): 经典 sk- 开头的 OpenAI 密钥应被检测 (AC #1)
+    it('经典 sk- 开头的 OpenAI 密钥应该被检测', () => {
+      const result = checkContent('OPENAI_API_KEY=sk-T3BlbkFJabcdefghij1234567890klmnop');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('openai-legacy-key');
+      expect(result.pattern.level).toBe('critical');
+    });
+
+    it('openai-legacy-key 不应吞掉 sk-ant-/sk-proj-/sk-org- 的专用判定', () => {
+      expect(checkContent('K=sk-ant-abcdefghijklmnopqrstuvwxyz123456').pattern.id).toBe('anthropic-api-key');
+      expect(checkContent('K=sk-proj-abcde12345fghij67890klmnop').pattern.id).toBe('openai-project-key');
+      expect(checkContent('K=sk-org-abcde12345fghij67890klmnop').pattern.id).toBe('openai-org-key');
+    });
+
+    // #2 (MED): Datadog 小写上下文应被检测
+    it('Datadog API Key (小写 datadog_api_key) 应该被检测', () => {
+      const result = checkContent('datadog_api_key=abcdef1234567890abcdef1234567890');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('datadog-api-key');
+    });
+
+    it('Datadog API Key (小写 dd_api_key) 应该被检测', () => {
+      const result = checkContent('dd_api_key: abcdef1234567890abcdef1234567890');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('datadog-api-key');
+    });
+
+    // #3 (LOW): Discord token 应支持 [MNO] 前缀与灵活长度
+    it('Discord Bot Token (O 前缀, 较长段) 应该被检测', () => {
+      const result = checkContent('token: ODk1MjMxMjI4NjQ3MzkxMzA2.YWxxxx.AbCdEfGhIjKlMnOpQrStUvWxYz0123456789');
+      expect(result.blocked).toBe(true);
+      expect(result.pattern.id).toBe('discord-bot-token');
+    });
+
+    // #4 (LOW): 反例 / 误报测试 — 不应被误判
+    it('随机 32 位 hex (无 datadog 上下文) 不应被 Datadog 误报', () => {
+      const result = checkContent('const hash = "abcdef1234567890abcdef1234567890";');
+      expect(result.blocked).toBe(false);
+    });
+
+    it('普通 时间戳:短串 不应被 Telegram 误报', () => {
+      const result = checkContent('const ts = "1234:5678";');
+      expect(result.blocked).toBe(false);
+    });
+
+    it('短的 sk- 字符串不应被 OpenAI 误报', () => {
+      const result = checkContent('className = "sk-button";');
+      expect(result.blocked).toBe(false);
+    });
+
+    it('短的 hf_ 字符串不应被 HuggingFace 误报', () => {
+      const result = checkContent('const hf_count = 3;');
+      expect(result.blocked).toBe(false);
+    });
+
+    it('普通三段式文本不应被 Discord 误报', () => {
+      const result = checkContent('see file a.b.c for details');
+      expect(result.blocked).toBe(false);
+    });
+
+    it('短的 hvs. 字符串不应被 Vault 误报', () => {
+      const result = checkContent('const v = "hvs.short";');
+      expect(result.blocked).toBe(false);
     });
 
     // Slack Token

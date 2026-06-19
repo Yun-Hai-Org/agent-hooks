@@ -75,8 +75,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/resolve-hook-path.js merge-gate.js",
+            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.js merge-gate.js",
             "statusMessage": "检查合并操作..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.js push-gate.js",
+            "statusMessage": "检查推送质量门..."
           }
         ]
       }
@@ -99,13 +109,25 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/resolve-hook-path.js post-write-lint.js",
-            "statusMessage": "执行代码质量检查..."
+            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.js auto-stage.js",
+            "statusMessage": "自动暂存修改文件..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.js auto-commit.js",
+            "statusMessage": "自动提交暂存变更..."
           },
           {
             "type": "command",
-            "command": "bun .claude/hooks/resolve-hook-path.js auto-stage.js",
-            "statusMessage": "自动暂存修改文件..."
+            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.js gate-retry-stop.js",
+            "statusMessage": "push/merge 质量门修复循环..."
           }
         ]
       }

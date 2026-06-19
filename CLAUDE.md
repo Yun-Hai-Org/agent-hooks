@@ -7,8 +7,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### 测试
 
 ```bash
-# 运行所有 hook 单元测试
-bun test .claude/hooks/__tests__/
+# 运行常规单测（不含 adversarial）
+bun test .claude/hooks/__tests__/*.test.js
+
+# 对抗性测试
+bun test .claude/hooks/__tests__/adversarial/
+
+# 本地 quality-gate CLI
+bun .claude/hooks/quality-gate.js --profile=commit
+bun .claude/hooks/quality-gate.js --profile=full
 
 # 运行单个测试文件
 bun test .claude/hooks/__tests__/commit-gate.test.js
@@ -51,16 +58,18 @@ uv sync                      # 同步依赖
 
 本项目是一个 **Claude Code Hooks 安全增强体系**，所有 hook 脚本位于 `.claude/hooks/` 目录，通过 `.claude/settings.json` 注册到 Claude Code。
 
-### 四门安全架构
+### 本地质量门 + 实时安全
 
-Hook 按执行时机分为四个安全门：
+| 门 | 触发 | Hook | profile |
+|----|------|------|---------|
+| **实时安全** | PreToolUse / PostToolUse / Stop | block-dangerous-commands、branch-gate、protect-secrets、auto-stage、auto-commit | — |
+| **提交门** | `git commit` | `commit-gate.js` | `commit`（暂存区增量，<30s） |
+| **推送门** | 人工 `git push` | `push-gate.js` | `full`（拒绝 + 修复循环） |
+| **合并门** | 人工 `git merge` → main/master | `merge-gate.js` | `full`（拒绝 + 修复循环） |
 
-| 门         | 触发时机                                      | Hook 脚本                                                             | 职责                                                 |
-| ---------- | --------------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------- |
-| **写入门** | `PreToolUse`（工具执行前）                    | `block-dangerous-commands.js`、`branch-gate.js`、`protect-secrets.js` | 拦截危险命令、分支保护、敏感文件保护                 |
-| **快速门** | `PostToolUse`（文件写入后）                   | `post-write-lint.js`、`auto-stage.js`                                 | 代码质量检查、自动 git add                           |
-| **提交门** | `PreToolUse`（`git commit` 时）               | `commit-gate.js`                                                      | 提交格式校验、暂存区敏感文件扫描、依赖审计、关联测试 |
-| **合并门** | `PreToolUse`（`git merge` 到 main/master 时） | `merge-gate.js`                                                       | Semgrep + Knip + Trivy 全量扫描、全量测试、自测      |
+共享核心：`checks/*.js` + `quality-gate.js`。无远程 `hooks-ci.yml`。
+
+PostToolUse 仅保留 **auto-stage**。**Stop 链**：`auto-commit`（有暂存则 commit 检查 + 自动提交）→ `gate-retry-stop`（仅当 push/merge 曾被 gate 拒绝时，驱动 full 修复循环，**不自动 push/merge**）。`push-gate` / `merge-gate` 仅在人工执行命令时触发；拒绝时写入 pending 并返回详细修复指引。
 
 ### Hook 协议
 
@@ -91,10 +100,11 @@ Hook 按执行时机分为四个安全门：
 
 ## 开发流程
 
-1. 在 feature 分支或 worktree 中开发（禁止在 master/main 上直接修改代码文件，`_bmad-output/` 目录除外）
-2. 文件写入后自动触发 lint + format + git add
-3. 提交时自动校验 commit 格式：`类型: 描述`（类型：feat/fix/refactor/docs/test/chore/style/perf）
-4. 合并到 main 时自动运行全量安全扫描和测试
+1. 在 **feature 分支**开发（禁止在 main/master 直接改代码；worktree 内同样受 branch-gate 约束，`_bmad-output/` 白名单除外）
+2. 文件写入后自动 **git add**（auto-stage）
+3. Agent 一轮结束 → **auto-commit**（有暂存则自动 commit；失败 block/followup 重试）
+4. **人工** `git push` → push-gate（full）；失败 → Agent 修复并重试同一命令；若尝试结束 → **gate-retry-stop** 继续驱动修复
+5. **人工** `git merge` 到 main → merge-gate（source 分支 full）；失败修复循环同上；通过后需**再次手动**执行 merge 命令
 
 ## 子代理开发规范
 
@@ -107,11 +117,11 @@ Hook 按执行时机分为四个安全门：
 Claude 可以直接执行 `git commit` 和 `git merge`，以下检查由 hook **自动运行**，
 **不需要 Claude 手动预先执行**：
 
-| 阶段          | 自动执行的检查                                                  | Claude 需要手动做？ |
-| ------------- | --------------------------------------------------------------- | :-----------------: |
-| 文件写入后    | ESLint + Ruff + Prettier + shellcheck + hadolint + 自动 git add |      ❌ 不需要      |
-| git commit 时 | 分支检查 + 提交格式 + 敏感文件 + 依赖审计 + 类型检查 + 关联测试 |      ❌ 不需要      |
-| git merge 时  | Semgrep + Trivy + Knip + 全量测试 + Hook 自测                   |      ❌ 不需要      |
+| 阶段 | 自动执行的检查 |
+|------|----------------|
+| git commit | 分支 + msg + 暂存敏感 + dep audit + 增量 typecheck + 关联测试 |
+| git push | quality-gate full（typecheck/lint/扫描/测试/对抗性等） |
+| git merge | quality-gate full @ source 分支 |
 
 **原则：提交门和合并门是安全最终保障，Claude 只需写好代码和提交信息，直接 commit/merge 即可。**
 **禁止 Claude 在提交前手动运行 `bun test` 或其他质量检查 — 这些由 hook 自动完成，手动运行会导致重复执行。**

@@ -4,15 +4,15 @@ import { writeFileSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 import {
   extractCommitMessage,
-  getCurrentBranch,
   getStagedFiles,
   checkBranch,
   checkCommitMessage,
-  checkSensitiveFiles,
-  checkDependencyAudit,
-  checkTypeScript,
-  checkRelatedTests,
-} from '../commit-gate.js';
+  checkSensitiveStagedFiles as checkSensitiveFiles,
+} from '../checks/git-policy.js';
+import { runDepAudit as checkDependencyAudit } from '../checks/dependency.js';
+import { runStagedTypecheck as checkTypeScript } from '../checks/typecheck.js';
+import { runRelatedTests as checkRelatedTests } from '../checks/tests.js';
+import { getCurrentBranch } from '../security-orchestrator.js';
 import { DECISION } from '../security-orchestrator.js';
 import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
 

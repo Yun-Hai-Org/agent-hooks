@@ -1,491 +1,119 @@
 #!/usr/bin/env bun
 /**
  * Merge Gate - PreToolUse Hook for Bash
- * 合并门：在 git merge 到 main/master 时执行安全扫描和测试
- *
- * 检查优先级：
- * 1. Fast bail-out：非 git merge 命令 → allow
- * 2. 目标分支检测：非 main/master → skip
- * 3. 安全扫描（并行）：Semgrep + Knip + Trivy
- * 4. 全量测试（串行）：bun test / pytest
- * 5. Hook 自身测试：bun test .claude/hooks/__tests__/
- * 6. 生成安全报告 summary
+ * 合并门：git merge 到 main/master 前对 source 分支跑 quality-gate --profile=full
  */
 
-import {
-  formatResult,
-  decide,
-  formatHookOutput,
-  log,
-  execCommand,
-  execCommandAsync,
-  readStdin,
-  safeMain,
-  withTimeout,
-  detectToolchain,
-  TESTS_DIR,
-  DECISION,
-} from './security-orchestrator.js';
+import { mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { execCommand, safeMain, log, getCurrentBranch, DECISION } from './security-orchestrator.js';
+import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
+import { extractMergeTarget, isGitMergeCommand } from './checks/git-policy.js';
+import { runQualityGate, summarizeResults } from './quality-gate.js';
+import { buildGateDenyReason } from './gate-fix.js';
+import { setPendingGateFailure, clearPendingGateFailure } from './gate-pending.js';
 
 const HOOK_NAME = 'merge-gate';
 
-// ─── 工具函数 ─────────────────────────────────────────────────────────────────
-
 /**
- * 获取 git 忽略的目录列表（用于安全扫描排除）
- * @param {string} [cwd]
+ * @param {string} repoCwd
+ * @param {string} sourceBranch
  */
-function getGitIgnoredDirs(cwd) {
-  const result = execCommand('git ls-files --others --ignored --exclude-standard --directory | head -20', {
-    cwd,
-    timeout: 5000,
-  });
-  if (!result.success || !result.stdout.trim()) return [];
-  return result.stdout
-    .trim()
-    .split('\n')
-    .map((/** @type {string} */ d) => d.replace(/\/$/, ''));
-}
-
-/**
- * 从 git merge 命令中提取目标分支
- * 支持带参数的命令，如 git merge --no-ff feat/xxx
- */
-/**
- * @param {string} cmd
- * @returns {string | null}
- */
-function extractMergeTarget(cmd) {
-  // 匹配 git merge，跳过所有 --xxx 参数，然后捕获第一个不以 - 开头的词
-  const m = cmd.match(/\bgit\s+merge\b(?:\s+--[^\s]+)*\s+([^\s-][^\s]*)/);
-  return m ? m[1] : null;
-}
-
-/**
- * 获取当前分支名
- * @param {string} [cwd]
- */
-function getCurrentBranch(cwd) {
-  const result = execCommand('git rev-parse --abbrev-ref HEAD', { cwd });
-  return result.success ? result.stdout.trim() : null;
-}
-
-// ─── 安全扫描 ─────────────────────────────────────────────────────────────────
-
-/**
- * 整个项目类型检查（Python + TypeScript/JS）
- * @param {string} [cwd]
- */
-async function runTypeCheck(cwd) {
-  // Python 类型检查
-  const pyrightPromise = new Promise((resolve) => {
-    const hasPyright = execCommand('which pyright', { cwd });
-    if (hasPyright.success) {
-      const r = execCommand('pyright', { cwd, timeout: 60000 });
-      resolve({ tool: 'pyright', ...r });
-    } else {
-      const hasUv = execCommand('which uv', { cwd });
-      if (hasUv.success) {
-        const r = execCommand('uv run pyright', { cwd, timeout: 60000 });
-        resolve({ tool: 'pyright (uv)', ...r });
-      } else {
-        resolve({ tool: 'pyright', success: true, stdout: 'pyright not found, skip', stderr: '' });
-      }
-    }
-  });
-
-  // TypeScript/JS 类型检查
-  const tscPromise = new Promise((resolve) => {
-    const hasTsconfig = execCommand('test -f tsconfig.json', { cwd });
-    if (!hasTsconfig.success) {
-      resolve({ tool: 'tsc', success: true, stdout: 'no tsconfig.json, skip', stderr: '' });
-      return;
-    }
-    const r = execCommand('bunx tsc --noEmit', { cwd, timeout: 60000 });
-    resolve({ tool: 'tsc', ...r });
-  });
-
+async function runFullOnSourceBranch(repoCwd, sourceBranch) {
+  const worktreeDir = mkdtempSync(join(tmpdir(), 'merge-gate-'));
   try {
-    const results = await Promise.allSettled([
-      withTimeout(pyrightPromise, 60000, 'pyright 超时 (60s)'),
-      withTimeout(tscPromise, 60000, 'tsc 超时 (60s)'),
-    ]);
-
-    const failures = [];
-    for (const r of results) {
-      if (r.status === 'fulfilled' && !r.value.success) {
-        failures.push(r.value);
-      }
+    const addResult = execCommand(`git worktree add "${worktreeDir}" "${sourceBranch}"`, { cwd: repoCwd, timeout: 60000 });
+    if (!addResult.success) {
+      return {
+        passed: false,
+        decision: { decision: DECISION.DENY, reason: `无法 checkout source 分支 ${sourceBranch}: ${addResult.stderr}` },
+        results: [],
+      };
     }
-    if (failures.length > 0) {
-      const messages = failures.map((f) => `${f.tool}: ${(f.stderr || f.stdout).slice(0, 500)}`).join('\n');
-      return formatResult('type-check', DECISION.DENY, `类型检查失败:\n${messages}`, { failures });
-    }
-    return formatResult('type-check', DECISION.ALLOW, '类型检查通过');
-  } catch (e) {
-    return formatResult('type-check', DECISION.SKIP, `类型检查跳过: ${e instanceof Error ? e.message : String(e)}`);
-  }
-}
-
-/**
- * Semgrep 安全扫描
- * @param {string} [cwd]
- */
-async function runSemgrep(cwd) {
-  const hasSemgrep = execCommand('which semgrep', { cwd });
-  if (!hasSemgrep.success) {
-    return formatResult('semgrep', DECISION.DENY, 'semgrep 未安装，请先安装 semgrep');
-  }
-
-  try {
-    const ignoredDirs = getGitIgnoredDirs(cwd);
-    const excludeFlags = ignoredDirs.map((/** @type {string} */ d) => `--exclude "${d}"`).join(' ');
-    const semgrepCmd = `semgrep --config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten --severity ERROR,WARNING,INFO --json ${excludeFlags} .`;
-
-    const result = await withTimeout(
-      execCommandAsync(semgrepCmd, { cwd, timeout: 60000 }),
-      60000,
-      'semgrep 超时 (60s)',
-    );
-
-    if (!result.success && result.stderr) {
-      // semgrep may exit non-zero with findings
-      try {
-        const json = JSON.parse(result.stdout);
-        const errors = json.results?.filter((/** @type {any} */ r) => r.extra?.severity === 'ERROR') || [];
-        if (errors.length > 0) {
-          return formatResult('semgrep', DECISION.DENY, `Semgrep 发现 ${errors.length} 个 ERROR 级别问题`, {
-            count: errors.length,
-            sample: errors.slice(0, 3).map((/** @type {any} */ e) => e.extra?.message || e.check_id),
-          });
-        }
-      } catch {}
-    }
-
-    if (result.success) {
-      return formatResult('semgrep', DECISION.ALLOW, 'Semgrep 扫描通过');
-    }
-
-    return formatResult('semgrep', DECISION.ALLOW, 'Semgrep 扫描完成（无 ERROR）');
-  } catch (/** @type {unknown} */ e) {
-    return formatResult('semgrep', DECISION.SKIP, `Semgrep 跳过: ${e instanceof Error ? e.message : String(e)}`);
-  }
-}
-
-/**
- * Knip 未使用代码检测
- * @param {string} [cwd]
- */
-async function runKnip(cwd) {
-  try {
-    const result = await withTimeout(
-      execCommandAsync('bunx knip --reporter json', { cwd, timeout: 30000 }),
-      30000,
-      'knip 超时 (30s)',
-    );
-
-    if (!result.success) {
-      // knip exits non-zero when issues found
-      try {
-        const json = JSON.parse(result.stdout);
-        const unusedFiles = json.files ? Object.keys(json.files).length : 0;
-        const unusedDeps = json.dependencies ? Object.keys(json.dependencies).length : 0;
-        if (unusedFiles > 0 || unusedDeps > 0) {
-          return formatResult(
-            'knip',
-            DECISION.DENY,
-            `Knip 发现 ${unusedFiles} 个未使用文件, ${unusedDeps} 个未使用依赖`,
-            { unusedFiles, unusedDeps },
-          );
-        }
-      } catch {}
-    }
-
-    return formatResult('knip', DECISION.ALLOW, 'Knip 检查通过（无未使用代码）');
-  } catch (/** @type {unknown} */ e) {
-    return formatResult('knip', DECISION.SKIP, `Knip 跳过: ${e instanceof Error ? e.message : String(e)}`);
-  }
-}
-
-/**
- * Trivy 漏洞扫描
- * @param {string} [cwd]
- */
-async function runTrivy(cwd) {
-  const hasTrivy = execCommand('which trivy', { cwd });
-  if (!hasTrivy.success) {
-    return formatResult('trivy', DECISION.DENY, 'trivy 未安装，请先安装 trivy');
-  }
-
-  try {
-    const ignoredDirs = getGitIgnoredDirs(cwd);
-    const skipDirs = ignoredDirs.map((/** @type {string} */ d) => `--skip-dirs "${d}"`).join(' ');
-    const trivyCmd = `trivy fs --scanners vuln,misconfig,secret,license --severity CRITICAL,HIGH,MEDIUM --format json ${skipDirs} .`;
-
-    const result = await withTimeout(execCommandAsync(trivyCmd, { cwd, timeout: 60000 }), 60000, 'trivy 超时 (60s)');
-
-    if (result.success) {
-      try {
-        const json = JSON.parse(result.stdout);
-        const vulns = json.Results?.flatMap((/** @type {any} */ r) => r.Vulnerabilities || []) || [];
-        const criticals = vulns.filter((/** @type {any} */ v) => v.Severity === 'CRITICAL');
-        const highs = vulns.filter((/** @type {any} */ v) => v.Severity === 'HIGH');
-        const mediums = vulns.filter((/** @type {any} */ v) => v.Severity === 'MEDIUM');
-        if (criticals.length > 0 || highs.length > 0 || mediums.length > 0) {
-          return formatResult(
-            'trivy',
-            DECISION.DENY,
-            `Trivy 发现 ${criticals.length} CRITICAL, ${highs.length} HIGH, ${mediums.length} MEDIUM 漏洞`,
-            { critical: criticals.length, high: highs.length, medium: mediums.length },
-          );
-        }
-      } catch {}
-    }
-
-    return formatResult('trivy', DECISION.ALLOW, 'Trivy 扫描通过');
-  } catch (/** @type {unknown} */ e) {
-    return formatResult('trivy', DECISION.SKIP, `Trivy 跳过: ${e instanceof Error ? e.message : String(e)}`);
-  }
-}
-
-// ─── 测试 ─────────────────────────────────────────────────────────────────────
-
-/**
- * 全量测试
- */
-async function runFullTests(cwd) {
-  const toolchain = detectToolchain(cwd);
-
-  const results = [];
-
-  // Python 测试：基于 detectToolchain 结果
-  if (toolchain.python === 'uv') {
-    const hasUv = execCommand('which uv', { cwd });
-    if (!hasUv.success) {
-      results.push(formatResult('full-test-py', DECISION.SKIP, 'uv 未安装，跳过 Python 测试'));
-    } else {
-      try {
-        const pyResult = await withTimeout(
-          execCommandAsync('uv run python -m pytest -x -q', { cwd, timeout: 60000 }),
-          60000,
-          'pytest 超时 (60s)',
-        );
-        if (!pyResult.success) {
-          const output = pyResult.stderr || pyResult.stdout || '';
-          if (
-            output.includes('No module named pytest') ||
-            output.includes('no tests ran') ||
-            output.includes('collected 0 items') ||
-            output.includes('no tests collected')
-          ) {
-            results.push(formatResult('full-test-py', DECISION.SKIP, 'Python 测试跳过（pytest 未安装或无测试文件）'));
-          } else {
-            results.push(
-              formatResult('full-test-py', DECISION.DENY, `Python 全量测试失败`, { output: output.slice(0, 500) }),
-            );
-          }
-        } else {
-          results.push(formatResult('full-test-py', DECISION.ALLOW, 'Python 全量测试通过'));
-        }
-      } catch (/** @type {unknown} */ e) {
-        results.push(
-          formatResult('full-test-py', DECISION.SKIP, `Python 测试跳过: ${e instanceof Error ? e.message : String(e)}`),
-        );
-      }
-    }
-  }
-
-  // JS 测试：基于 detectToolchain 结果
-  if (toolchain.js === 'bun') {
+    return await runQualityGate({ profile: 'full', cwd: worktreeDir });
+  } finally {
+    execCommand(`git worktree remove --force "${worktreeDir}"`, { cwd: repoCwd, timeout: 30000 });
     try {
-      const trackedFiles = execCommand(
-        "git ls-files '*.test.js' '*.test.ts' '*.spec.js' '*.spec.ts' '*.test.jsx' '*.test.tsx'",
-        { cwd, timeout: 5000 },
-      );
-      let testCmd = `bun test "${TESTS_DIR}"`;
-      if (trackedFiles.success && trackedFiles.stdout.trim()) {
-        const files = trackedFiles.stdout
-          .trim()
-          .split('\n')
-          .map((/** @type {string} */ f) => `./${f}`)
-          .join(' ');
-        testCmd = `bun test ${files}`;
-      }
-      const jsResult = await withTimeout(
-        execCommandAsync(testCmd, { cwd, timeout: 60000 }),
-        60000,
-        'bun test 超时 (60s)',
-      );
-      if (!jsResult.success) {
-        results.push(
-          formatResult('full-test-js', DECISION.DENY, `JS 全量测试失败`, {
-            output: (jsResult.stderr || jsResult.stdout).slice(0, 500),
-          }),
-        );
-      } else {
-        results.push(formatResult('full-test-js', DECISION.ALLOW, 'JS 全量测试通过'));
-      }
-    } catch (/** @type {unknown} */ e) {
-      results.push(
-        formatResult('full-test-js', DECISION.SKIP, `JS 测试跳过: ${e instanceof Error ? e.message : String(e)}`),
-      );
-    }
-  }
-
-  if (results.length === 0) {
-    return formatResult('full-tests', DECISION.SKIP, '未找到测试配置');
-  }
-
-  // Return the first failure, or all passed
-  const failure = results.find((r) => r.decision === DECISION.DENY);
-  return failure || formatResult('full-tests', DECISION.ALLOW, '所有全量测试通过');
-}
-
-/**
- * Hook 自身测试
- */
-async function runHookTests(cwd) {
-  const check = execCommand(`test -d "${TESTS_DIR}"`, { cwd });
-  if (!check.success) {
-    return formatResult('hook-tests', DECISION.SKIP, 'Hook 测试目录不存在，跳过');
-  }
-
-  try {
-    const result = await withTimeout(
-      execCommandAsync(`bun test "${TESTS_DIR}"`, { cwd, timeout: 30000 }),
-      30000,
-      'Hook 测试超时 (30s)',
-    );
-
-    if (!result.success) {
-      return formatResult('hook-tests', DECISION.DENY, `Hook 自身测试失败`, {
-        output: (result.stderr || result.stdout).slice(0, 500),
-      });
-    }
-
-    return formatResult('hook-tests', DECISION.ALLOW, 'Hook 自身测试通过');
-  } catch (/** @type {unknown} */ e) {
-    return formatResult('hook-tests', DECISION.SKIP, `Hook 测试跳过: ${e instanceof Error ? e.message : String(e)}`);
+      rmSync(worktreeDir, { recursive: true, force: true });
+    } catch {}
   }
 }
-
-/**
- * 生成安全报告 summary
- */
-/** @param {any[]} results */
-function generateSummary(results) {
-  const summary = results
-    .map((/** @type {any} */ r) => {
-      const icon = { allow: '✅', deny: '❌', skip: '⏭️', warn: '⚠️' }[/** @type {string} */ (r.decision)] || '📋';
-      return `${icon} [${r.checkId}] ${r.message}`;
-    })
-    .join('\n');
-  return summary;
-}
-
-// ─── 主流程 ───────────────────────────────────────────────────────────────────
 
 async function main() {
   await safeMain(async () => {
-    const data = await readStdin();
+    const data = await readHookInput();
     const { tool_name, tool_input, session_id, cwd } = data;
+    const workingDir = cwd || process.cwd();
 
-    // Fast bail-out: 非 Bash 工具
-    if (tool_name !== 'Bash') {
-      console.log('{}');
+    if (!isShellHookInput(data)) {
+      console.log(formatAllowOutput());
       return;
     }
 
     const cmd = tool_input?.command || '';
-
-    // Fast bail-out: 非 git merge 命令
-    if (!/\bgit\s+merge\b/.test(cmd)) {
-      console.log('{}');
+    if (!isGitMergeCommand(cmd)) {
+      console.log(formatAllowOutput());
       return;
     }
 
-    // 目标分支检测：检查是否合并到 main/master
-    const currentBranch = getCurrentBranch(cwd);
+    const currentBranch = getCurrentBranch(workingDir);
     if (currentBranch !== 'main' && currentBranch !== 'master') {
-      log(HOOK_NAME, { level: 'SKIP', reason: `当前分支 ${currentBranch} 非 main/master`, session_id, cwd });
-      console.log('{}');
+      log(HOOK_NAME, { level: 'SKIP', reason: `当前分支 ${currentBranch} 非 main/master`, session_id, cwd: workingDir });
+      console.log(formatAllowOutput());
       return;
     }
 
-    // Phase 1: 安全扫描 + 类型检查（并行）
-    const [semgrepResult, knipResult, trivyResult, typeCheckResult] = await Promise.allSettled([
-      runSemgrep(cwd),
-      runKnip(cwd),
-      runTrivy(cwd),
-      runTypeCheck(cwd),
-    ]);
-
-    const securityResults = [
-      semgrepResult.status === 'fulfilled'
-        ? semgrepResult.value
-        : formatResult('semgrep', DECISION.SKIP, 'Semgrep 执行异常'),
-      knipResult.status === 'fulfilled' ? knipResult.value : formatResult('knip', DECISION.SKIP, 'Knip 执行异常'),
-      trivyResult.status === 'fulfilled' ? trivyResult.value : formatResult('trivy', DECISION.SKIP, 'Trivy 执行异常'),
-      typeCheckResult.status === 'fulfilled'
-        ? typeCheckResult.value
-        : formatResult('type-check', DECISION.SKIP, '类型检查执行异常'),
-    ];
-
-    // 检查安全扫描是否 deny
-    const securityDecision = decide(securityResults);
-    if (securityDecision.decision === DECISION.DENY) {
-      const summary = generateSummary(securityResults);
-      log(HOOK_NAME, { level: 'BLOCKED', phase: 'security', summary: summary.slice(0, 1000), session_id, cwd });
-      console.log(formatHookOutput(DECISION.DENY, `🔒 安全扫描未通过:\n${securityDecision.reason}`));
+    const sourceBranch = extractMergeTarget(cmd);
+    if (!sourceBranch) {
+      console.log(formatDenyOutput(DECISION.DENY, '无法解析 git merge 的 source 分支'));
       return;
     }
 
-    // Phase 2: 全量测试（串行）
-    const fullTestResult = await runFullTests(cwd);
-    if (fullTestResult.decision === DECISION.DENY) {
-      log(HOOK_NAME, { level: 'BLOCKED', phase: 'full-tests', session_id, cwd });
-      console.log(formatHookOutput(DECISION.DENY, `🧪 全量测试失败:\n${fullTestResult.message}`));
+    if (sourceBranch === 'main' || sourceBranch === 'master') {
+      console.log(formatDenyOutput(DECISION.DENY, '禁止 merge main/master 到自身'));
       return;
     }
 
-    // Phase 3: Hook 自身测试
-    const hookTestResult = await runHookTests(cwd);
-    if (hookTestResult.decision === DECISION.DENY) {
-      log(HOOK_NAME, { level: 'BLOCKED', phase: 'hook-tests', session_id, cwd });
-      console.log(formatHookOutput(DECISION.DENY, `🔧 Hook 测试失败:\n${hookTestResult.message}`));
-      return;
-    }
+    execCommand('git fetch --quiet', { cwd: workingDir, timeout: 60000 });
 
-    // 所有检查通过
-    const allResults = [...securityResults, fullTestResult, hookTestResult];
-    const summary = generateSummary(allResults);
+    const gateResult = await runFullOnSourceBranch(workingDir, sourceBranch);
 
     log(HOOK_NAME, {
-      level: 'PASSED',
-      summary: summary.slice(0, 1000),
+      level: gateResult.passed ? 'PASSED' : 'BLOCKED',
+      profile: 'full',
+      sourceBranch,
       session_id,
-      cwd,
+      cwd: workingDir,
+      summary: gateResult.results?.length ? summarizeResults(gateResult.results).slice(0, 1000) : gateResult.decision?.reason,
     });
 
-    console.log(formatHookOutput(DECISION.ALLOW, `✅ 合并门检查全部通过:\n${summary}`));
+    if (!gateResult.passed) {
+      const reason = buildGateDenyReason(HOOK_NAME, cmd, gateResult);
+      setPendingGateFailure(session_id, {
+        type: 'merge',
+        command: cmd,
+        cwd: workingDir,
+        sourceBranch,
+      });
+      console.log(formatDenyOutput(DECISION.DENY, reason));
+      return;
+    }
+
+    clearPendingGateFailure(session_id);
+
+    console.log(formatAllowOutput());
   });
 }
 
-// 只在直接运行时执行 main()，导入时不执行
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1]);
+if (isDirectRun) {
   main();
 }
 
-// 导出函数供测试使用
 export {
-  getGitIgnoredDirs,
   extractMergeTarget,
   getCurrentBranch,
-  runTypeCheck,
-  runSemgrep,
-  runKnip,
-  runTrivy,
-  runFullTests,
-  runHookTests,
-  generateSummary,
+  runFullOnSourceBranch,
+  main,
 };
