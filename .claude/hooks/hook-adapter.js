@@ -127,6 +127,9 @@ export async function readFileEditInput() {
 export function formatDenyOutput(decision, reason) {
   const platform = getPlatform();
   if (platform === 'cursor') {
+    if (decision === 'allow') {
+      return JSON.stringify({ permission: 'allow' });
+    }
     return JSON.stringify({
       permission: 'deny',
       user_message: reason,
@@ -134,6 +137,9 @@ export function formatDenyOutput(decision, reason) {
     });
   }
   if (platform === 'kiro') {
+    if (decision === 'allow') {
+      return JSON.stringify({ decision: 'allow' });
+    }
     return JSON.stringify({ decision: 'deny', reason });
   }
   if (decision === 'allow') return '{}';

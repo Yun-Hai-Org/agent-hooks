@@ -80,8 +80,37 @@ describe('hook-adapter', () => {
     else delete process.env.HOOK_PLATFORM;
   });
 
-  it('allow 输出为 {}', () => {
+  it('cursor allow 输出 permission allow', () => {
+    const prev = process.env.HOOK_PLATFORM;
+    process.env.HOOK_PLATFORM = 'cursor';
+    expect(JSON.parse(formatAllowOutput())).toEqual({ permission: 'allow' });
+    if (prev) process.env.HOOK_PLATFORM = prev;
+    else delete process.env.HOOK_PLATFORM;
+  });
+
+  it('cursor deny 输出 permission deny', () => {
+    const prev = process.env.HOOK_PLATFORM;
+    process.env.HOOK_PLATFORM = 'cursor';
+    const out = JSON.parse(formatDenyOutput('deny', 'blocked'));
+    expect(out.permission).toBe('deny');
+    expect(out.agent_message).toBe('blocked');
+    if (prev) process.env.HOOK_PLATFORM = prev;
+    else delete process.env.HOOK_PLATFORM;
+  });
+
+  it('kiro allow 输出 decision allow', () => {
+    const prev = process.env.HOOK_PLATFORM;
+    process.env.HOOK_PLATFORM = 'kiro';
+    expect(JSON.parse(formatAllowOutput())).toEqual({ decision: 'allow' });
+    if (prev) process.env.HOOK_PLATFORM = prev;
+    else delete process.env.HOOK_PLATFORM;
+  });
+
+  it('allow 输出为 {}（claude 默认）', () => {
+    const prev = process.env.HOOK_PLATFORM;
+    delete process.env.HOOK_PLATFORM;
     expect(formatAllowOutput()).toBe('{}');
+    if (prev) process.env.HOOK_PLATFORM = prev;
   });
 
   it('Stop 成功 Cursor 输出 {}', () => {
