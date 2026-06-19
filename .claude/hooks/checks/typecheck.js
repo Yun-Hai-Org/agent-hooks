@@ -2,6 +2,12 @@ import { execCommand, formatResult, withTimeout, DECISION } from '../security-or
 import { getStagedFiles } from './git-policy.js';
 import { denyIfPyrightMissing, denyIfToolMissing, denyOnToolError, isPyrightAvailable } from './tools.js';
 
+/** @param {{ tool?: string; stdout?: string; stderr?: string; success?: boolean }} result */
+function formatTypecheckToolOutput(result) {
+  const text = [result.stderr, result.stdout].filter((s) => typeof s === 'string' && s.trim()).join('\n').trim();
+  return text || `${result.tool ?? 'tool'}: failed (exit non-zero)`;
+}
+
 /** @param {string} [cwd] */
 export async function runStagedTypecheck(cwd) {
   const stagedFiles = getStagedFiles(cwd);
@@ -58,8 +64,8 @@ export async function runStagedTypecheck(cwd) {
     ]);
     const failures = results.filter((r) => r.status === 'fulfilled' && !r.value.success).map((r) => r.value);
     if (failures.length > 0) {
-      const messages = failures.map((f) => `${f.tool}: ${(f.stderr || f.stdout).slice(0, 200)}`).join('\n');
-      return formatResult('type-check', DECISION.DENY, `类型检查失败:\n${messages}`, { failures });
+      const messages = failures.map((f) => `${formatTypecheckToolOutput(f)}`).join('\n\n');
+      return formatResult('type-check', DECISION.DENY, `类型检查失败:\n${messages.slice(0, 800)}`, { failures });
     }
     return formatResult('type-check', DECISION.ALLOW, '类型检查通过');
   } catch (e) {
@@ -107,8 +113,8 @@ export async function runFullTypecheck(cwd) {
     ]);
     const failures = results.filter((r) => r.status === 'fulfilled' && !r.value.success).map((r) => r.value);
     if (failures.length > 0) {
-      const messages = failures.map((f) => `${f.tool}: ${(f.stderr || f.stdout).slice(0, 500)}`).join('\n');
-      return formatResult('type-check', DECISION.DENY, `类型检查失败:\n${messages}`, { failures });
+      const messages = failures.map((f) => formatTypecheckToolOutput(f)).join('\n\n');
+      return formatResult('type-check', DECISION.DENY, `类型检查失败:\n${messages.slice(0, 800)}`, { failures });
     }
     return formatResult('type-check', DECISION.ALLOW, '类型检查通过');
   } catch (e) {

@@ -10,7 +10,7 @@ import { join } from 'path';
 import { execCommand, safeMain, log, getCurrentBranch, DECISION } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
 import { extractMergeTarget, isGitMergeCommand } from './checks/git-policy.js';
-import { runQualityGate, summarizeResults } from './quality-gate.js';
+import { runQualityGate, logGateResult } from './quality-gate.js';
 import { buildGateDenyReason } from './gate-fix.js';
 import { setPendingGateFailure, clearPendingGateFailure } from './gate-pending.js';
 
@@ -79,13 +79,11 @@ async function main() {
 
     const gateResult = await runFullOnSourceBranch(workingDir, sourceBranch);
 
-    log(HOOK_NAME, {
-      level: gateResult.passed ? 'PASSED' : 'BLOCKED',
+    logGateResult(HOOK_NAME, gateResult, {
       profile: 'full',
       sourceBranch,
       session_id,
       cwd: workingDir,
-      summary: gateResult.results?.length ? summarizeResults(gateResult.results).slice(0, 1000) : gateResult.decision?.reason,
     });
 
     if (!gateResult.passed) {

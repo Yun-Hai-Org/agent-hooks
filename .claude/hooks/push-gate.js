@@ -7,7 +7,7 @@
 import { safeMain, log, getCurrentBranch, DECISION } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
 import { isGitPushCommand } from './checks/git-policy.js';
-import { runQualityGate, summarizeResults } from './quality-gate.js';
+import { runQualityGate, logGateResult } from './quality-gate.js';
 import { buildGateDenyReason } from './gate-fix.js';
 import { setPendingGateFailure, clearPendingGateFailure } from './gate-pending.js';
 
@@ -46,13 +46,11 @@ async function main() {
 
     const gateResult = await runQualityGate({ profile: 'full', cwd: workingDir });
 
-    log(HOOK_NAME, {
-      level: gateResult.passed ? 'PASSED' : 'BLOCKED',
+    logGateResult(HOOK_NAME, gateResult, {
       profile: 'full',
       branch,
       session_id,
       cwd: workingDir,
-      summary: summarizeResults(gateResult.results).slice(0, 1000),
     });
 
     if (!gateResult.passed) {

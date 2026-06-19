@@ -15,7 +15,7 @@
 
 import { execCommand, log, getCurrentBranch } from './security-orchestrator.js';
 import { getStagedFiles } from './checks/git-policy.js';
-import { runQualityGate, summarizeResults } from './quality-gate.js';
+import { runQualityGate, summarizeResults, formatChecksForLog } from './quality-gate.js';
 import {
   getPlatform,
   formatStopContinueOutput,

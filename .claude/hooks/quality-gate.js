@@ -110,14 +110,85 @@ export async function runQualityGate(options) {
   return { passed: finalDecision.decision !== DECISION.DENY, results, decision: finalDecision };
 }
 
+export const CHECK_DETAILS_LOG_MAX = 2000;
+
+/** @param {Record<string, unknown> | undefined} details */
+export function summarizeCheckDetails(details) {
+  if (!details || typeof details !== 'object') return undefined;
+
+  const parts = [];
+  if (typeof details.output === 'string' && details.output.trim()) {
+    parts.push(details.output.trim());
+  }
+  if (Array.isArray(details.failures)) {
+    for (const failure of details.failures) {
+      if (!failure || typeof failure !== 'object') continue;
+      const f = /** @type {{ tool?: string; stdout?: string; stderr?: string }} */ (failure);
+      const text = [f.stderr, f.stdout].filter((s) => typeof s === 'string' && s.trim()).join('\n').trim();
+      parts.push(text ? `${f.tool ?? 'tool'}:\n${text}` : `${f.tool ?? 'tool'}: failed`);
+    }
+  }
+  if (Array.isArray(details.findings) && details.findings.length > 0) {
+    parts.push(JSON.stringify(details.findings));
+  }
+  if (Array.isArray(details.matched) && details.matched.length > 0) {
+    parts.push(`matched: ${details.matched.join(', ')}`);
+  }
+
+  const text = parts.join('\n---\n').trim();
+  return text ? text.slice(0, CHECK_DETAILS_LOG_MAX) : undefined;
+}
+
+/** @param {Array<{ checkId: string; decision: string; message: string; details?: Record<string, unknown> }>} results */
+export function formatChecksForLog(results) {
+  return results.map((r) => {
+    /** @type {{ id: string; decision: string; message: string; details?: string }} */
+    const entry = { id: r.checkId, decision: r.decision, message: r.message };
+    const details = summarizeCheckDetails(r.details);
+    if (details) entry.details = details;
+    return entry;
+  });
+}
+
+/**
+ * @param {string} hookName
+ * @param {{ passed: boolean; results: Array<{ checkId: string; decision: string; message: string; details?: Record<string, unknown> }>; decision?: { reason?: string } }} gateResult
+ * @param {Record<string, unknown>} [extra]
+ */
+export function logGateResult(hookName, gateResult, extra = {}) {
+  /** @type {Record<string, unknown>} */
+  const payload = {
+    level: gateResult.passed ? 'PASSED' : 'BLOCKED',
+    checks: formatChecksForLog(gateResult.results),
+    ...extra,
+  };
+  if (!gateResult.passed && gateResult.decision?.reason) {
+    payload.reason = gateResult.decision.reason.slice(0, 500);
+  }
+  log(hookName, payload);
+}
+
+/** @param {{ checkId: string; decision: string; message: string; details?: Record<string, unknown> }} r */
+export function formatCheckSummaryLine(r) {
+  const icon = { allow: '✅', deny: '❌', skip: '⏭️', warn: '⚠️' }[r.decision] || '📋';
+  let line = `${icon} [${r.checkId}] ${r.message}`;
+  if (r.decision === DECISION.DENY || r.decision === DECISION.WARN) {
+    const details = summarizeCheckDetails(r.details);
+    if (details) {
+      const indented = details
+        .split('\n')
+        .slice(0, 12)
+        .map((l) => `   ${l}`)
+        .join('\n');
+      line += `\n${indented}`;
+    }
+  }
+  return line;
+}
+
 /** @param {any[]} results */
 export function summarizeResults(results) {
-  return results
-    .map((r) => {
-      const icon = { allow: '✅', deny: '❌', skip: '⏭️', warn: '⚠️' }[r.decision] || '📋';
-      return `${icon} [${r.checkId}] ${r.message}`;
-    })
-    .join('\n');
+  return results.map(formatCheckSummaryLine).join('\n');
 }
 
 async function main() {
@@ -128,7 +199,8 @@ async function main() {
     level: gateResult.passed ? 'PASSED' : 'BLOCKED',
     profile: options.profile,
     cwd: options.cwd,
-    checks: gateResult.results.map((r) => ({ id: r.checkId, decision: r.decision })),
+    ...(gateResult.passed ? {} : { reason: gateResult.decision.reason?.slice(0, 500) }),
+    checks: formatChecksForLog(gateResult.results),
   });
 
   if (options.json) {

@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'bun:test';
-import { parseArgs, runQualityGate } from '../quality-gate.js';
-import { DECISION } from '../security-orchestrator.js';
+import {
+  parseArgs,
+  runQualityGate,
+  formatChecksForLog,
+  summarizeCheckDetails,
+  formatCheckSummaryLine,
+} from '../quality-gate.js';
+import { DECISION, formatResult } from '../security-orchestrator.js';
 import { checkBranch, checkCommitMessage } from '../checks/git-policy.js';
 
 describe('quality-gate', () => {
@@ -34,6 +40,39 @@ describe('quality-gate', () => {
       });
       expect(result).toHaveProperty('passed');
       expect(result).toHaveProperty('results');
+    });
+  });
+
+  describe('gate logging helpers', () => {
+    it('formatChecksForLog 应包含 details 摘要', () => {
+      const results = [
+        formatResult('type-check', DECISION.DENY, '类型检查失败', {
+          failures: [{ tool: 'tsc', stdout: '.claude/hooks/x.js(1,1): error TS1005', stderr: '' }],
+        }),
+        formatResult('branch-check', DECISION.ALLOW, 'ok'),
+      ];
+      const logged = formatChecksForLog(results);
+      expect(logged[0].details).toContain('error TS1005');
+      expect(logged[1].details).toBeUndefined();
+    });
+
+    it('formatCheckSummaryLine 应在 deny 时附加 details', () => {
+      const line = formatCheckSummaryLine(
+        formatResult('related-tests', DECISION.DENY, '关联测试失败', {
+          output: 'AssertionError: expected true to be false',
+        }),
+      );
+      expect(line).toContain('AssertionError');
+      expect(line).toContain('❌');
+    });
+
+    it('summarizeCheckDetails 应合并 output 与 failures', () => {
+      const text = summarizeCheckDetails({
+        output: 'dep audit output',
+        failures: [{ tool: 'tsc', stderr: 'syntax error' }],
+      });
+      expect(text).toContain('dep audit output');
+      expect(text).toContain('syntax error');
     });
   });
 });
