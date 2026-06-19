@@ -222,6 +222,16 @@ export async function runHookUnitTests(cwd) {
 }
 
 /** @param {string} [cwd] */
+export async function runHookAdversarialIfStaged(cwd) {
+  const stagedFiles = getStagedFiles(cwd);
+  const touchesHooks = stagedFiles.some((f) => f.startsWith('.claude/hooks/'));
+  if (!touchesHooks) {
+    return formatResult('hook-adversarial', DECISION.SKIP, '暂存区未修改 hooks，跳过对抗性测试');
+  }
+  return runHookAdversarialTests(cwd);
+}
+
+/** @param {string} [cwd] */
 export async function runHookAdversarialTests(cwd) {
   const missing = denyIfToolMissing('bun', 'hook-adversarial', cwd);
   if (missing) return missing;

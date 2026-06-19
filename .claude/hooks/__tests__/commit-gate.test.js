@@ -445,6 +445,20 @@ describe('commit-gate', () => {
       expect(msg).toBe('fix: 修复bug');
     });
 
+    it('extractCommitMessage 应提取含空格的长 message', () => {
+      const msg = extractCommitMessage('git commit -m "fix: post-merge quality gate failures on master"');
+      expect(msg).toBe('fix: post-merge quality gate failures on master');
+    });
+
+    it('extractCommitMessage 应提取 HEREDOC message', () => {
+      const cmd = `git commit -m "$(cat <<'EOF'
+fix: hello world
+EOF
+)"`;
+      const msg = extractCommitMessage(cmd);
+      expect(msg).toBe('fix: hello world');
+    });
+
     it('extractCommitMessage 无效命令返回 null', () => {
       const msg = extractCommitMessage('git push origin main');
       expect(msg).toBeNull();

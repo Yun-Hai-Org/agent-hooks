@@ -106,6 +106,27 @@ export async function runTrivy(cwd) {
 }
 
 /** @param {string} [cwd] */
+export async function runGitleaksStaged(cwd) {
+  const missing = denyIfToolMissing('gitleaks', 'gitleaks-staged', cwd);
+  if (missing) return missing;
+  try {
+    const result = await withTimeout(
+      execCommandAsync('gitleaks protect --staged --no-banner --redact', { cwd, timeout: 30000 }),
+      30000,
+      'gitleaks staged 超时 (30s)',
+    );
+    if (!result.success && (result.stderr || result.stdout)) {
+      return formatResult('gitleaks-staged', DECISION.DENY, 'gitleaks 在暂存 diff 中发现潜在密钥泄露', {
+        output: (result.stderr || result.stdout).slice(0, 500),
+      });
+    }
+    return formatResult('gitleaks-staged', DECISION.ALLOW, 'gitleaks 暂存 diff 扫描通过');
+  } catch (e) {
+    return denyOnToolError(e, 'gitleaks-staged', 'gitleaks');
+  }
+}
+
+/** @param {string} [cwd] */
 export async function runGitleaks(cwd) {
   const missing = denyIfToolMissing('gitleaks', 'gitleaks', cwd);
   if (missing) return missing;

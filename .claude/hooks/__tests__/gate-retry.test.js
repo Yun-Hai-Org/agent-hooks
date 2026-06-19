@@ -7,7 +7,8 @@ import {
   getPendingGateFailure,
   clearPendingGateFailure,
 } from '../gate-pending.js';
-import { buildGateDenyReason, buildGateRetryPassMessage } from '../gate-fix.js';
+import { buildGateDenyReason, buildGateRetryPassMessage, buildGateRetryMergeSuccessMessage } from '../gate-fix.js';
+import { isAutoRetryMergeEnabled } from '../gate-retry-stop.js';
 
 const PENDING_FILE = join(LOG_DIR, 'gate-pending.json');
 
@@ -49,9 +50,22 @@ describe('gate-fix', () => {
     expect(reason).toContain('semgrep');
   });
 
-  it('buildGateRetryPassMessage 提示手动重试', () => {
-    const msg = buildGateRetryPassMessage('merge-gate', 'git merge feat/a');
+  it('buildGateRetryPassMessage push 提示手动重试', () => {
+    const msg = buildGateRetryPassMessage('push-gate', 'git push origin feat/a', 'push');
     expect(msg).toContain('手动');
-    expect(msg).toContain('git merge feat/a');
+    expect(msg).toContain('git push');
+  });
+
+  it('buildGateRetryMergeSuccessMessage 含 sha', () => {
+    const msg = buildGateRetryMergeSuccessMessage('merge-gate', 'git merge feat/a', 'abc1234');
+    expect(msg).toContain('自动执行 merge');
+    expect(msg).toContain('abc1234');
+  });
+
+  it('isAutoRetryMergeEnabled 默认开启', () => {
+    const prev = process.env.GATE_AUTO_RETRY_MERGE;
+    delete process.env.GATE_AUTO_RETRY_MERGE;
+    expect(isAutoRetryMergeEnabled()).toBe(true);
+    process.env.GATE_AUTO_RETRY_MERGE = prev;
   });
 });
