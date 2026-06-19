@@ -1,25 +1,14 @@
 #!/usr/bin/env bun
 /**
- * Auto Stage - PostToolUse Hook for Edit|Write
- * Automatically stages files after Claude Code modifies them.
- * Logs to: ~/.claude/hooks-logs/
- *
- * Benefits:
- *   - `git status` shows exactly what Claude modified
- *   - Easy to review changes before committing
- *   - No manual staging needed
- *
- * Note: Relies on .gitignore to exclude sensitive files (.env, keys, etc.)
- *
- * Conditional staging:
- *   - Skips git add if CLAUDE_HOOK_PREVIOUS_DENIED is "true"
- *   - Sets CLAUDE_HOOK_AUTO_STAGED = 'true' after successful git add
+ * Auto Stage - PostToolUse / afterFileEdit Hook
+ * Agent 修改文件后自动 git add
  */
 
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join, dirname, isAbsolute } from 'path';
 import { execSync } from 'child_process';
 import { LOG_DIR } from './security-orchestrator.js';
+import { readFileEditInput, isFileEditTool } from './hook-adapter.js';
 
 /** @param {Record<string, unknown>} data */
 function log(data) {
@@ -53,24 +42,21 @@ function stageFile(filePath) {
 }
 
 async function main() {
-  let input = '';
-  for await (const chunk of process.stdin) input += chunk;
-
   try {
-    const data = JSON.parse(input);
+    const data = await readFileEditInput();
     const { tool_name, tool_input, session_id, cwd } = data;
 
-    if (!['Edit', 'Write'].includes(tool_name)) {
+    if (!isFileEditTool(tool_name)) {
+      log({ level: 'SKIP', reason: `unsupported tool: ${tool_name || '(empty)'}`, session_id });
       return console.log('{}');
     }
 
     const filePath = tool_input?.file_path;
-    if (!filePath) {
+    if (!filePath || typeof filePath !== 'string') {
       log({ level: 'SKIP', reason: 'no file_path', tool: tool_name, session_id });
       return console.log('{}');
     }
 
-    // Resolve to absolute path if relative
     const absPath = isAbsolute(filePath) ? filePath : join(cwd || process.cwd(), filePath);
 
     if (!isInGitRepo(absPath)) {
@@ -78,7 +64,6 @@ async function main() {
       return console.log('{}');
     }
 
-    // Conditional staging: skip if previous hook denied
     if (process.env.CLAUDE_HOOK_PREVIOUS_DENIED === 'true') {
       log({ level: 'SKIP', reason: 'previous hook denied', file: absPath, session_id });
       return console.log('{}');
@@ -86,7 +71,6 @@ async function main() {
 
     const result = stageFile(absPath);
     if (result.success) {
-      // Mark auto-staged for downstream hooks
       process.env.CLAUDE_HOOK_AUTO_STAGED = 'true';
       log({ level: 'STAGED', file: absPath, tool: tool_name, session_id });
     } else {
@@ -100,8 +84,8 @@ async function main() {
   }
 }
 
-// 只在直接运行时执行 main()，导入时不执行
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isDirectRun = import.meta.main || (process.argv[1] && import.meta.url.endsWith(process.argv[1]));
+if (isDirectRun) {
   main();
 }
 
