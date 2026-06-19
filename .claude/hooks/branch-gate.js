@@ -5,7 +5,7 @@
  *
  * 功能：
  * 1. 检测当前 git 分支，如果是 main 或 master，拒绝写入操作
- * 2. 支持 worktree 环境检测（.git 是文件=worktree，允许）
+ * 2. worktree 内仍按 getCurrentBranch() 执行分支检查（无 bypass）
  * 3. 对于 Bash 工具：检测文件写入型命令
  * 4. 对于 Write/Edit 工具：直接检查分支
  */
@@ -132,13 +132,7 @@ async function main() {
 
     const workingDir = cwd || process.cwd();
 
-    // 检测是否为 worktree 环境
-    if (isInsideWorktree(workingDir)) {
-      log({ level: 'INFO', reason: 'worktree detected, skipping branch check', tool: tool_name, session_id });
-      return console.log(allow());
-    }
-
-    // 获取当前分支
+    // 获取当前分支（worktree 内仍按实际分支检查，不再 bypass）
     const branch = getCurrentBranch(workingDir);
     if (!branch) {
       log({ level: 'WARN', reason: 'cannot determine branch', tool: tool_name, session_id });
@@ -153,6 +147,14 @@ async function main() {
     // 主分支上的操作 - 根据工具类型处理
     if (tool_name === 'Bash') {
       const command = tool_input?.command || '';
+
+      // 禁止在 main 上创建指向 main/master 的 worktree
+      if (/\bgit\s+worktree\s+add\b/.test(command) && /\b(main|master)\b/.test(command)) {
+        log({ level: 'BLOCKED', reason: 'worktree add on main/master', command: command.slice(0, 200), session_id });
+        return console.log(
+          deny(`🔒 [branch-gate] 禁止在 main/master 上创建 worktree 进行开发。请使用 feature 分支 worktree。`),
+        );
+      }
 
       // 安全命令白名单放行
       if (isSafeCommand(command)) {

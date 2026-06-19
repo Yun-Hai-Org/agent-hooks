@@ -471,7 +471,7 @@ const CONTENT_PATTERNS = [
   {
     level: 'critical',
     id: 'discord-bot-token',
-    regex: /[MN][A-Za-z0-9_-]{23}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27}/,
+    regex: /[MNO][A-Za-z0-9_-]{23,25}\.[A-Za-z0-9_-]{6,7}\.[A-Za-z0-9_-]{27,}/,
     reason: 'Discord Bot Token',
   },
   // Telegram Bot Token
@@ -492,7 +492,7 @@ const CONTENT_PATTERNS = [
   {
     level: 'critical',
     id: 'datadog-api-key',
-    regex: /(?:datadog|DD)_API_KEY\s*[:=]\s*['"]?[a-fA-F0-9]{32}['"]?/,
+    regex: /(?:datadog|DD)_API_KEY\s*[:=]\s*['"]?[a-fA-F0-9]{32}['"]?/i,
     reason: 'Datadog API Key',
   },
   // PagerDuty Token
@@ -501,6 +501,13 @@ const CONTENT_PATTERNS = [
     id: 'pagerduty-token',
     regex: /p[dt]d_[A-Za-z0-9]{20,}/,
     reason: 'PagerDuty API Token',
+  },
+  // OpenAI Legacy API Key (经典 sk- 前缀；专用 sk-ant-/sk-proj-/sk-org- 因连字符不会被此模式吞掉)
+  {
+    level: 'critical',
+    id: 'openai-legacy-key',
+    regex: /sk-[A-Za-z0-9]{20,}/,
+    reason: 'OpenAI Legacy API Key',
   },
 ];
 

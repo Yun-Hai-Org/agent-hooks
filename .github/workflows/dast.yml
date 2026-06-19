@@ -1,0 +1,11 @@
+name: DAST (P3 stub)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  dast:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "P3: enable when staging URL exists (ZAP baseline / nuclei)"
