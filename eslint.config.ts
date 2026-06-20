@@ -1,9 +1,8 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
-import jsdoc from 'eslint-plugin-jsdoc';
 
 const tsFiles = ['**/*.{ts,tsx,mts,cts}'];
-const hookJsFiles = ['.claude/hooks/**/*.js'];
+const hookTsFiles = ['.claude/hooks/**/*.ts'];
 
 export default [
   {
@@ -19,7 +18,7 @@ export default [
   js.configs.recommended,
   ...tseslint.configs.strict.map((config) => ({
     ...config,
-    files: config.files ?? tsFiles,
+    files: 'files' in config && config.files ? config.files : tsFiles,
   })),
   {
     files: tsFiles,
@@ -42,42 +41,11 @@ export default [
     },
   },
   {
-    files: hookJsFiles,
-    plugins: { jsdoc },
-    languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: 'module',
-      globals: {
-        process: 'readonly',
-        console: 'readonly',
-        Buffer: 'readonly',
-        Bun: 'readonly',
-        fetch: 'readonly',
-        setTimeout: 'readonly',
-        clearTimeout: 'readonly',
-        AbortController: 'readonly',
-        require: 'readonly',
-        module: 'readonly',
-        __dirname: 'readonly',
-        __filename: 'readonly',
-        URL: 'readonly',
-      },
-    },
+    files: hookTsFiles,
     rules: {
       'no-console': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],
       'no-useless-escape': 'off',
-      'no-unused-vars': 'off',
-      'jsdoc/require-jsdoc': [
-        'error',
-        {
-          publicOnly: { esm: true },
-          require: { FunctionDeclaration: true, MethodDefinition: false, ClassDeclaration: false },
-        },
-      ],
-      'jsdoc/require-param-type': 'error',
-      'jsdoc/require-returns-type': 'error',
-      'jsdoc/check-types': 'error',
     },
   },
 ];
