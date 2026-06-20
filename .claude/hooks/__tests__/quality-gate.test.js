@@ -64,6 +64,12 @@ describe('quality-gate', () => {
       expect(source).toContain('runSchemaLintFull(cwd)');
       expect(source).toContain('runK8sLintFull(cwd)');
     });
+
+    it('pyproject 不应忽略 ANN101/ANN102', () => {
+      const pyproject = readFileSync(join(import.meta.dir, '..', '..', '..', 'pyproject.toml'), 'utf-8');
+      expect(pyproject).not.toContain('ANN101');
+      expect(pyproject).not.toContain('ANN102');
+    });
   });
 
   describe('gate logging helpers', () => {
