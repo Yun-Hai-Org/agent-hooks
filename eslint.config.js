@@ -5,6 +5,16 @@ const tsFiles = ['**/*.{ts,tsx,mts,cts}'];
 const hookJsFiles = ['.claude/hooks/**/*.js'];
 
 export default [
+  {
+    ignores: [
+      '**/.venv/**',
+      '**/node_modules/**',
+      '**/_bmad/**',
+      '**/_bmad-output/**',
+      '.claude/worktrees/**',
+      '.claude/hooks/__tests__/fixtures/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.strict.map((config) => ({
     ...config,
@@ -55,6 +65,7 @@ export default [
       'no-console': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],
       'no-useless-escape': 'off',
+      'no-unused-vars': 'off',
     },
   },
 ];

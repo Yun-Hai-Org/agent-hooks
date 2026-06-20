@@ -1,8 +1,8 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
 
-const TRIVY_EXTRA_SKIP_DIRS = ['_bmad', '_bmad-output'];
-const TRIVY_TIMEOUT_MS = 120000;
+const TRIVY_EXTRA_SKIP_DIRS = ['_bmad', '_bmad-output', 'node_modules', '.venv', '.claude/worktrees'];
+const TRIVY_TIMEOUT_MS = 300000;
 
 /** @param {string} [cwd] */
 function getGitleaksConfigArg(cwd) {

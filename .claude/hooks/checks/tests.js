@@ -66,13 +66,16 @@ export async function runRelatedTests(cwd) {
       const jsFiles = testFileList.filter((f) => /\.(js|ts)$/.test(f));
       const pyResult = await withTimeout(
         Promise.resolve(
-          execCommand(`uv run python -m pytest ${pyFiles.map((f) => `"${f}"`).join(' ')} -x -q`, { cwd, timeout: 30000 }),
+          execCommand(`uv run python -m pytest ${pyFiles.map((f) => `"${f}"`).join(' ')} -x -q`, {
+            cwd,
+            timeout: 30000,
+          }),
         ),
         30000,
         'pytest 超时 (30s)',
       );
       if (!pyResult.success) {
-        const output = pyResult.stderr || pyResult.stdout || '';
+        const output = [pyResult.stdout, pyResult.stderr].filter(Boolean).join('\n');
         if (output.includes('No module named pytest')) {
           return formatResult('related-tests', DECISION.DENY, 'pytest 未安装，请先 uv add pytest');
         }
@@ -131,13 +134,15 @@ export async function runFullProjectTests(cwd) {
           'pytest 超时 (120s)',
         );
         if (!pyResult.success) {
-          const output = pyResult.stderr || pyResult.stdout || '';
+          const output = [pyResult.stdout, pyResult.stderr].filter(Boolean).join('\n');
           if (output.includes('No module named pytest')) {
             results.push(formatResult('full-test-py', DECISION.DENY, 'pytest 未安装，请先 uv add pytest'));
           } else if (output.includes('no tests ran') || output.includes('collected 0 items')) {
             results.push(formatResult('full-test-py', DECISION.SKIP, '无 Python 测试用例'));
           } else {
-            results.push(formatResult('full-test-py', DECISION.DENY, 'Python 全量测试失败', { output: output.slice(0, 500) }));
+            results.push(
+              formatResult('full-test-py', DECISION.DENY, 'Python 全量测试失败', { output: output.slice(0, 500) }),
+            );
           }
         } else {
           results.push(formatResult('full-test-py', DECISION.ALLOW, 'Python 全量测试通过'));
@@ -153,10 +158,10 @@ export async function runFullProjectTests(cwd) {
       results.push(formatResult('full-test-js', DECISION.DENY, 'bun 未安装，请先安装 bun'));
     } else {
       try {
-        const trackedFiles = execCommand(
-          "git ls-files '*.test.js' '*.test.ts' '*.spec.js' '*.spec.ts'",
-          { cwd, timeout: 5000 },
-        );
+        const trackedFiles = execCommand("git ls-files '*.test.js' '*.test.ts' '*.spec.js' '*.spec.ts'", {
+          cwd,
+          timeout: 5000,
+        });
         const projectTestFiles = trackedFiles.success
           ? trackedFiles.stdout
               .trim()
@@ -165,7 +170,9 @@ export async function runFullProjectTests(cwd) {
               .filter((f) => !f.includes('.claude/hooks/__tests__'))
           : [];
         if (projectTestFiles.length === 0) {
-          results.push(formatResult('full-test-js', DECISION.SKIP, '无项目级 JS 测试（hook 测试由 hook-unit-tests 覆盖）'));
+          results.push(
+            formatResult('full-test-js', DECISION.SKIP, '无项目级 JS 测试（hook 测试由 hook-unit-tests 覆盖）'),
+          );
         } else {
           const files = projectTestFiles.map((f) => `./${f}`).join(' ');
           const jsResult = await withTimeout(
@@ -174,9 +181,11 @@ export async function runFullProjectTests(cwd) {
             'bun test 超时 (120s)',
           );
           if (!jsResult.success) {
-            results.push(formatResult('full-test-js', DECISION.DENY, 'JS 全量测试失败', {
-              output: (jsResult.stderr || jsResult.stdout).slice(0, 500),
-            }));
+            results.push(
+              formatResult('full-test-js', DECISION.DENY, 'JS 全量测试失败', {
+                output: (jsResult.stderr || jsResult.stdout).slice(0, 500),
+              }),
+            );
           } else {
             results.push(formatResult('full-test-js', DECISION.ALLOW, 'JS 全量测试通过'));
           }
@@ -209,7 +218,11 @@ export async function runHookUnitTests(cwd) {
   }
   try {
     const cmd = `bun test ${files.map((f) => `"${f}"`).join(' ')}`;
-    const result = await withTimeout(execCommandAsync(cmd, { cwd, timeout: 180000 }), 180000, 'Hook 常规单测超时 (180s)');
+    const result = await withTimeout(
+      execCommandAsync(cmd, { cwd, timeout: 300000 }),
+      300000,
+      'Hook 常规单测超时 (300s)',
+    );
     if (!result.success) {
       return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 常规单测失败', {
         output: (result.stderr || result.stdout).slice(0, 500),

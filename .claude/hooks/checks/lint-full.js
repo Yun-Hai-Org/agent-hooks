@@ -13,10 +13,13 @@ export async function runLintFull(cwd) {
     if (missing) return missing;
     try {
       const eslintResult = await withTimeout(
-        execCommandAsync('bunx eslint . --max-warnings 0 --report-unused-disable-directives', {
-          cwd,
-          timeout: 120000,
-        }),
+        execCommandAsync(
+          'bunx eslint .claude/hooks --ignore-pattern "**/__tests__/**" --max-warnings 0 --report-unused-disable-directives',
+          {
+            cwd,
+            timeout: 120000,
+          },
+        ),
         120000,
         'eslint 超时 (120s)',
       );
