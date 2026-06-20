@@ -5,6 +5,8 @@
 
 import { execCommand, log, DECISION } from '../security-orchestrator.js';
 import { checkCommitMessageFromFile } from '../checks/git-policy.js';
+import { existsSync } from 'fs';
+import { join } from 'path';
 
 const HOOK_NAME = 'native-commit-msg';
 
@@ -25,6 +27,12 @@ async function main() {
   }
 
   const cwd = getRepoRoot();
+
+  if (existsSync(join(cwd, '.git', 'MERGE_HEAD'))) {
+    log(HOOK_NAME, { level: 'PASSED', cwd, message: 'merge commit，跳过 message 格式校验' });
+    process.exit(0);
+  }
+
   const result = checkCommitMessageFromFile(msgFile);
 
   log(HOOK_NAME, {
