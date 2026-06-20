@@ -310,9 +310,23 @@ export function getCurrentBranch(cwd) {
  * @param {string} filePath
  * @param {string} cwd
  */
-export function isGitIgnored(filePath, cwd) {
+export function isGitIgnored(filePath, cwd = process.cwd()) {
+  /** @type {NodeJS.ProcessEnv} */
+  const env = { ...process.env };
   try {
-    execSync(`git check-ignore -q "${filePath}"`, { cwd, stdio: 'pipe' });
+    const bare = execSync('git rev-parse --is-bare-repository', {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+    if (bare === 'true' && existsSync(join(cwd, '.gitignore'))) {
+      env.GIT_WORK_TREE = cwd;
+    }
+  } catch {
+    // fall through with default env
+  }
+  try {
+    execSync(`git check-ignore -q "${filePath}"`, { cwd, stdio: 'pipe', env });
     return true; // exit 0 = is ignored
   } catch {
     return false; // exit non-zero = not ignored
