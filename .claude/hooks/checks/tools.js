@@ -12,6 +12,15 @@ export const TOOL_INSTALL_HINTS = {
   trivy: 'brew install trivy  # 或见 https://aquasecurity.github.io/trivy/latest/getting-started/installation/',
   eslint: 'bun add -d eslint',
   prettier: 'bun add -d prettier',
+  shellcheck: 'brew install shellcheck',
+  shfmt: 'brew install shfmt',
+  hadolint: 'brew install hadolint  # 或见 https://github.com/hadolint/hadolint#installing',
+  taplo: 'brew install taplo',
+  sqlfluff: 'uv tool install sqlfluff',
+  'check-jsonschema': 'uv tool install check-jsonschema',
+  jq: 'brew install jq',
+  yq: 'brew install yq',
+  markdownlint: 'bun add -d markdownlint-cli2',
 };
 
 /** @param {string} tool */

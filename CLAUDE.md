@@ -138,14 +138,21 @@ Claude 可以直接执行 `git commit` 和 `git merge`，以下检查由 hook **
 
 ## 质量工具栈
 
-| 工具             | 语言          | 配置文件                     |
-| ---------------- | ------------- | ---------------------------- |
-| ESLint (strict)  | JS/TS         | `eslint.config.js`           |
-| Prettier         | JS/TS/MD/JSON | `.prettierrc`                |
-| Ruff (60+ 规则)  | Python        | `pyproject.toml [tool.ruff]` |
-| Pyright (strict) | Python        | `pyrightconfig.json`         |
-| markdownlint     | Markdown      | `.markdownlint.json`         |
-| Knip             | JS 死代码     | `knip.json`                  |
+| 工具             | 语言                    | 配置文件                     |
+| ---------------- | ----------------------- | ---------------------------- |
+| ESLint (strict)  | JS/TS                   | `eslint.config.js`           |
+| Prettier         | JS/TS/MD/JSON/YAML/CSS  | `.prettierrc`                |
+| Ruff (60+ 规则)  | Python                  | `pyproject.toml [tool.ruff]` |
+| Pyright (strict) | Python                  | `pyrightconfig.json`         |
+| markdownlint     | Markdown                | `.markdownlint.json`         |
+| shellcheck/shfmt | Shell                   | —                            |
+| hadolint         | Dockerfile              | —                            |
+| taplo            | TOML                    | —                            |
+| sqlfluff         | SQL                     | —                            |
+| stylelint        | CSS/SCSS/LESS           | `.stylelintrc*`              |
+| check-jsonschema | JSON/YAML (schema)      | —                            |
+| jq / yq          | JSON / YAML 语法        | —                            |
+| Knip             | JS 死代码               | `knip.json`                  |
 
 ## 外部内容处理
 

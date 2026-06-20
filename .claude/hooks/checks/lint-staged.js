@@ -22,7 +22,10 @@ export async function runLintStaged(cwd) {
     const files = jsFiles.map((f) => `"${f}"`).join(' ');
     try {
       const eslintResult = await withTimeout(
-        execCommandAsync(`bunx eslint ${files} --max-warnings 0`, { cwd, timeout: 30000 }),
+        execCommandAsync(`bunx eslint ${files} --max-warnings 0 --report-unused-disable-directives`, {
+          cwd,
+          timeout: 30000,
+        }),
         30000,
         'eslint staged 超时 (30s)',
       );
@@ -44,7 +47,7 @@ export async function runLintStaged(cwd) {
     const files = pyFiles.map((f) => `"${f}"`).join(' ');
     try {
       const ruffResult = await withTimeout(
-        execCommandAsync(`ruff check ${files}`, { cwd, timeout: 30000 }),
+        execCommandAsync(`ruff check --preview ${files}`, { cwd, timeout: 30000 }),
         30000,
         'ruff staged 超时 (30s)',
       );

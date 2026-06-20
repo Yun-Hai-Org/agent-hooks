@@ -13,7 +13,10 @@ export async function runLintFull(cwd) {
     if (missing) return missing;
     try {
       const eslintResult = await withTimeout(
-        execCommandAsync('bunx eslint . --max-warnings 0', { cwd, timeout: 120000 }),
+        execCommandAsync('bunx eslint . --max-warnings 0 --report-unused-disable-directives', {
+          cwd,
+          timeout: 120000,
+        }),
         120000,
         'eslint 超时 (120s)',
       );
@@ -34,7 +37,7 @@ export async function runLintFull(cwd) {
     if (missing) return missing;
     try {
       const ruffResult = await withTimeout(
-        execCommandAsync('ruff check .', { cwd, timeout: 60000 }),
+        execCommandAsync('ruff check --preview .', { cwd, timeout: 60000 }),
         60000,
         'ruff 超时 (60s)',
       );

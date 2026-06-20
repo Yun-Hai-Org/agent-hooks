@@ -4,13 +4,16 @@ import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import {
   isAutoCommitEnabled,
+  getAutoCommitMode,
   buildCommitMessage,
   buildFixFollowupMessage,
   buildCommitFailureMessage,
+  buildAgentCommitMessage,
   getMaxAutoCommitLoops,
   hasStagedChanges,
   runAutoCommit,
 } from '../auto-commit.js';
+import { hasUncommittedChanges } from '../checks/git-policy.js';
 import { formatStopContinueOutput } from '../hook-adapter.js';
 
 describe('auto-commit', () => {
@@ -20,6 +23,7 @@ describe('auto-commit', () => {
   beforeEach(() => {
     delete process.env.AUTO_COMMIT;
     delete process.env.AUTO_COMMIT_MESSAGE;
+    delete process.env.AUTO_COMMIT_MODE;
     tempDir = join('/tmp', `auto-commit-test-${Date.now()}`);
     repoPath = join(tempDir, 'repo');
     mkdirSync(repoPath, { recursive: true });
@@ -43,6 +47,17 @@ describe('auto-commit', () => {
     it('AUTO_COMMIT=0 时禁用', () => {
       process.env.AUTO_COMMIT = '0';
       expect(isAutoCommitEnabled()).toBe(false);
+    });
+  });
+
+  describe('getAutoCommitMode', () => {
+    it('默认 agent 模式', () => {
+      expect(getAutoCommitMode()).toBe('agent');
+    });
+
+    it('AUTO_COMMIT_MODE=auto 时为 auto', () => {
+      process.env.AUTO_COMMIT_MODE = 'auto';
+      expect(getAutoCommitMode()).toBe('auto');
     });
   });
 
@@ -74,6 +89,44 @@ describe('auto-commit', () => {
       writeFileSync(join(repoPath, 'x.js'), 'x');
       execSync('git add x.js', { cwd: repoPath, stdio: 'pipe' });
       expect(hasStagedChanges(repoPath)).toBe(true);
+    });
+  });
+
+  describe('hasUncommittedChanges', () => {
+    it('干净工作区应为 false', () => {
+      expect(hasUncommittedChanges(repoPath)).toBe(false);
+    });
+
+    it('未暂存修改应为 true', () => {
+      writeFileSync(join(repoPath, 'dirty.js'), 'dirty');
+      expect(hasUncommittedChanges(repoPath)).toBe(true);
+    });
+
+    it('已暂存未提交应为 true', () => {
+      writeFileSync(join(repoPath, 'staged.js'), 'staged');
+      execSync('git add staged.js', { cwd: repoPath, stdio: 'pipe' });
+      expect(hasUncommittedChanges(repoPath)).toBe(true);
+    });
+  });
+
+  describe('buildAgentCommitMessage', () => {
+    it('main 分支应提示切换 feature 分支', () => {
+      execSync('git checkout -b main', { cwd: repoPath, stdio: 'pipe' });
+      writeFileSync(join(repoPath, 'y.js'), 'y');
+      execSync('git add y.js', { cwd: repoPath, stdio: 'pipe' });
+      const msg = buildAgentCommitMessage(repoPath);
+      expect(msg).toContain('[auto-commit]');
+      expect(msg).toContain('main/master');
+      expect(msg).toContain('feature 分支');
+      expect(msg).toContain('git commit');
+    });
+
+    it('应要求 Agent 自行 commit', () => {
+      writeFileSync(join(repoPath, 'z.js'), 'z');
+      const msg = buildAgentCommitMessage(repoPath);
+      expect(msg).toContain('[auto-commit]');
+      expect(msg).toContain('git commit');
+      expect(msg).not.toContain('自动提交');
     });
   });
 

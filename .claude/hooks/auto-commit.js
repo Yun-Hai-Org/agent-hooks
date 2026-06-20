@@ -1,20 +1,24 @@
 #!/usr/bin/env bun
 /**
  * Auto Commit - Stop hook
- * Agent 一轮结束后，若有暂存变更则在 feature 分支自动 git commit。
  *
- * 流程：quality-gate profile=commit → 通过则 git commit
- *       失败则 block（Claude）/ followup_message（Cursor）→ Agent 修复 → 再次 Stop 重试
+ * AUTO_COMMIT_MODE=agent（默认）：Stop 时检查工作区；有未提交变更 → block，要求 Agent 自行 git commit（commit-gate 校验）
+ * AUTO_COMMIT_MODE=auto：有暂存变更时 hook 自动 git commit（quality-gate profile=commit → git commit）
  *
  * 环境变量：
- *   AUTO_COMMIT=0           关闭自动提交
- *   AUTO_COMMIT_MESSAGE     固定 commit message（需符合 feat: 格式）
- *   AUTO_COMMIT_SUBAGENT=1  允许 SubagentStop 时提交（默认跳过）
+ *   AUTO_COMMIT=0           关闭 Stop 侧 commit 检查/自动提交
+ *   AUTO_COMMIT_MODE        agent（默认）| auto
+ *   AUTO_COMMIT_MESSAGE     auto 模式固定 commit message（需符合 feat: 格式）
+ *   AUTO_COMMIT_SUBAGENT=1  允许 SubagentStop 时检查/提交（默认跳过）
  *   AUTO_COMMIT_MAX_LOOPS=8 Cursor stop 最大自动 follow-up 次数（默认 8）
  */
 
 import { execCommand, log, getCurrentBranch } from './security-orchestrator.js';
-import { getStagedFiles } from './checks/git-policy.js';
+import {
+  getStagedFiles,
+  hasUncommittedChanges,
+  buildUncommittedWorktreeDenyReason,
+} from './checks/git-policy.js';
 import { runQualityGate, summarizeResults, formatChecksForLog } from './quality-gate.js';
 import {
   getPlatform,
@@ -51,6 +55,12 @@ export function isAutoCommitEnabled() {
   return v !== '0' && v !== 'false' && v !== 'off';
 }
 
+/** @returns {'agent' | 'auto'} */
+export function getAutoCommitMode() {
+  const mode = (process.env.AUTO_COMMIT_MODE ?? 'agent').toLowerCase();
+  return mode === 'auto' ? 'auto' : 'agent';
+}
+
 export function getMaxAutoCommitLoops() {
   const n = parseInt(process.env.AUTO_COMMIT_MAX_LOOPS || String(DEFAULT_MAX_LOOPS), 10);
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_MAX_LOOPS;
@@ -60,6 +70,11 @@ export function getMaxAutoCommitLoops() {
 export function hasStagedChanges(cwd) {
   const result = execCommand('git diff --cached --quiet', { cwd });
   return !result.success;
+}
+
+/** @param {string} cwd */
+export function buildAgentCommitMessage(cwd) {
+  return buildUncommittedWorktreeDenyReason(cwd, 'stop', { prefix: '[auto-commit] ' });
 }
 
 /**
@@ -234,6 +249,35 @@ async function main() {
       return;
     }
 
+    if (!isAutoCommitEnabled()) {
+      log(HOOK_NAME, { level: 'SKIP', reason: 'AUTO_COMMIT disabled', session_id: sessionId, cwd });
+      console.log('{}');
+      return;
+    }
+
+    if (!execCommand('git rev-parse --git-dir', { cwd }).success) {
+      log(HOOK_NAME, { level: 'SKIP', reason: 'not a git repo', session_id: sessionId, cwd });
+      console.log('{}');
+      return;
+    }
+
+    if (getAutoCommitMode() === 'agent') {
+      if (hasUncommittedChanges(cwd)) {
+        const followup = buildAgentCommitMessage(cwd);
+        log(HOOK_NAME, {
+          level: 'BLOCKED',
+          reason: 'uncommitted changes',
+          mode: 'agent',
+          session_id: sessionId,
+          cwd,
+        });
+        console.log(formatStopContinueOutput(followup, hookEvent));
+        return;
+      }
+      console.log('{}');
+      return;
+    }
+
     const result = await runAutoCommit(cwd, { sessionId });
 
     if (result.committed) {
@@ -254,6 +298,19 @@ async function main() {
       return;
     }
 
+    if (hasUncommittedChanges(cwd)) {
+      const followup = buildAgentCommitMessage(cwd);
+      log(HOOK_NAME, {
+        level: 'BLOCKED',
+        reason: result.reason || 'uncommitted changes',
+        mode: 'auto',
+        session_id: sessionId,
+        cwd,
+      });
+      console.log(formatStopContinueOutput(followup, hookEvent));
+      return;
+    }
+
     if (result.reason) {
       log(HOOK_NAME, { level: 'SKIP', reason: result.reason, session_id: sessionId, cwd });
     }
@@ -270,4 +327,4 @@ if (isDirectRun) {
   main();
 }
 
-export { main };
+export { main, hasUncommittedChanges };

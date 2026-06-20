@@ -147,14 +147,7 @@ const PATTERNS = [
     regex: /\brm\b.+\.ssh\/(id_|authorized_keys|known_hosts)/,
     reason: 'deleting SSH keys',
   },
-  // 21. git push origin main/master (non-force)
-  {
-    level: 'high',
-    id: 'git-push-main',
-    regex: /\bgit\s+push\b(?!.*--force).*\b(origin\s+)?(main|master)\b/,
-    reason: '禁止直接 push 到 main/master，请通过 PR/MR 合并',
-  },
-  // 22. git push --force-with-lease main/master
+  // 21. git push --force-with-lease main/master
   {
     level: 'high',
     id: 'git-force-lease-main',

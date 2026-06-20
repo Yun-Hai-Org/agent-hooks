@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'bun:test';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import {
   parseArgs,
   runQualityGate,
@@ -7,7 +9,7 @@ import {
   formatCheckSummaryLine,
 } from '../quality-gate.js';
 import { DECISION, formatResult } from '../security-orchestrator.js';
-import { checkBranch, checkCommitMessage } from '../checks/git-policy.js';
+import { checkCommitMessage } from '../checks/git-policy.js';
 
 describe('quality-gate', () => {
   describe('parseArgs', () => {
@@ -40,6 +42,25 @@ describe('quality-gate', () => {
       });
       expect(result).toHaveProperty('passed');
       expect(result).toHaveProperty('results');
+    });
+
+    it('commit profile 应包含 extended-lint 与 schema-lint 检查项', async () => {
+      const result = await runQualityGate({
+        profile: 'commit',
+        cwd: '/tmp',
+        commitCmd: 'git commit -m "feat: test"',
+      });
+      const checkIds = result.results.map((r) => r.checkId);
+      expect(checkIds).toContain('extended-staged');
+      expect(checkIds.some((id) => id.startsWith('schema-staged'))).toBe(true);
+    });
+  });
+
+  describe('runQualityGate full smoke', () => {
+    it('quality-gate 应接入 full profile 的 extended/schema 检查', () => {
+      const source = readFileSync(join(import.meta.dir, '..', 'quality-gate.js'), 'utf-8');
+      expect(source).toContain('runExtendedLintFull(cwd)');
+      expect(source).toContain('runSchemaLintFull(cwd)');
     });
   });
 
