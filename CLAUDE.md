@@ -8,25 +8,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # 运行常规单测（不含 adversarial）
-bun test .claude/hooks/__tests__/*.test.js
+bun test .claude/hooks/__tests__/*.test.ts
 
 # 对抗性测试
 bun test .claude/hooks/__tests__/adversarial/
 
 # 本地 quality-gate CLI
-bun .claude/hooks/quality-gate.js --profile=commit
-bun .claude/hooks/quality-gate.js --profile=full
+bun .claude/hooks/quality-gate.ts --profile=commit
+bun .claude/hooks/quality-gate.ts --profile=full
 
 # 运行单个测试文件
-bun test .claude/hooks/__tests__/commit-gate.test.js
+bun test .claude/hooks/__tests__/commit-gate.test.ts
 ```
 
 ### 代码质量检查
 
 ```bash
 # JS/TS 代码检查和格式化
-bun prettier --write .claude/hooks/*.js
-bun eslint --max-warnings 0 --fix .claude/hooks/*.js
+bun prettier --write .claude/hooks/*.ts
+bun eslint --max-warnings 0 --fix .claude/hooks/*.ts
 
 # Python 代码检查和格式化
 uv run ruff check --fix .
@@ -61,26 +61,30 @@ uv sync                      # 同步依赖
 ### 本地质量门 + 实时安全
 
 | 门 | 触发 | Hook | profile |
-|----|------|------|---------|
-| **实时安全** | PreToolUse / PostToolUse / Stop | block-dangerous-commands、branch-gate、protect-secrets、auto-stage、auto-commit | — |
-| **提交门** | `git commit` | `commit-gate.js` | `commit`（暂存区增量，<30s） |
-| **推送门** | 人工 `git push` | `push-gate.js` | `full`（拒绝 + 修复循环） |
-| **合并门** | 人工 `git merge` → main/master | `merge-gate.js` | `full`（拒绝 + 修复循环） |
+| ---- | ------ | ------ | --------- |
+| **实时安全** | PreToolUse / PostToolUse / Stop | branch-gate、protect-secrets 等 | — |
+| **提交门** | `git commit` | `commit-gate.ts` | `commit`（暂存区增量，<30s） |
+| **推送门** | 人工 `git push` | `push-gate.ts` | `full`（拒绝 + 修复循环） |
+| **合并门** | 人工 `git merge` → main/master | `merge-gate.ts` | `full`（拒绝 + 修复循环） |
 
-共享核心：`checks/*.js` + `quality-gate.js`。无远程 `hooks-ci.yml`。
+共享核心：`checks/*.ts` + `quality-gate.ts`。无远程 `hooks-ci.yml`。
 
-PostToolUse 仅保留 **auto-stage**。**Stop 链**：`auto-commit`（有暂存则 commit 检查 + 自动提交）→ `gate-retry-stop`（仅当 push/merge 曾被 gate 拒绝时，驱动 full 修复循环，**不自动 push/merge**）。`push-gate` / `merge-gate` 仅在人工执行命令时触发；拒绝时写入 pending 并返回详细修复指引。
+PostToolUse 仅保留 **auto-stage**。
+
+**Stop 链**：`auto-commit`（有暂存则 commit 检查 + 自动提交）→ `gate-retry-stop`（push/merge 曾被 gate 拒绝时驱动 full 修复循环，**不自动 push/merge**）。
+
+`push-gate` / `merge-gate` 仅在人工执行命令时触发；拒绝时写入 pending 并返回详细修复指引。
 
 ### Hook 协议
 
 所有 hook 通过 stdin 接收 JSON 输入（`tool_name`、`tool_input`、`session_id`、`cwd`、`permission_mode`），通过 stdout 输出 JSON 结果：
 
 - **放行**: `{}`
-- **拒绝**: `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "原因"}}`
+- **拒绝**: 含 `permissionDecision: "deny"` 与 `permissionDecisionReason` 的 JSON 输出
 
 ### 共享模块
 
-`security-orchestrator.js` 是提交门和合并门的共享决策引擎，提供：
+`security-orchestrator.ts` 是提交门和合并门的共享决策引擎，提供：
 
 - `DECISION` / `SEVERITY` 枚举常量
 - `formatResult()` / `decide()` — 标准化检查结果和决策聚合（any deny → deny）
@@ -92,7 +96,7 @@ PostToolUse 仅保留 **auto-stage**。**Stop 链**：`auto-commit`（有暂存�
 
 ### 测试架构
 
-测试位于 `.claude/hooks/__tests__/`，使用 Bun 内置测试框架（`bun:test`）。`helpers.js` 提供：
+测试位于 `.claude/hooks/__tests__/`，使用 Bun 内置测试框架（`bun:test`）。`helpers.ts` 提供：
 
 - `createHookInput(tool, toolInput)` — 构造 stdin 输入
 - `expectDeny(output)` / `expectAllow(output)` — 输出断言
@@ -118,7 +122,7 @@ Claude 可以直接执行 `git commit` 和 `git merge`，以下检查由 hook **
 **不需要 Claude 手动预先执行**：
 
 | 阶段 | 自动执行的检查 |
-|------|----------------|
+| ---- | ---------------- |
 | git commit | 分支 + msg + 暂存敏感 + dep audit + 增量 typecheck + 关联测试 |
 | git push | quality-gate full（typecheck/lint/扫描/测试/对抗性等） |
 | git merge | quality-gate full @ source 分支 |
@@ -140,7 +144,7 @@ Claude 可以直接执行 `git commit` 和 `git merge`，以下检查由 hook **
 
 | 工具             | 语言                    | 配置文件                     |
 | ---------------- | ----------------------- | ---------------------------- |
-| ESLint (strict)  | JS/TS                   | `eslint.config.js`           |
+| ESLint (strict)  | JS/TS                   | `eslint.config.ts`           |
 | Prettier         | JS/TS/MD/JSON/YAML/CSS  | `.prettierrc`                |
 | Ruff (60+ 规则)  | Python                  | `pyproject.toml [tool.ruff]` |
 | Pyright (strict) | Python                  | `pyrightconfig.json`         |
