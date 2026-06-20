@@ -86,3 +86,57 @@ export interface ExecErrorLike {
 export function isExecErrorLike(error: unknown): error is ExecErrorLike {
   return typeof error === 'object' && error !== null;
 }
+
+export interface ToolStatus {
+  name: string;
+  available: boolean;
+  version: string;
+}
+
+export interface NotificationEvent {
+  hook: string;
+  severity: string;
+  reason: string;
+}
+
+export interface NotificationChannel {
+  name: string;
+  url: string;
+  formatFn: (event: NotificationEvent, timestamp: string) => Record<string, unknown>;
+}
+
+export type GatePendingType = 'push' | 'merge';
+
+export interface GatePendingEntry {
+  type: GatePendingType;
+  command: string;
+  cwd: string;
+  sourceBranch?: string;
+  ts?: number;
+}
+
+export interface GateFixOptions {
+  loopCount?: number;
+  pendingType?: string;
+}
+
+export interface HadolintIssue {
+  file: string;
+  line: number;
+  severity: string;
+  ruleId: string;
+  message: string;
+}
+
+export interface QualityGateParseOptions {
+  profile: QualityGateProfile;
+  cwd: string;
+  json: boolean;
+  commitCmd?: string;
+  commitMsgFile?: string;
+}
+
+export interface AutoCommitOptions {
+  loopCount?: number;
+  sessionId?: string;
+}

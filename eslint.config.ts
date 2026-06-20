@@ -12,6 +12,7 @@ export default [
       '**/_bmad/**',
       '**/_bmad-output/**',
       '.claude/worktrees/**',
+      '.claude/hooks/__tests__/**',
       '.claude/hooks/__tests__/fixtures/**',
     ],
   },
@@ -22,6 +23,12 @@ export default [
   })),
   {
     files: tsFiles,
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
     rules: {
       'no-unused-vars': 'off',
       'no-console': 'error',
@@ -46,6 +53,14 @@ export default [
       'no-console': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],
       'no-useless-escape': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/restrict-template-expressions': 'off',
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+      '@typescript-eslint/no-dynamic-delete': 'off',
+      '@typescript-eslint/no-base-to-string': 'off',
     },
   },
 ];

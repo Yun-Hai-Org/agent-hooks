@@ -9,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/resolve-hook-path.js session-start.js",
+            "command": "bun .claude/hooks/resolve-hook-path.ts session-start.ts",
             "statusMessage": "检查工具健康状态..."
           }
         ]
@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/resolve-hook-path.js user-prompt-filter.js",
+            "command": "bun .claude/hooks/resolve-hook-path.ts user-prompt-filter.ts",
             "statusMessage": "扫描提示词中的敏感信息..."
           }
         ]
@@ -33,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/resolve-hook-path.js block-dangerous-commands.js",
+            "command": "bun .claude/hooks/resolve-hook-path.ts block-dangerous-commands.ts",
             "statusMessage": "检查危险命令和工具限制..."
           }
         ]
@@ -43,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/resolve-hook-path.js branch-gate.js",
+            "command": "bun .claude/hooks/resolve-hook-path.ts branch-gate.ts",
             "statusMessage": "检查分支保护（master/main 写入限制）..."
           }
         ]
@@ -53,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/resolve-hook-path.js protect-secrets.js",
+            "command": "bun .claude/hooks/resolve-hook-path.ts protect-secrets.ts",
             "statusMessage": "检查敏感文件和内容..."
           }
         ]
@@ -65,7 +65,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/resolve-hook-path.js notification-hook.js",
+            "command": "bun .claude/hooks/resolve-hook-path.ts notification-hook.ts",
             "statusMessage": "发送安全事件通知..."
           }
         ]
@@ -77,7 +77,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.js auto-stage.js",
+            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts auto-stage.ts",
             "statusMessage": "自动暂存修改文件..."
           }
         ]
@@ -89,12 +89,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.js auto-commit.js",
+            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts auto-commit.ts",
             "statusMessage": "自动提交暂存变更..."
           },
           {
             "type": "command",
-            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.js gate-retry-stop.js",
+            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts gate-retry-stop.ts",
             "statusMessage": "push/merge 质量门修复循环..."
           }
         ]

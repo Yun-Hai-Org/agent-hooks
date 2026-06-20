@@ -3,47 +3,47 @@
   "hooks": {
     "sessionStart": [
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.js session-start.js"
+        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts session-start.ts"
       }
     ],
     "beforeShellExecution": [
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.js block-dangerous-commands.js"
+        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts block-dangerous-commands.ts"
       }
     ],
     "preToolUse": [
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.js branch-gate.js",
+        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts branch-gate.ts",
         "matcher": "Shell|Write"
       },
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.js protect-secrets.js",
+        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts protect-secrets.ts",
         "matcher": "Shell|Write"
       }
     ],
     "beforeReadFile": [
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.js protect-secrets.js"
+        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts protect-secrets.ts"
       }
     ],
     "afterFileEdit": [
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.js auto-stage.js"
+        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts auto-stage.ts"
       }
     ],
     "stop": [
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.js auto-commit.js",
+        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts auto-commit.ts",
         "loop_limit": 8
       },
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.js gate-retry-stop.js",
+        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts gate-retry-stop.ts",
         "loop_limit": 8
       }
     ],
     "beforeSubmitPrompt": [
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.js user-prompt-filter.js"
+        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts user-prompt-filter.ts"
       }
     ]
   }
