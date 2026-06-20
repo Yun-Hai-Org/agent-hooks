@@ -1,0 +1,2 @@
+#!/bin/sh
+exec bun .claude/hooks/native/run-pre-merge-commit.js
