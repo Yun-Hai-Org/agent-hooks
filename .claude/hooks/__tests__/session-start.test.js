@@ -188,6 +188,10 @@ describe('session-start', () => {
       expect(toolNames).toContain('shfmt');
       // Docker 工具
       expect(toolNames).toContain('hadolint');
+      expect(toolNames).toContain('docker');
+      // K8s 工具
+      expect(toolNames).toContain('kubeconform');
+      expect(toolNames).toContain('kube-linter');
       // TOML 工具
       expect(toolNames).toContain('taplo');
       // SQL 工具

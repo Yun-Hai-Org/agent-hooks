@@ -311,6 +311,11 @@ describe('protect-secrets', () => {
       expect(result.blocked).toBe(true);
     });
 
+    it('docker-compose.override.yml 应该被阻止 (strict)', () => {
+      const result = checkFilePath('docker-compose.override.yml');
+      expect(result.blocked).toBe(true);
+    });
+
     it('.htpasswd 应该被阻止 (high)', () => {
       const result = checkFilePath('.htpasswd');
       expect(result.blocked).toBe(true);

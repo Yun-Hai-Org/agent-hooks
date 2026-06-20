@@ -29,6 +29,7 @@ import { runCoverage } from './checks/coverage.js';
 import { runCodeReview } from './checks/code-review.js';
 import { runExtendedLintStaged, runExtendedLintFull } from './checks/extended-lint.js';
 import { runSchemaLintStaged, runSchemaLintFull } from './checks/schema-lint.js';
+import { runK8sLintStaged, runK8sLintFull } from './checks/k8s-lint.js';
 
 /** @typedef {'commit' | 'full'} QualityProfile */
 
@@ -87,6 +88,7 @@ export async function runQualityGate(options) {
       hookAdv,
       extendedLint,
       schemaLint,
+      k8sLint,
     ] = await Promise.all([
       runDepAudit(cwd, { staged: true }),
       runStagedTypecheck(cwd),
@@ -98,6 +100,7 @@ export async function runQualityGate(options) {
       runHookAdversarialIfStaged(cwd),
       runExtendedLintStaged(cwd),
       runSchemaLintStaged(cwd),
+      runK8sLintStaged(cwd),
     ]);
     const results = [
       ...syncResults,
@@ -111,6 +114,7 @@ export async function runQualityGate(options) {
       hookAdv,
       extendedLint,
       schemaLint,
+      k8sLint,
     ];
     const finalDecision = decide(results);
     return { passed: finalDecision.decision !== DECISION.DENY, results, decision: finalDecision };
@@ -132,6 +136,7 @@ export async function runQualityGate(options) {
     reviewResult,
     extendedLint,
     schemaLint,
+    k8sLint,
   ] = await Promise.all([
     runFullTypecheck(cwd),
     runLintFull(cwd),
@@ -148,6 +153,7 @@ export async function runQualityGate(options) {
     runCodeReview(cwd),
     runExtendedLintFull(cwd),
     runSchemaLintFull(cwd),
+    runK8sLintFull(cwd),
   ]);
 
   const results = [
@@ -166,6 +172,7 @@ export async function runQualityGate(options) {
     reviewResult,
     extendedLint,
     schemaLint,
+    k8sLint,
   ];
   const finalDecision = decide(results);
   return { passed: finalDecision.decision !== DECISION.DENY, results, decision: finalDecision };

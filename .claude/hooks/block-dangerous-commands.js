@@ -155,6 +155,27 @@ const PATTERNS = [
     regex: /\bgit\s+push\b.+--force-with-lease.*\b(main|master)\b/,
     reason: '禁止 force push 到 main/master',
   },
+  // 22. kubectl get secret
+  {
+    level: 'high',
+    id: 'kubectl-get-secret',
+    regex: /\bkubectl\s+get\s+secrets?\b/,
+    reason: 'kubectl get secret exposes credentials',
+  },
+  // 23. kubectl describe secret
+  {
+    level: 'high',
+    id: 'kubectl-describe-secret',
+    regex: /\bkubectl\s+describe\s+secrets?\b/,
+    reason: 'kubectl describe secret exposes credentials',
+  },
+  // 24. docker exec print env
+  {
+    level: 'high',
+    id: 'docker-exec-env',
+    regex: /\bdocker\s+exec\b.*\b(env|printenv)\b/,
+    reason: 'docker exec printing environment variables',
+  },
 
   // ==================== STRICT - 工具限制 ====================
   // 23. pip install/uninstall

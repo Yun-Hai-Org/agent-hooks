@@ -52,6 +52,7 @@ describe('quality-gate', () => {
       });
       const checkIds = result.results.map((r) => r.checkId);
       expect(checkIds).toContain('extended-staged');
+      expect(checkIds).toContain('k8s-staged');
       expect(checkIds.some((id) => id.startsWith('schema-staged'))).toBe(true);
     });
   });
@@ -61,6 +62,7 @@ describe('quality-gate', () => {
       const source = readFileSync(join(import.meta.dir, '..', 'quality-gate.js'), 'utf-8');
       expect(source).toContain('runExtendedLintFull(cwd)');
       expect(source).toContain('runSchemaLintFull(cwd)');
+      expect(source).toContain('runK8sLintFull(cwd)');
     });
   });
 
