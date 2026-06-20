@@ -47,7 +47,10 @@ export function normalizeInput(data) {
       tool_name: data.tool_name || data.toolName || (isBeforeShell || command ? 'Shell' : ''),
       tool_input:
         toolInput && typeof toolInput === 'object'
-          ? { .../** @type {object} */ (toolInput), command: command || /** @type {{ command?: string }} */ (toolInput).command || '' }
+          ? {
+              .../** @type {object} */ (toolInput),
+              command: command || /** @type {{ command?: string }} */ (toolInput).command || '',
+            }
           : { command },
       session_id: data.session_id || data.conversation_id || '',
       cwd: data.cwd || data.workspace_roots?.[0] || process.cwd(),

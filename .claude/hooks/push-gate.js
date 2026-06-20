@@ -33,9 +33,7 @@ async function main() {
     const branch = getCurrentBranch(workingDir);
 
     if (hasUncommittedChanges(workingDir)) {
-      console.log(
-        formatDenyOutput(DECISION.DENY, buildUncommittedWorktreeDenyReason(workingDir, 'push')),
-      );
+      console.log(formatDenyOutput(DECISION.DENY, buildUncommittedWorktreeDenyReason(workingDir, 'push')));
       return;
     }
 

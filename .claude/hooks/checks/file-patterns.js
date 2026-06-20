@@ -30,11 +30,7 @@ export function classifyFiles(files) {
 export function listTrackedFiles(cwd, predicate) {
   const result = execCommand('git ls-files', { cwd });
   if (!result.success) return [];
-  return result.stdout
-    .trim()
-    .split('\n')
-    .filter(Boolean)
-    .filter(predicate);
+  return result.stdout.trim().split('\n').filter(Boolean).filter(predicate);
 }
 
 /** @param {string} [cwd] */

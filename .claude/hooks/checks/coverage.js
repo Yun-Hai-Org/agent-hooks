@@ -18,7 +18,9 @@ export async function runCoverage(cwd, options = {}) {
   if (execCommand('grep -q coverage package.json', { cwd }).success) {
     const result = execCommand('bun test --coverage 2>&1 | tail -5', { cwd, timeout: 120000 });
     if (!result.success) {
-      return formatResult('coverage', DECISION.DENY, '覆盖率测试失败', { output: (result.stderr || result.stdout).slice(0, 500) });
+      return formatResult('coverage', DECISION.DENY, '覆盖率测试失败', {
+        output: (result.stderr || result.stdout).slice(0, 500),
+      });
     }
     const match = (result.stdout + result.stderr).match(/(\d+(?:\.\d+)?)\s*%/);
     const pct = match ? parseFloat(match[1]) : 100;

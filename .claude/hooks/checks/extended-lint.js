@@ -304,7 +304,9 @@ export async function runExtendedLintFull(cwd) {
     listTrackedFiles(cwd, (f) => {
       if (f.startsWith('_bmad-output/') || f.startsWith('_bmad/') || f.startsWith('GitHub/')) return false;
       if (f.startsWith('.claude/commands/') || f.startsWith('.cursor/commands/')) return false;
+      if (f.startsWith('.claude/includes/') || f === '.claude/ralph-loop.local.md') return false;
       if (/^(hooks\.md|instrct\.md|CLAUDE\.md|agents-view\.md)$/.test(f)) return false;
+      if (/^(安全配置分析报告|文档质量分析报告)\.md$/.test(f)) return false;
       if (/\.(md|mdx|sh|bash|zsh|toml|sql|css|scss|less)$/i.test(f)) return true;
       return isDockerfilePath(f);
     }),

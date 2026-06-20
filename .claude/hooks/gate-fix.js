@@ -74,21 +74,12 @@ export function buildGateRetryPassMessage(gateName, cmd, pendingType) {
   if (pendingType === 'merge') {
     return [`[gate-retry] ${gateName} 检查已通过。`, '', '请手动重新执行 merge 命令：', `  ${cmd}`].join('\n');
   }
-  return [
-    `[gate-retry] ${gateName} 检查已通过。`,
-    '',
-    '请手动重新执行之前被阻止的命令：',
-    `  ${cmd}`,
-  ].join('\n');
+  return [`[gate-retry] ${gateName} 检查已通过。`, '', '请手动重新执行之前被阻止的命令：', `  ${cmd}`].join('\n');
 }
 
 /** @param {string} gateName @param {string} cmd @param {string} [sha] */
 export function buildGateRetryMergeSuccessMessage(gateName, cmd, sha) {
-  return [
-    `[gate-retry] ${gateName} 检查已通过，已自动执行 merge。`,
-    sha ? `合并提交: ${sha}` : '',
-    `命令: ${cmd}`,
-  ]
+  return [`[gate-retry] ${gateName} 检查已通过，已自动执行 merge。`, sha ? `合并提交: ${sha}` : '', `命令: ${cmd}`]
     .filter(Boolean)
     .join('\n');
 }

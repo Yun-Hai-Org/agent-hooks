@@ -3,6 +3,14 @@ _bmad-output/
 .venv/
 node_modules/
 .claude/hooks/__tests__/fixtures/
+.claude/commands/
+.cursor/commands/
+.claude/includes/
+.claude/ralph-loop.local.md
+.kiro/
 hooks.md
 instrct.md
 agents-view.md
+CLAUDE.md
+安全配置分析报告.md
+文档质量分析报告.md
