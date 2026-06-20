@@ -30,6 +30,7 @@ import { runCodeReview } from './checks/code-review.js';
 import { runExtendedLintStaged, runExtendedLintFull } from './checks/extended-lint.js';
 import { runSchemaLintStaged, runSchemaLintFull } from './checks/schema-lint.js';
 import { runK8sLintStaged, runK8sLintFull } from './checks/k8s-lint.js';
+import { runOpenApiContractStaged, runOpenApiContractFull } from './checks/openapi-contract.js';
 
 /** @typedef {'commit' | 'full'} QualityProfile */
 
@@ -89,6 +90,7 @@ export async function runQualityGate(options) {
       extendedLint,
       schemaLint,
       k8sLint,
+      openApiContract,
     ] = await Promise.all([
       runDepAudit(cwd, { staged: true }),
       runStagedTypecheck(cwd),
@@ -101,6 +103,7 @@ export async function runQualityGate(options) {
       runExtendedLintStaged(cwd),
       runSchemaLintStaged(cwd),
       runK8sLintStaged(cwd),
+      runOpenApiContractStaged(cwd),
     ]);
     const results = [
       ...syncResults,
@@ -115,6 +118,7 @@ export async function runQualityGate(options) {
       extendedLint,
       schemaLint,
       k8sLint,
+      openApiContract,
     ];
     const finalDecision = decide(results);
     return { passed: finalDecision.decision !== DECISION.DENY, results, decision: finalDecision };
@@ -137,6 +141,7 @@ export async function runQualityGate(options) {
     extendedLint,
     schemaLint,
     k8sLint,
+    openApiContract,
   ] = await Promise.all([
     runFullTypecheck(cwd),
     runLintFull(cwd),
@@ -154,6 +159,7 @@ export async function runQualityGate(options) {
     runExtendedLintFull(cwd),
     runSchemaLintFull(cwd),
     runK8sLintFull(cwd),
+    runOpenApiContractFull(cwd),
   ]);
 
   const results = [
@@ -173,6 +179,7 @@ export async function runQualityGate(options) {
     extendedLint,
     schemaLint,
     k8sLint,
+    openApiContract,
   ];
   const finalDecision = decide(results);
   return { passed: finalDecision.decision !== DECISION.DENY, results, decision: finalDecision };

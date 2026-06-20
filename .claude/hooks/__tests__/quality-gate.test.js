@@ -53,6 +53,7 @@ describe('quality-gate', () => {
       const checkIds = result.results.map((r) => r.checkId);
       expect(checkIds).toContain('extended-staged');
       expect(checkIds).toContain('k8s-staged');
+      expect(checkIds).toContain('openapi-staged');
       expect(checkIds.some((id) => id.startsWith('schema-staged'))).toBe(true);
     });
   });
@@ -63,6 +64,7 @@ describe('quality-gate', () => {
       expect(source).toContain('runExtendedLintFull(cwd)');
       expect(source).toContain('runSchemaLintFull(cwd)');
       expect(source).toContain('runK8sLintFull(cwd)');
+      expect(source).toContain('runOpenApiContractFull(cwd)');
     });
 
     it('pyproject 不应忽略 ANN101/ANN102', () => {

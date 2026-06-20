@@ -91,6 +91,7 @@ const TOOLS = [
   // K8s 工具
   { name: 'kubeconform', binary: 'kubeconform', versionCmd: 'kubeconform -v' },
   { name: 'kube-linter', binary: 'kube-linter', versionCmd: 'kube-linter version' },
+  { name: 'oasdiff', binary: 'oasdiff', versionCmd: 'oasdiff --version' },
   // TOML 工具
   { name: 'taplo', binary: 'taplo', versionCmd: 'taplo --version' },
   // SQL 工具

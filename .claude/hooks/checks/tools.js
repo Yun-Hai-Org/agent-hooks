@@ -24,6 +24,7 @@ export const TOOL_INSTALL_HINTS = {
   jq: 'brew install jq',
   yq: 'brew install yq',
   markdownlint: 'bun add -d markdownlint-cli2',
+  oasdiff: 'brew install oasdiff  # 或 go install github.com/oasdiff/oasdiff@latest',
 };
 
 /** @param {string} tool */

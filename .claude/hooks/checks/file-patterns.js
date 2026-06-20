@@ -7,6 +7,45 @@ const K8S_HELM_TEMPLATES = /^charts\/templates\//i;
 const K8S_RESOURCE_FILENAME =
   /^(deployment|service|ingress|configmap|secret|pod|statefulset|daemonset|job|cronjob|namespace|persistentvolumeclaim|hpa|networkpolicy)(\.ya?ml)?$/i;
 
+const OPENAPI_FILENAME = /^(openapi|swagger)\.(ya?ml|json)$/i;
+const OPENAPI_DIR = /(^|\/)(openapi|api-docs)\//i;
+
+/** @param {string} filePath */
+export function isOpenApiSpecExcludedPath(filePath) {
+  if (filePath.startsWith('_bmad-output/') || filePath.startsWith('_bmad/')) return true;
+  if (/\.github\/workflows\//i.test(filePath)) return true;
+  return false;
+}
+
+/** @param {string} filePath */
+export function isOpenApiSpecCandidatePath(filePath) {
+  if (isOpenApiSpecExcludedPath(filePath)) return false;
+  if (OPENAPI_FILENAME.test(basename(filePath))) return true;
+  if (OPENAPI_DIR.test(filePath) && /\.(ya?ml|json)$/i.test(filePath)) return true;
+  return false;
+}
+
+/** @param {string} content */
+export function looksLikeOpenApiSpecContent(content) {
+  return /openapi:\s*['"]?3/i.test(content);
+}
+
+/**
+ * @param {string} filePath
+ * @param {string} [cwd]
+ */
+export function isOpenApiSpecPath(filePath, cwd) {
+  if (!isOpenApiSpecCandidatePath(filePath)) return false;
+  if (OPENAPI_FILENAME.test(basename(filePath)) || OPENAPI_DIR.test(filePath)) return true;
+  if (!cwd) return false;
+  try {
+    const content = readFileSync(join(cwd, filePath), 'utf-8').slice(0, 4096);
+    return looksLikeOpenApiSpecContent(content);
+  } catch {
+    return false;
+  }
+}
+
 /** @param {string} filePath */
 export function isDockerfilePath(filePath) {
   const filename = basename(filePath).toLowerCase();
