@@ -1,2 +1,0 @@
-#!/bin/sh
-exec bun .claude/hooks/native/run-commit-msg.js "$1"
