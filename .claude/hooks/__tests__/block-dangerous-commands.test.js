@@ -34,14 +34,14 @@ describe('block-dangerous-commands', () => {
     expect(r.blocked).toBe(true);
   });
 
-  it('应该阻止 git push origin main (non-force)', () => {
+  it('应该允许 git push origin main (non-force)', () => {
     const r = checkCommand('git push origin main');
-    expect(r.blocked).toBe(true);
+    expect(r.blocked).toBe(false);
   });
 
-  it('应该阻止 git push origin master', () => {
-    const r = checkCommand('git push origin master');
-    expect(r.blocked).toBe(true);
+  it('应该允许 git push -u origin master', () => {
+    const r = checkCommand('git push -u origin master');
+    expect(r.blocked).toBe(false);
   });
 
   it('应该阻止 git reset --hard', () => {

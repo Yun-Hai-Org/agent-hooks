@@ -91,6 +91,13 @@ So that **AI 无法通过 Bash 命令执行破坏性操作或泄露敏感凭据�
   - [ ] `bun test .claude/hooks/__tests__/`
   - [ ] 确认无回归，所有 423+ 测试用例通过
 
+### Review Follow-ups (AI)
+
+> 来源：code-review（adversarial）。
+
+- [ ] [AI-Review][CRITICAL] 状态不一致：sprint-status.yaml 曾标记本 story 为 `review`，但实际**零实现**。`block-dangerous-commands.js` 只有原始 39 条 PATTERNS，本 story 描述的 10+ 个新模式（kubectl-get-secret、terraform-output、openssl-rsa、base64-decode-pipe、docker-exec-env、redirect-disk、find-delete-root、mv-root、fork-bomb-variant、chmod-777-root）**均不存在**，测试文件中亦无对应用例。AC #1–#10 全部未实现。已将 sprint-status 回退为 `ready-for-dev`，请走 `dev-story` 实现。[block-dangerous-commands.js]
+- [ ] [AI-Review][LOW] 环境问题：`bun test ./.claude/hooks/__tests__/`（整目录）会卡死不返回（疑似某测试读 stdin 阻塞），需单文件运行。建议排查。
+
 ## Dev Notes
 
 - **目标文件**: `.claude/hooks/block-dangerous-commands.js`

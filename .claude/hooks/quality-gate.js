@@ -26,6 +26,8 @@ import { runFormatFull } from './checks/format-full.js';
 import { runFormatStaged } from './checks/format-staged.js';
 import { runCoverage } from './checks/coverage.js';
 import { runCodeReview } from './checks/code-review.js';
+import { runExtendedLintStaged, runExtendedLintFull } from './checks/extended-lint.js';
+import { runSchemaLintStaged, runSchemaLintFull } from './checks/schema-lint.js';
 
 /** @typedef {'commit' | 'full'} QualityProfile */
 
@@ -67,17 +69,29 @@ export async function runQualityGate(options) {
       return { passed: false, results: syncResults, decision: syncDecision };
     }
 
-    const [auditResult, typeResult, testResult, lintStaged, formatStaged, gitleaksStaged, codeReview, hookAdv] =
-      await Promise.all([
-        runDepAudit(cwd, { staged: true }),
-        runStagedTypecheck(cwd),
-        runRelatedTests(cwd),
-        runLintStaged(cwd),
-        runFormatStaged(cwd),
-        runGitleaksStaged(cwd),
-        runCodeReview(cwd, { staged: true }),
-        runHookAdversarialIfStaged(cwd),
-      ]);
+    const [
+      auditResult,
+      typeResult,
+      testResult,
+      lintStaged,
+      formatStaged,
+      gitleaksStaged,
+      codeReview,
+      hookAdv,
+      extendedLint,
+      schemaLint,
+    ] = await Promise.all([
+      runDepAudit(cwd, { staged: true }),
+      runStagedTypecheck(cwd),
+      runRelatedTests(cwd),
+      runLintStaged(cwd),
+      runFormatStaged(cwd),
+      runGitleaksStaged(cwd),
+      runCodeReview(cwd, { staged: true }),
+      runHookAdversarialIfStaged(cwd),
+      runExtendedLintStaged(cwd),
+      runSchemaLintStaged(cwd),
+    ]);
     const results = [
       ...syncResults,
       auditResult,
@@ -88,27 +102,46 @@ export async function runQualityGate(options) {
       gitleaksStaged,
       codeReview,
       hookAdv,
+      extendedLint,
+      schemaLint,
     ];
     const finalDecision = decide(results);
     return { passed: finalDecision.decision !== DECISION.DENY, results, decision: finalDecision };
   }
 
-  const [typeResult, lintResult, fullTests, hookUnit, hookAdv, depAudit, gitleaks, semgrep, knip, trivy, formatResult_, coverageResult, reviewResult] =
-    await Promise.all([
-      runFullTypecheck(cwd),
-      runLintFull(cwd),
-      runFullProjectTests(cwd),
-      runHookUnitTests(cwd),
-      runHookAdversarialTests(cwd),
-      runDepAudit(cwd, { staged: false }),
-      runGitleaks(cwd),
-      runSemgrep(cwd),
-      runKnip(cwd),
-      runTrivy(cwd),
-      runFormatFull(cwd),
-      runCoverage(cwd),
-      runCodeReview(cwd),
-    ]);
+  const [
+    typeResult,
+    lintResult,
+    fullTests,
+    hookUnit,
+    hookAdv,
+    depAudit,
+    gitleaks,
+    semgrep,
+    knip,
+    trivy,
+    formatResult_,
+    coverageResult,
+    reviewResult,
+    extendedLint,
+    schemaLint,
+  ] = await Promise.all([
+    runFullTypecheck(cwd),
+    runLintFull(cwd),
+    runFullProjectTests(cwd),
+    runHookUnitTests(cwd),
+    runHookAdversarialTests(cwd),
+    runDepAudit(cwd, { staged: false }),
+    runGitleaks(cwd),
+    runSemgrep(cwd),
+    runKnip(cwd),
+    runTrivy(cwd),
+    runFormatFull(cwd),
+    runCoverage(cwd),
+    runCodeReview(cwd),
+    runExtendedLintFull(cwd),
+    runSchemaLintFull(cwd),
+  ]);
 
   const results = [
     typeResult,
@@ -124,6 +157,8 @@ export async function runQualityGate(options) {
     formatResult_,
     coverageResult,
     reviewResult,
+    extendedLint,
+    schemaLint,
   ];
   const finalDecision = decide(results);
   return { passed: finalDecision.decision !== DECISION.DENY, results, decision: finalDecision };

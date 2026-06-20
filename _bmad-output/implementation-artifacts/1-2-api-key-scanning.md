@@ -67,6 +67,15 @@ So that **AI 写入代码时不慎泄露的 API 密钥在保存时被自动发�
   - [x] `bun test .claude/hooks/__tests__/protect-secrets.test.js`
   - [x] `bun test .claude/hooks/__tests__/`
 
+### Review Follow-ups (AI)
+
+> 来源：code-review（adversarial）。protect-secrets.test.js 实测 165/165 通过；以下为评审发现的缺口。
+
+- [x] [AI-Review][HIGH] AC #1 未完全实现：经典 `sk-` 开头 OpenAI 密钥漏检。实现仅覆盖 `sk-proj-`/`sk-org-`/`sk-ant-`，缺设计表第 10 项的通用 `sk-` 兜底。实测 `sk-T3BlbkFJ...` → ALLOWED。需产品决策：是否新增通用 `sk-[A-Za-z0-9]{20,}`（注意与 `sk-ant-` 重叠及误报风险）。[protect-secrets.js:443-455] — **已解决**：产品决策采用通用模式，新增 `openai-legacy-key` (`sk-[A-Za-z0-9]{20,}`, CRITICAL)。专用 `sk-ant-`/`sk-proj-`/`sk-org-` 因前缀后连字符打断连续字母数字串，不会被通用模式吞掉，专用判定仍优先生效（已加测试验证）。
+- [x] [AI-Review][MEDIUM] Datadog 模式大小写过严：`(?:datadog|DD)_API_KEY` 无 `/i`，常见小写 `datadog_api_key=...` 漏检（实测 ALLOWED）；现有测试用非常规 `datadog_API_KEY` 掩盖了该问题。[protect-secrets.js:491-497] — **已解决**：正则增加 `/i` 标志，新增 `datadog_api_key=` 与 `dd_api_key:` 小写正例测试。
+- [x] [AI-Review][LOW] Discord 模式与设计不符：设计为 `[MNO]` 前缀，实现写成 `[MN]`，且 `{23}\.{6}\.{27}` 固定长度过死板，易漏报。[protect-secrets.js:470-476] — **已解决**：改为 `[MNO][A-Za-z0-9_-]{23,25}\.[A-Za-z0-9_-]{6,7}\.[A-Za-z0-9_-]{27,}`，新增 `O` 前缀正例测试。
+- [x] [AI-Review][LOW] 新增 9 个模式缺少反例/误报测试（如随机 32 位 hex 不应被 Datadog 误报、普通 `数字:串` 不应被 Telegram 误报），无法验证 FR8 误报率。[__tests__/protect-secrets.test.js] — **已解决**：新增 6 个反例/误报测试（随机 32 hex、时间戳短串、短 `sk-`/`hf_`/`hvs.`、普通三段式文本均不应触发）。
+
 ## Dev Notes
 
 - **目标文件**: `.claude/hooks/protect-secrets.js`
@@ -148,3 +157,18 @@ Story 1.2 是 Epic 1 的第二个任务，在 Story 1.1（敏感文件 + Terrafo
 3. 在 PreToolUse 阶段检测写入内容中的 API 密钥，及时阻止泄露
 4. 为所有新增模式编写单元测试
 5. 确保排除列表中的文件不被误检
+
+### 评审遗留项修复（2026-06-15）
+
+- ✅ Resolved review finding [HIGH]：AC #1 经典 `sk-` 密钥漏检 —— 经产品决策，新增 `openai-legacy-key` 模式 `sk-[A-Za-z0-9]{20,}`（CRITICAL）。`sk-ant-`/`sk-proj-`/`sk-org-` 的连字符会打断连续字母数字串，故专用模式不被吞掉且优先生效，已加测试验证。
+- ✅ Resolved review finding [MEDIUM]：Datadog 正则增加 `/i`，支持小写 `datadog_api_key` / `dd_api_key`。
+- ✅ Resolved review finding [LOW]：Discord 正则改为 `[MNO]` 前缀 + 灵活长度 `{23,25}/{6,7}/{27,}`。
+- ✅ Resolved review finding [LOW]：新增 6 个反例/误报测试以验证 FR8 误报率（随机 hex、时间戳短串、短前缀串、三段式文本）。
+- 验证：`protect-secrets.test.js` 176/176 通过（修复前 165）。
+- 备注：全量目录 `__tests__/` 运行时 `merge-gate.test.js` 与 `post-write-lint.test.js` 因 `execSync` 调用 git/外部 linter 阻塞而挂起；二者均不依赖 `protect-secrets.js`，与本故事改动无关（既有环境问题）。
+
+## Change Log
+
+| 日期       | 变更                                                                                                     |
+| ---------- | -------------------------------------------------------------------------------------------------------- |
+| 2026-06-15 | 处理 code-review 遗留项：解决 4 项（1 HIGH / 1 MEDIUM / 2 LOW）。新增 openai-legacy-key 模式、Datadog 大小写不敏感、Discord 模式灵活化，补充反例/误报测试。protect-secrets.test.js 176/176 通过。 |

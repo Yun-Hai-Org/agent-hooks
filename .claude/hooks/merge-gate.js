@@ -9,7 +9,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { execCommand, safeMain, log, getCurrentBranch, DECISION } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
-import { extractMergeTarget, isGitMergeCommand } from './checks/git-policy.js';
+import { extractMergeTarget, isGitMergeCommand, hasUncommittedChanges, buildUncommittedWorktreeDenyReason } from './checks/git-policy.js';
 import { runQualityGate, logGateResult } from './quality-gate.js';
 import { buildGateDenyReason } from './gate-fix.js';
 import { setPendingGateFailure, clearPendingGateFailure } from './gate-pending.js';
@@ -72,6 +72,13 @@ async function main() {
 
     if (sourceBranch === 'main' || sourceBranch === 'master') {
       console.log(formatDenyOutput(DECISION.DENY, '禁止 merge main/master 到自身'));
+      return;
+    }
+
+    if (hasUncommittedChanges(workingDir)) {
+      console.log(
+        formatDenyOutput(DECISION.DENY, buildUncommittedWorktreeDenyReason(workingDir, 'merge')),
+      );
       return;
     }
 

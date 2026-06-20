@@ -5,7 +5,9 @@ import { denyIfToolMissing, denyOnToolError } from './tools.js';
 /** @param {string} [cwd] */
 export async function runFormatStaged(cwd) {
   const stagedFiles = getStagedFiles(cwd);
-  const jsFiles = stagedFiles.filter((f) => /\.(js|ts|jsx|tsx|mjs|cjs|json|md|mdx|yaml|yml|css|scss)$/i.test(f));
+  const jsFiles = stagedFiles.filter((f) =>
+    /\.(js|ts|jsx|tsx|mjs|cjs|json|md|mdx|yaml|yml|css|scss|less)$/i.test(f),
+  );
   const pyFiles = stagedFiles.filter((f) => f.endsWith('.py'));
 
   if (jsFiles.length === 0 && pyFiles.length === 0) {

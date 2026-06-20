@@ -6,13 +6,12 @@
 
 import { safeMain, log, getCurrentBranch, DECISION } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
-import { isGitPushCommand } from './checks/git-policy.js';
+import { isGitPushCommand, hasUncommittedChanges, buildUncommittedWorktreeDenyReason } from './checks/git-policy.js';
 import { runQualityGate, logGateResult } from './quality-gate.js';
 import { buildGateDenyReason } from './gate-fix.js';
 import { setPendingGateFailure, clearPendingGateFailure } from './gate-pending.js';
 
 const HOOK_NAME = 'push-gate';
-const MAIN_BRANCHES = ['main', 'master'];
 
 async function main() {
   await safeMain(async () => {
@@ -32,15 +31,11 @@ async function main() {
     }
 
     const branch = getCurrentBranch(workingDir);
-    if (branch && MAIN_BRANCHES.includes(branch)) {
-      log(HOOK_NAME, { level: 'SKIP', reason: 'main/master push handled by block-dangerous-commands', session_id, cwd: workingDir });
-      console.log(formatAllowOutput());
-      return;
-    }
 
-    if (/\bgit\s+push\b.*\b(main|master)\b/.test(cmd)) {
-      log(HOOK_NAME, { level: 'SKIP', reason: 'push to main/master blocked elsewhere', session_id, cwd: workingDir });
-      console.log(formatAllowOutput());
+    if (hasUncommittedChanges(workingDir)) {
+      console.log(
+        formatDenyOutput(DECISION.DENY, buildUncommittedWorktreeDenyReason(workingDir, 'push')),
+      );
       return;
     }
 

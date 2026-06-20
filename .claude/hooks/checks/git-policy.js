@@ -51,6 +51,65 @@ export function getStagedFiles(cwd) {
 }
 
 /** @param {string} [cwd] */
+export function hasUncommittedChanges(cwd) {
+  const result = execCommand('git status --porcelain', { cwd });
+  if (!result.success) return false;
+  return result.stdout.trim().length > 0;
+}
+
+/** @param {string} [cwd] */
+export function countUncommittedFiles(cwd) {
+  const result = execCommand('git status --porcelain', { cwd });
+  if (!result.success) return 0;
+  return result.stdout.trim().split('\n').filter(Boolean).length;
+}
+
+/**
+ * @param {string} cwd
+ * @param {'stop' | 'push' | 'merge'} action
+ * @param {{ prefix?: string }} [options]
+ */
+export function buildUncommittedWorktreeDenyReason(cwd, action, options = {}) {
+  const prefix = options.prefix ?? '';
+  const branchResult = execCommand('git rev-parse --abbrev-ref HEAD', { cwd });
+  const branch = branchResult.success ? branchResult.stdout.trim() : 'unknown';
+  const fileCount = countUncommittedFiles(cwd);
+  const actionSteps = {
+    stop: '4. 再结束本轮',
+    push: '4. 再执行 git push',
+    merge: '4. 再执行 git merge',
+  };
+
+  if (branch === 'main' || branch === 'master') {
+    return [
+      `${prefix}当前在 main/master 分支，请先切换到 feature 分支并 commit。`,
+      '',
+      `检测到 ${fileCount} 个未提交变更。`,
+      '',
+      '步骤：',
+      '1. git checkout -b feat/your-feature',
+      '2. git add 相关文件（auto-stage 会自动暂存）',
+      '3. git commit -m "类型: 描述"（需通过 commit-gate）',
+      actionSteps[action],
+    ].join('\n');
+  }
+
+  const actionLabel = { stop: '结束本轮', push: 'git push', merge: 'git merge' }[action];
+
+  return [
+    `${prefix}工作区有 ${fileCount} 个未提交变更，请先 git commit 再${actionLabel}。`,
+    '',
+    `当前分支: ${branch}`,
+    '',
+    '步骤：',
+    '1. git status 确认变更',
+    '2. git add 相关文件（auto-stage 已暂存则跳过）',
+    '3. git commit -m "类型: 描述"（feat/fix/docs/test/chore…，需通过 commit-gate）',
+    actionSteps[action],
+  ].join('\n');
+}
+
+/** @param {string} [cwd] */
 export function checkBranch(cwd) {
   const result = execCommand('git rev-parse --abbrev-ref HEAD', { cwd });
   const branch = result.success ? result.stdout.trim() : null;
