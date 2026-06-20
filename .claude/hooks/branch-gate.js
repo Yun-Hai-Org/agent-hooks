@@ -79,18 +79,20 @@ function isAllowedPathOnMain(filePath) {
 function isFileWriteCommand(command) {
   if (!command) return false;
   const commandWithoutDevNull = command.replace(/\d*\s*>\s*\/dev\/null/g, '');
-  if (!/>(?!&)|tee|sed\s+-i|\bcp\b|\bmv\b|\bdd\b|\binstall\b/.test(commandWithoutDevNull)) {
+  const commandWithoutEmails = commandWithoutDevNull.replace(/<[^>\s]+@[^>\s]+>/g, '');
+  if (!/>(?!&)|tee|sed\s+-i|\bcp\b|\bmv\b|\bdd\b|\binstall\b/.test(commandWithoutEmails)) {
     return false;
   }
-  return FILE_WRITE_PATTERNS.some(({ pattern }) => pattern.test(commandWithoutDevNull));
+  return FILE_WRITE_PATTERNS.some(({ pattern }) => pattern.test(commandWithoutEmails));
 }
 
 /** @param {string} command */
 function getWritePatternName(command) {
   if (!command) return null;
   const commandWithoutDevNull = command.replace(/\d*\s*>\s*\/dev\/null/g, '');
+  const commandWithoutEmails = commandWithoutDevNull.replace(/<[^>\s]+@[^>\s]+>/g, '');
   for (const { pattern, name } of FILE_WRITE_PATTERNS) {
-    if (pattern.test(commandWithoutDevNull)) return name;
+    if (pattern.test(commandWithoutEmails)) return name;
   }
   return null;
 }
