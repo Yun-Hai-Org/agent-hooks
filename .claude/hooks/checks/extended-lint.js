@@ -1,4 +1,4 @@
-import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
+import { execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
 import {
   classifyFiles,
@@ -77,6 +77,7 @@ export function parseHadolintOutput(output) {
 function formatHadolintDenyOutput(output) {
   const issues = parseHadolintOutput(output);
   if (issues.length === 0) return output.slice(0, 500);
+  /** @type {Record<string, number>} */
   const severityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2 };
   issues.sort((a, b) => (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3));
   return issues
@@ -102,10 +103,10 @@ function aggregateExtendedResults(results, skipId, allowId, skipMsg, allowMsg) {
 
 /**
  * @param {ReturnType<classifyFiles>} classified
- * @param {string} [cwd]
  * @param {string} idPrefix
+ * @param {string} [cwd]
  */
-async function runExtendedChecks(classified, cwd, idPrefix) {
+async function runExtendedChecks(classified, idPrefix, cwd) {
   const results = [];
   const stagedPrefix = idPrefix === 'extended-staged' ? 'lint-staged' : 'lint';
   const formatPrefix = idPrefix === 'extended-staged' ? 'format-staged' : 'format';
@@ -327,13 +328,13 @@ export async function runExtendedLintStaged(cwd) {
     return formatResult('extended-staged', DECISION.SKIP, '暂存区无扩展 lint 目标文件，跳过');
   }
 
-  return runExtendedChecks(classified, cwd, 'extended-staged');
+  return runExtendedChecks(classified, 'extended-staged', cwd);
 }
 
 /** @param {string} [cwd] */
 export async function runExtendedLintFull(cwd) {
   const classified = classifyFiles(
-    listTrackedFiles(cwd, (f) => {
+    listTrackedFiles((f) => {
       if (f.startsWith('_bmad-output/') || f.startsWith('_bmad/') || f.startsWith('GitHub/')) return false;
       if (f.startsWith('.claude/commands/') || f.startsWith('.cursor/commands/')) return false;
       if (f.startsWith('.claude/includes/') || f === '.claude/ralph-loop.local.md') return false;
@@ -342,7 +343,7 @@ export async function runExtendedLintFull(cwd) {
       if (/\.(md|mdx|sh|bash|zsh|toml|sql|css|scss|less)$/i.test(f)) return true;
       if (isDockerComposePath(f)) return true;
       return isDockerfilePath(f);
-    }),
+    }, cwd),
     cwd,
   );
 
@@ -360,5 +361,5 @@ export async function runExtendedLintFull(cwd) {
     return formatResult('extended-full', DECISION.SKIP, '仓库无扩展 lint 目标文件，跳过');
   }
 
-  return runExtendedChecks(classified, cwd, 'extended-full');
+  return runExtendedChecks(classified, 'extended-full', cwd);
 }

@@ -15,7 +15,7 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "allowJs": true,
-    "checkJs": false,
+    "checkJs": true,
     "noEmit": true
   },
   "include": [".claude/hooks/**/*.js"],

@@ -339,6 +339,9 @@ function checkCommand(cmd, safetyLevel = SAFETY_LEVEL) {
   return { blocked: false, pattern: null, allowed: false };
 }
 
+/**
+ *
+ */
 async function main() {
   await (async () => {
     try {

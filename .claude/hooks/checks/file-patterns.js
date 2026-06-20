@@ -85,10 +85,10 @@ export function classifyFiles(files, cwd) {
 }
 
 /**
- * @param {string} [cwd]
  * @param {(file: string) => boolean} predicate
+ * @param {string} [cwd]
  */
-export function listTrackedFiles(cwd, predicate) {
+export function listTrackedFiles(predicate, cwd) {
   const result = execCommand('git ls-files', { cwd });
   if (!result.success) return [];
   return result.stdout.trim().split('\n').filter(Boolean).filter(predicate);

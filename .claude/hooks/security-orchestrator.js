@@ -9,6 +9,17 @@ import { existsSync, appendFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
+// ─── 共享类型 ────────────────────────────────────────────────────────────────
+
+/**
+ * @typedef {object} CheckResult
+ * @property {string} checkId
+ * @property {string} decision
+ * @property {string} message
+ * @property {string} [timestamp]
+ * @property {Record<string, unknown>} [details]
+ */
+
 // ─── 常量 ───────────────────────────────────────────────────────────────────
 
 export const DECISION = { ALLOW: 'allow', DENY: 'deny', WARN: 'warn', SKIP: 'skip' };
@@ -90,11 +101,11 @@ export function execCommandAsync(command, options = {}) {
         if (error) {
           finish({
             success: false,
-            stdout: stdout || '',
-            stderr: stderr || (error instanceof Error ? error.message : String(error)),
+            stdout: String(stdout || ''),
+            stderr: String(stderr || (error instanceof Error ? error.message : String(error))),
           });
         } else {
-          finish({ success: true, stdout, stderr: '' });
+          finish({ success: true, stdout: String(stdout || ''), stderr: String(stderr || '') });
         }
       },
     );
@@ -132,6 +143,9 @@ export function withTimeout(promise, ms, timeoutMessage = '操作超时') {
 
 // ─── stdin 读取 ──────────────────────────────────────────────────────────────
 
+/**
+ *
+ */
 export function readStdin() {
   return new Promise((resolve, reject) => {
     let input = '';
@@ -176,6 +190,7 @@ export async function safeMain(fn) {
  * @param {string} decision
  * @param {string} message
  * @param {Record<string, unknown>} [details]
+ * @returns {CheckResult}
  */
 export function formatResult(checkId, decision, message, details = {}) {
   return { checkId, decision, message, timestamp: new Date().toISOString(), details };

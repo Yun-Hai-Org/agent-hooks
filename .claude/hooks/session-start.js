@@ -198,7 +198,7 @@ function formatJsonResult(results) {
     unavailable: results.filter((r) => !r.available).length,
   };
 
-  const toolStatus = {};
+  const toolStatus = /** @type {Record<string, { available: boolean; version: string | null }>} */ ({});
   for (const r of results) {
     toolStatus[r.name] = {
       available: r.available,

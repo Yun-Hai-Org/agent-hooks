@@ -48,6 +48,7 @@ export function getRuffInvocation(cwd) {
 /**
  * @param {string} checkId
  * @param {string} [cwd]
+ * @returns {import('../security-orchestrator.js').CheckResult | null}
  */
 export function denyIfRuffMissing(checkId, cwd) {
   if (execCommand('test -f pyproject.toml', { cwd }).success && isToolInstalled('uv', cwd)) {
@@ -60,6 +61,7 @@ export function denyIfRuffMissing(checkId, cwd) {
  * @param {string} tool
  * @param {string} checkId
  * @param {string} [cwd]
+ * @returns {import('../security-orchestrator.js').CheckResult | null}
  */
 export function denyIfToolMissing(tool, checkId, cwd) {
   if (!isToolInstalled(tool, cwd)) {
@@ -74,7 +76,7 @@ export function isPyrightAvailable(cwd) {
   return isToolInstalled('pyright', cwd) || isToolInstalled('uv', cwd);
 }
 
-/** @param {string} checkId @param {string} [cwd] */
+/** @param {string} checkId @param {string} [cwd] @returns {import('../security-orchestrator.js').CheckResult | null} */
 export function denyIfPyrightMissing(checkId, cwd) {
   if (!isPyrightAvailable(cwd)) {
     const hint = `${getToolInstallHint('pyright')}；或 ${getToolInstallHint('uv')}`;
@@ -89,6 +91,7 @@ export function denyIfPyrightMissing(checkId, cwd) {
  * @param {unknown} error
  * @param {string} checkId
  * @param {string} tool
+ * @returns {import('../security-orchestrator.js').CheckResult}
  */
 export function denyOnToolError(error, checkId, tool) {
   const message = error instanceof Error ? error.message : String(error);

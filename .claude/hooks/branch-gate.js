@@ -126,10 +126,16 @@ function deny(reason, session_id) {
   return formatDenyOutput('deny', reason);
 }
 
+/**
+ *
+ */
 function allow() {
   return formatAllowOutput();
 }
 
+/**
+ *
+ */
 async function main() {
   try {
     const data = await readBranchGateInput();

@@ -29,9 +29,16 @@ export function parseKubeLinterDiagnostics(output) {
   try {
     const json = JSON.parse(output);
     const reports = json.reports ?? [];
-    const diagnostics = reports.flatMap((r) => r.diagnostics ?? []);
-    const errors = diagnostics.filter((d) => String(d.severity).toLowerCase() === 'error');
-    const warnings = diagnostics.filter((d) => String(d.severity).toLowerCase() === 'warning');
+    const diagnostics = reports.flatMap(
+      (/** @type {{ diagnostics?: Array<{ severity?: string; check?: string; message?: string }> }} */ r) =>
+        r.diagnostics ?? [],
+    );
+    const errors = diagnostics.filter(
+      (/** @type {{ severity?: string }} */ d) => String(d.severity).toLowerCase() === 'error',
+    );
+    const warnings = diagnostics.filter(
+      (/** @type {{ severity?: string }} */ d) => String(d.severity).toLowerCase() === 'warning',
+    );
     return { errors, warnings, diagnostics };
   } catch {
     return { errors: [], warnings: [], diagnostics: [] };
@@ -42,18 +49,26 @@ export function parseKubeLinterDiagnostics(output) {
 function formatKubeLinterDenyOutput(output) {
   const { errors, warnings } = parseKubeLinterDiagnostics(output);
   const lines = [
-    ...errors.slice(0, 10).map((d) => `[ERROR] ${d.check ?? 'rule'}: ${d.message ?? ''}`),
-    ...warnings.slice(0, 5).map((d) => `[WARN] ${d.check ?? 'rule'}: ${d.message ?? ''}`),
+    ...errors
+      .slice(0, 10)
+      .map(
+        (/** @type {{ check?: string; message?: string }} */ d) => `[ERROR] ${d.check ?? 'rule'}: ${d.message ?? ''}`,
+      ),
+    ...warnings
+      .slice(0, 5)
+      .map(
+        (/** @type {{ check?: string; message?: string }} */ d) => `[WARN] ${d.check ?? 'rule'}: ${d.message ?? ''}`,
+      ),
   ];
   return lines.length > 0 ? lines.join('\n') : output.slice(0, 500);
 }
 
 /**
  * @param {string[]} files
- * @param {string} [cwd]
  * @param {string} idPrefix
+ * @param {string} [cwd]
  */
-async function runK8sChecks(files, cwd, idPrefix) {
+async function runK8sChecks(files, idPrefix, cwd) {
   const results = [];
 
   const kubeconformMissing = denyIfToolMissing('kubeconform', `${idPrefix}-kubeconform`, cwd);
@@ -144,17 +159,17 @@ export async function runK8sLintStaged(cwd) {
   if (k8sFiles.length === 0) {
     return formatResult('k8s-staged', DECISION.SKIP, '暂存区无 K8s manifest，跳过');
   }
-  return runK8sChecks(k8sFiles, cwd, 'k8s-staged');
+  return runK8sChecks(k8sFiles, 'k8s-staged', cwd);
 }
 
 /** @param {string} [cwd] */
 export async function runK8sLintFull(cwd) {
-  const k8sFiles = listTrackedFiles(cwd, (f) => {
+  const k8sFiles = listTrackedFiles((f) => {
     if (f.startsWith('_bmad-output/') || f.startsWith('_bmad/')) return false;
     return isK8sManifestPath(f, cwd);
-  });
+  }, cwd);
   if (k8sFiles.length === 0) {
     return formatResult('k8s-full', DECISION.SKIP, '仓库无 K8s manifest，跳过');
   }
-  return runK8sChecks(k8sFiles, cwd, 'k8s-full');
+  return runK8sChecks(k8sFiles, 'k8s-full', cwd);
 }

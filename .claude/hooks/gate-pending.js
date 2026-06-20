@@ -8,12 +8,12 @@ const PENDING_FILE = join(LOG_DIR, 'gate-pending.json');
 /** @typedef {'push' | 'merge'} GatePendingType */
 
 /**
- * @typedef {Object} GatePendingEntry
+ * @typedef {object} GatePendingEntry
  * @property {GatePendingType} type
  * @property {string} command
  * @property {string} cwd
  * @property {string} [sourceBranch]
- * @property {number} ts
+ * @property {number} [ts]
  */
 
 function readStore() {
@@ -25,6 +25,7 @@ function readStore() {
   }
 }
 
+/** @param {Record<string, GatePendingEntry>} store */
 function writeStore(store) {
   if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
   writeFileSync(PENDING_FILE, JSON.stringify(store, null, 2));

@@ -617,7 +617,11 @@ async function readProtectSecretsInput() {
   const raw = await readStdin();
   if (getPlatform() === 'cursor' && typeof raw.file_path === 'string' && !raw.tool_name && !raw.toolName) {
     const normalized = normalizeFileEditInput(raw);
-    return { ...normalized, tool_name: 'Read' };
+    return {
+      ...normalized,
+      tool_name: 'Read',
+      permission_mode: typeof raw.permission_mode === 'string' ? raw.permission_mode : undefined,
+    };
   }
   const data = normalizeInput(raw);
   let toolName = data.tool_name;
@@ -625,7 +629,11 @@ async function readProtectSecretsInput() {
   else if (/^write$/i.test(toolName)) toolName = 'Write';
   else if (/^edit$/i.test(toolName)) toolName = 'Edit';
   else if (/^read$/i.test(toolName)) toolName = 'Read';
-  return { ...data, tool_name: toolName };
+  return {
+    ...data,
+    tool_name: toolName,
+    permission_mode: typeof raw.permission_mode === 'string' ? raw.permission_mode : undefined,
+  };
 }
 
 /** @param {string} reason @param {string} [session_id] */
@@ -648,7 +656,7 @@ async function main() {
       return console.log(formatAllowOutput());
     }
 
-    const result = check(tool_name, tool_input);
+    const result = check(tool_name, /** @type {Record<string, unknown>} */ (tool_input));
 
     if (result.blocked && result.pattern) {
       const p = result.pattern;

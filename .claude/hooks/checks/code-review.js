@@ -19,7 +19,9 @@ export async function runCodeReview(cwd, options = {}) {
     );
   }
 
-  const addedLines = diffResult.stdout.split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'));
+  const addedLines = diffResult.stdout
+    .split('\n')
+    .filter((/** @type {string} */ l) => l.startsWith('+') && !l.startsWith('+++'));
   const findings = [];
   for (const line of addedLines) {
     for (const pattern of DIFF_BLOCK_PATTERNS) {

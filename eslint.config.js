@@ -1,5 +1,6 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import jsdoc from 'eslint-plugin-jsdoc';
 
 const tsFiles = ['**/*.{ts,tsx,mts,cts}'];
 const hookJsFiles = ['.claude/hooks/**/*.js'];
@@ -42,6 +43,7 @@ export default [
   },
   {
     files: hookJsFiles,
+    plugins: { jsdoc },
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -66,6 +68,16 @@ export default [
       'no-empty': ['error', { allowEmptyCatch: true }],
       'no-useless-escape': 'off',
       'no-unused-vars': 'off',
+      'jsdoc/require-jsdoc': [
+        'error',
+        {
+          publicOnly: { esm: true },
+          require: { FunctionDeclaration: true, MethodDefinition: false, ClassDeclaration: false },
+        },
+      ],
+      'jsdoc/require-param-type': 'error',
+      'jsdoc/require-returns-type': 'error',
+      'jsdoc/check-types': 'error',
     },
   },
 ];

@@ -25,7 +25,13 @@ export {
 const HOOK_NAME = 'notification-hook';
 
 /**
- * @param {object} data
+ * @typedef {object} NotificationHookInput
+ * @property {{ message?: string }} [tool_input]
+ * @property {string} [session_id]
+ */
+
+/**
+ * @param {NotificationHookInput} data
  */
 export async function handleNotification(data) {
   const message = data?.tool_input?.message || '';

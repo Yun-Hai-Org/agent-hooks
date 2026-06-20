@@ -42,6 +42,9 @@ export function parseStopInput(data) {
   };
 }
 
+/**
+ *
+ */
 export function isAutoCommitEnabled() {
   const v = (process.env.AUTO_COMMIT ?? '1').toLowerCase();
   return v !== '0' && v !== 'false' && v !== 'off';
@@ -53,6 +56,9 @@ export function getAutoCommitMode() {
   return mode === 'auto' ? 'auto' : 'agent';
 }
 
+/**
+ *
+ */
 export function getMaxAutoCommitLoops() {
   const n = parseInt(process.env.AUTO_COMMIT_MAX_LOOPS || String(DEFAULT_MAX_LOOPS), 10);
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_MAX_LOOPS;
@@ -186,6 +192,9 @@ export async function runAutoCommit(cwd, options = {}) {
   return { committed: true, message, sha };
 }
 
+/**
+ *
+ */
 async function main() {
   let input = '';
   for await (const chunk of process.stdin) input += chunk;

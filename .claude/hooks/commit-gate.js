@@ -11,10 +11,13 @@ import { runQualityGate, logGateResult } from './quality-gate.js';
 
 const HOOK_NAME = 'commit-gate';
 
+/**
+ *
+ */
 async function main() {
   await safeMain(async () => {
     const data = await readHookInput();
-    const { tool_name, tool_input, session_id, cwd } = data;
+    const { tool_input, session_id, cwd } = data;
 
     if (!isShellHookInput(data)) {
       console.log(formatAllowOutput());

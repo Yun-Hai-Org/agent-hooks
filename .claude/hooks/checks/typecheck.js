@@ -65,7 +65,15 @@ export async function runStagedTypecheck(cwd) {
       withTimeout(pyrightPromise, 30000, 'pyright 超时 (30s)'),
       withTimeout(tscPromise, 30000, 'tsc 超时 (30s)'),
     ]);
-    const failures = results.filter((r) => r.status === 'fulfilled' && !r.value.success).map((r) => r.value);
+    const failures = results
+      .filter((r) => r.status === 'fulfilled')
+      .map(
+        (r) =>
+          /** @type {PromiseFulfilledResult<{ tool?: string; stdout?: string; stderr?: string; success?: boolean }>} */ (
+            r
+          ).value,
+      )
+      .filter((v) => !v.success);
     if (failures.length > 0) {
       const messages = failures.map((f) => `${formatTypecheckToolOutput(f)}`).join('\n\n');
       return formatResult('type-check', DECISION.DENY, `类型检查失败:\n${messages.slice(0, 800)}`, { failures });
@@ -82,7 +90,8 @@ export async function runFullTypecheck(cwd) {
   const hasTsconfig = execCommand('test -f tsconfig.json', { cwd }).success;
 
   if (hasPyproject && !isPyrightAvailable(cwd)) {
-    return denyIfPyrightMissing('type-check', cwd);
+    const missing = denyIfPyrightMissing('type-check', cwd);
+    if (missing) return missing;
   }
   if (hasTsconfig) {
     const missing = denyIfToolMissing('bun', 'type-check', cwd);
@@ -114,7 +123,15 @@ export async function runFullTypecheck(cwd) {
       withTimeout(pyrightPromise, 60000, 'pyright 超时 (60s)'),
       withTimeout(tscPromise, 60000, 'tsc 超时 (60s)'),
     ]);
-    const failures = results.filter((r) => r.status === 'fulfilled' && !r.value.success).map((r) => r.value);
+    const failures = results
+      .filter((r) => r.status === 'fulfilled')
+      .map(
+        (r) =>
+          /** @type {PromiseFulfilledResult<{ tool?: string; stdout?: string; stderr?: string; success?: boolean }>} */ (
+            r
+          ).value,
+      )
+      .filter((v) => !v.success);
     if (failures.length > 0) {
       const messages = failures.map((f) => formatTypecheckToolOutput(f)).join('\n\n');
       return formatResult('type-check', DECISION.DENY, `类型检查失败:\n${messages.slice(0, 800)}`, { failures });

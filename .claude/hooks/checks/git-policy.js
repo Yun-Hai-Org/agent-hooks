@@ -44,7 +44,7 @@ export function extractCommitMessage(cmd) {
   return null;
 }
 
-/** @param {string} [cwd] */
+/** @param {string} [cwd] @returns {string[]} */
 export function getStagedFiles(cwd) {
   const result = execCommand('git diff --cached --name-only', { cwd });
   if (!result.success) return [];

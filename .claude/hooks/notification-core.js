@@ -7,24 +7,40 @@ import { log } from './security-orchestrator.js';
 
 export const DEFAULT_COOLDOWN_MS = 5 * 60 * 1000;
 
+/**
+ * @typedef {object} NotificationEvent
+ * @property {string} hook
+ * @property {string} severity
+ * @property {string} reason
+ */
+
+/** @typedef {'critical' | 'high' | 'medium' | 'low' | 'info'} NotificationSeverity */
+
 /** @type {Map<string, number>} */
 const lastSentMap = new Map();
 
+/** @param {string} eventKey @param {number} [cooldownMs] */
 export function isCoolingDown(eventKey, cooldownMs = DEFAULT_COOLDOWN_MS) {
   const lastSent = lastSentMap.get(eventKey);
   if (lastSent === undefined) return false;
   return Date.now() - lastSent < cooldownMs;
 }
 
+/** @param {string} eventKey */
 export function recordSent(eventKey) {
   lastSentMap.set(eventKey, Date.now());
 }
 
+/**
+ *
+ */
 export function clearCooldownState() {
   lastSentMap.clear();
 }
 
+/** @param {string} severity */
 export function mapSeverityEmoji(severity) {
+  /** @type {Record<string, string>} */
   const map = {
     critical: '🔴',
     high: '🟠',
@@ -35,6 +51,7 @@ export function mapSeverityEmoji(severity) {
   return map[severity?.toLowerCase()] || '⚠️';
 }
 
+/** @param {string} message */
 export function parseNotificationMessage(message) {
   if (!message || typeof message !== 'string') {
     return { hook: 'unknown', severity: 'info', reason: message || '' };
@@ -52,10 +69,12 @@ export function parseNotificationMessage(message) {
   return { hook, severity, reason: message };
 }
 
+/** @param {NotificationEvent} event */
 export function makeEventKey(event) {
   return `${event.hook}:${event.severity}`;
 }
 
+/** @param {NotificationEvent} event @param {string} timestamp */
 export function formatWechatMessage(event, timestamp) {
   const emoji = mapSeverityEmoji(event.severity);
   return {
@@ -73,8 +92,10 @@ export function formatWechatMessage(event, timestamp) {
   };
 }
 
+/** @param {NotificationEvent} event @param {string} timestamp */
 export function formatFeishuMessage(event, timestamp) {
   const emoji = mapSeverityEmoji(event.severity);
+  /** @type {Record<string, string>} */
   const colorMap = {
     critical: 'red',
     high: 'orange',
@@ -112,8 +133,10 @@ export function formatFeishuMessage(event, timestamp) {
   };
 }
 
+/** @param {NotificationEvent} event @param {string} timestamp */
 export function formatSlackMessage(event, timestamp) {
   const emoji = mapSeverityEmoji(event.severity);
+  /** @type {Record<string, string>} */
   const colorMap = {
     critical: '#FF0000',
     high: '#FF6600',
@@ -157,6 +180,7 @@ export function formatSlackMessage(event, timestamp) {
   };
 }
 
+/** @param {string} url @param {Record<string, unknown>} body @param {number} [timeoutMs] */
 export async function sendWebhook(url, body, timeoutMs) {
   if (timeoutMs === undefined) {
     timeoutMs = parseInt(process.env.NOTIFY_TIMEOUT_MS || '', 10) || 5000;
@@ -186,6 +210,9 @@ export async function sendWebhook(url, body, timeoutMs) {
   }
 }
 
+/**
+ *
+ */
 export function getConfiguredChannels() {
   const channels = [];
 
@@ -207,6 +234,7 @@ export function getConfiguredChannels() {
   return channels;
 }
 
+/** @param {NotificationEvent} event @param {string} timestamp */
 export async function notifyAllChannels(event, timestamp) {
   const channels = getConfiguredChannels();
   if (channels.length === 0) return [];

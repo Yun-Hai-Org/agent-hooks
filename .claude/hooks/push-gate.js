@@ -4,7 +4,7 @@
  * 推送门：git push 前跑 quality-gate --profile=full
  */
 
-import { safeMain, log, getCurrentBranch, DECISION } from './security-orchestrator.js';
+import { safeMain, getCurrentBranch, DECISION } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
 import { isGitPushCommand, hasUncommittedChanges, buildUncommittedWorktreeDenyReason } from './checks/git-policy.js';
 import { runQualityGate, logGateResult } from './quality-gate.js';
@@ -13,10 +13,13 @@ import { setPendingGateFailure, clearPendingGateFailure } from './gate-pending.j
 
 const HOOK_NAME = 'push-gate';
 
+/**
+ *
+ */
 async function main() {
   await safeMain(async () => {
     const data = await readHookInput();
-    const { tool_name, tool_input, session_id, cwd } = data;
+    const { tool_input, session_id, cwd } = data;
     const workingDir = cwd || process.cwd();
 
     if (!isShellHookInput(data)) {

@@ -3,7 +3,7 @@ import { summarizeResults } from './quality-gate.js';
 /**
  * @param {string} gateName
  * @param {string} cmd
- * @param {{ results: { checkId: string; decision: string; message: string }[] }} gateResult
+ * @param {{ results: { checkId: string; decision: string; message: string }[]; decision?: { reason?: string } }} gateResult
  * @param {{ loopCount?: number }} [options]
  */
 export function buildGateDenyReason(gateName, cmd, gateResult, options = {}) {
@@ -34,8 +34,8 @@ export function buildGateDenyReason(gateName, cmd, gateResult, options = {}) {
 /**
  * @param {string} gateName
  * @param {string} cmd
- * @param {{ results: { checkId: string; decision: string; message: string }[] }} gateResult
- * @param {{ loopCount?: number }} [options]
+ * @param {{ results: { checkId: string; decision: string; message: string }[]; decision?: { reason?: string } }} gateResult
+ * @param {{ loopCount?: number; pendingType?: string }} [options]
  */
 export function buildGateRetryStopMessage(gateName, cmd, gateResult, options = {}) {
   const results = gateResult.results || [];

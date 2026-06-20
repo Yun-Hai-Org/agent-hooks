@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'fs';
 import { basename, dirname, extname, join } from 'path';
-import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
+import { execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
 import { classifyFiles, listTrackedFiles } from './file-patterns.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
@@ -82,10 +82,10 @@ export async function runCheckJsonschema(filePath, schemaPath, format, cwd) {
 /**
  * @param {string[]} jsonFiles
  * @param {string[]} yamlFiles
- * @param {string} [cwd]
  * @param {string} idPrefix
+ * @param {string} [cwd]
  */
-async function runSchemaChecks(jsonFiles, yamlFiles, cwd, idPrefix) {
+async function runSchemaChecks(jsonFiles, yamlFiles, idPrefix, cwd) {
   const results = [];
 
   if (jsonFiles.length === 0 && yamlFiles.length === 0) {
@@ -184,12 +184,12 @@ async function runSchemaChecks(jsonFiles, yamlFiles, cwd, idPrefix) {
 export async function runSchemaLintStaged(cwd) {
   const staged = getStagedFiles(cwd);
   const { json, yaml } = classifyFiles(staged);
-  return runSchemaChecks(json, yaml, cwd, 'schema-staged');
+  return runSchemaChecks(json, yaml, 'schema-staged', cwd);
 }
 
 /** @param {string} [cwd] */
 export async function runSchemaLintFull(cwd) {
-  const json = listTrackedFiles(cwd, (f) => f.endsWith('.json') && !f.endsWith('.schema.json'));
-  const yaml = listTrackedFiles(cwd, (f) => /\.(yaml|yml)$/i.test(f));
-  return runSchemaChecks(json, yaml, cwd, 'schema-full');
+  const json = listTrackedFiles((f) => f.endsWith('.json') && !f.endsWith('.schema.json'), cwd);
+  const yaml = listTrackedFiles((f) => /\.(yaml|yml)$/i.test(f), cwd);
+  return runSchemaChecks(json, yaml, 'schema-full', cwd);
 }

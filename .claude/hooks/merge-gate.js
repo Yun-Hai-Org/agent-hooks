@@ -48,10 +48,13 @@ async function runFullOnSourceBranch(repoCwd, sourceBranch) {
   }
 }
 
+/**
+ *
+ */
 async function main() {
   await safeMain(async () => {
     const data = await readHookInput();
-    const { tool_name, tool_input, session_id, cwd } = data;
+    const { tool_input, session_id, cwd } = data;
     const workingDir = cwd || process.cwd();
 
     if (!isShellHookInput(data)) {

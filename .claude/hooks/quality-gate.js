@@ -57,7 +57,7 @@ export function parseArgs(argv) {
 }
 
 /**
- * @param {{ profile: QualityProfile; cwd: string; commitCmd?: string }} options
+ * @param {{ profile: QualityProfile; cwd: string; commitCmd?: string; commitMsgFile?: string }} options
  */
 export async function runQualityGate(options) {
   const { profile, cwd, commitCmd, commitMsgFile } = options;

@@ -25,7 +25,7 @@ export function getGitIgnoredDirs(cwd) {
   return result.stdout
     .trim()
     .split('\n')
-    .map((d) => d.replace(/\/$/, ''));
+    .map((/** @type {string} */ d) => d.replace(/\/$/, ''));
 }
 
 /** @param {string} [cwd] */
@@ -34,7 +34,7 @@ export async function runSemgrep(cwd) {
   if (missing) return missing;
   try {
     const ignoredDirs = getGitIgnoredDirs(cwd);
-    const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
+    const excludeFlags = ignoredDirs.map((/** @type {string} */ d) => `--exclude "${d}"`).join(' ');
     const semgrepCmd = `semgrep --config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten --severity ERROR,WARNING,INFO --json ${excludeFlags} .`;
     const result = await withTimeout(
       execCommandAsync(semgrepCmd, { cwd, timeout: 60000 }),
@@ -44,7 +44,9 @@ export async function runSemgrep(cwd) {
     if (!result.success && result.stdout) {
       try {
         const json = JSON.parse(result.stdout);
-        const errors = json.results?.filter((r) => r.extra?.severity === 'ERROR') || [];
+        const errors =
+          json.results?.filter((/** @type {{ extra?: { severity?: string } }} */ r) => r.extra?.severity === 'ERROR') ||
+          [];
         if (errors.length > 0) {
           return formatResult('semgrep', DECISION.DENY, `Semgrep 发现 ${errors.length} 个 ERROR 级别问题`, {
             count: errors.length,
@@ -116,10 +118,13 @@ export async function runTrivy(cwd) {
     if (result.stdout) {
       try {
         const json = JSON.parse(result.stdout);
-        const vulns = json.Results?.flatMap((r) => r.Vulnerabilities || []) || [];
-        const criticals = vulns.filter((v) => v.Severity === 'CRITICAL');
-        const highs = vulns.filter((v) => v.Severity === 'HIGH');
-        const mediums = vulns.filter((v) => v.Severity === 'MEDIUM');
+        const vulns =
+          json.Results?.flatMap(
+            (/** @type {{ Vulnerabilities?: Array<{ Severity?: string }> }} */ r) => r.Vulnerabilities || [],
+          ) || [];
+        const criticals = vulns.filter((/** @type {{ Severity?: string }} */ v) => v.Severity === 'CRITICAL');
+        const highs = vulns.filter((/** @type {{ Severity?: string }} */ v) => v.Severity === 'HIGH');
+        const mediums = vulns.filter((/** @type {{ Severity?: string }} */ v) => v.Severity === 'MEDIUM');
         if (criticals.length > 0 || highs.length > 0 || mediums.length > 0) {
           return formatResult(
             'trivy',
