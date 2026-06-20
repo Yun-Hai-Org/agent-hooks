@@ -365,12 +365,14 @@ describe('security-orchestrator', () => {
 
   describe('detectToolchain - 工具链检测', () => {
     it('当前项目应检测到 bun (package.json + bun.lock)', () => {
-      const toolchain = detectToolchain(process.cwd());
+      const { PROJECT_ROOT } = require('./helpers.js');
+      const toolchain = detectToolchain(PROJECT_ROOT);
       expect(toolchain.js).toBe('bun');
     });
 
     it('当前项目应检测到 uv (pyproject.toml)', () => {
-      const toolchain = detectToolchain(process.cwd());
+      const { PROJECT_ROOT } = require('./helpers.js');
+      const toolchain = detectToolchain(PROJECT_ROOT);
       expect(toolchain.python).toBe('uv');
     });
 

@@ -1,6 +1,6 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
-import { denyIfToolMissing, denyOnToolError } from './tools.js';
+import { denyIfToolMissing, denyOnToolError, denyIfRuffMissing, getRuffInvocation } from './tools.js';
 
 /** @param {string} [cwd] */
 export async function runLintStaged(cwd) {
@@ -42,12 +42,13 @@ export async function runLintStaged(cwd) {
   }
 
   if (pyFiles.length > 0 && execCommand('test -f pyproject.toml', { cwd }).success) {
-    const missing = denyIfToolMissing('ruff', 'lint-staged-ruff', cwd);
+    const missing = denyIfRuffMissing('lint-staged-ruff', cwd);
     if (missing) return missing;
     const files = pyFiles.map((f) => `"${f}"`).join(' ');
+    const ruff = getRuffInvocation(cwd);
     try {
       const ruffResult = await withTimeout(
-        execCommandAsync(`ruff check --preview ${files}`, { cwd, timeout: 30000 }),
+        execCommandAsync(`${ruff} check --preview ${files}`, { cwd, timeout: 30000 }),
         30000,
         'ruff staged 超时 (30s)',
       );

@@ -15,6 +15,7 @@ import { appendFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { LOG_DIR } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
+import { notifySecurityEventAsync } from './notify-security-event.js';
 
 const SAFETY_LEVEL = 'strict';
 
@@ -212,6 +213,34 @@ const PATTERNS = [
     regex: /\bgit\s+commit\b.*\s-n\b/,
     reason: '禁止使用 -n(--no-verify) 跳过 commit hooks',
   },
+  // 34b. git push --no-verify
+  {
+    level: 'strict',
+    id: 'push-no-verify',
+    regex: /\bgit\s+push\b.*--no-verify/,
+    reason: '禁止使用 --no-verify 跳过 push hooks',
+  },
+  // 34c. git merge --no-verify
+  {
+    level: 'strict',
+    id: 'merge-no-verify',
+    regex: /\bgit\s+merge\b.*--no-verify/,
+    reason: '禁止使用 --no-verify 跳过 merge hooks',
+  },
+  // 34d. gh pr merge（绕过本地 merge gate）
+  {
+    level: 'strict',
+    id: 'gh-pr-merge',
+    regex: /\bgh\s+pr\s+merge\b/,
+    reason: '禁止 gh pr merge，请使用 git merge 以触发本地质量门',
+  },
+  // 34e. git pull with merge（需本地 merge gate）
+  {
+    level: 'strict',
+    id: 'git-pull-merge',
+    regex: /\bgit\s+pull\b(?!.*--rebase)(?!.*--ff-only)/,
+    reason: 'git pull 默认 merge 会绕过 pre-merge-commit，请使用 git pull --rebase 或 git fetch + git merge',
+  },
 
   // ==================== STRICT - 分支操作（非阻止） ====================
   // 35. git force push any (非 main/master)
@@ -317,6 +346,12 @@ async function main() {
           cmd: cmd.slice(0, 200),
           session_id,
           cwd,
+        });
+        notifySecurityEventAsync({
+          hook: 'block-dangerous-commands',
+          severity: p.level,
+          reason,
+          session_id,
         });
         console.log(formatDenyOutput('deny', reason));
         return;

@@ -14,6 +14,7 @@ import { execSync } from 'child_process';
 import { existsSync, appendFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { LOG_DIR } from './security-orchestrator.js';
+import { getPlatform } from './hook-adapter.js';
 const HOOK_NAME = 'session-start';
 const GLOBAL_TIMEOUT_MS = 2000;
 const PER_TOOL_TIMEOUT_MS = 500;
@@ -77,6 +78,10 @@ function checkTool(name, binary, versionCmd) {
  * 所有待检查工具列表
  */
 const TOOLS = [
+  // 核心运行时（优先检测）
+  { name: 'bun', binary: 'bun', versionCmd: 'bun --version' },
+  { name: 'uv', binary: 'uv', versionCmd: 'uv --version' },
+  { name: 'gitleaks', binary: 'gitleaks', versionCmd: 'gitleaks version' },
   // Shell 工具
   { name: 'shellcheck', binary: 'shellcheck', versionCmd: 'shellcheck --version' },
   { name: 'shfmt', binary: 'shfmt', versionCmd: 'shfmt --version' },
@@ -108,8 +113,6 @@ const TOOLS = [
   // 死代码检测
   { name: 'knip', binary: 'knip', versionCmd: 'knip --version' },
   // 包管理器
-  { name: 'bun', binary: 'bun', versionCmd: 'bun --version' },
-  { name: 'uv', binary: 'uv', versionCmd: 'uv --version' },
 ];
 
 /**
@@ -216,11 +219,14 @@ async function main() {
     const results = await checkAllTools();
     const elapsed = Date.now() - startTime;
 
-    // 输出人类可读的报告到 stderr（终端显示）
     process.stderr.write(formatReport(results) + '\n');
+    checkGitHooksPath();
 
-    // JSON 结果到 stdout（供 Claude Code 处理）
-    console.log(formatJsonResult(results));
+    if (getPlatform() === 'cursor') {
+      console.log('{}');
+    } else {
+      console.log(formatJsonResult(results));
+    }
 
     log({
       level: 'INFO',
@@ -240,6 +246,26 @@ async function main() {
     // 输出降级消息
     process.stderr.write(`ℹ️ [session-start] 健康检查超时，部分工具状态未知\n`);
     console.log('{}');
+  }
+}
+
+function checkGitHooksPath() {
+  try {
+    const cwd = process.cwd();
+    const hooksPath = execSync('git config core.hooksPath', {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+    if (hooksPath && hooksPath !== '.githooks') {
+      process.stderr.write(`⚠️ [session-start] core.hooksPath=${hooksPath}，建议运行 ./scripts/install-git-hooks.sh\n`);
+      log({ level: 'WARN', reason: 'core.hooksPath mismatch', hooksPath });
+    } else if (!hooksPath) {
+      process.stderr.write(`⚠️ [session-start] 未配置 core.hooksPath，请运行 ./scripts/install-git-hooks.sh\n`);
+      log({ level: 'WARN', reason: 'core.hooksPath not set' });
+    }
+  } catch {
+    // 非 git 仓库，跳过
   }
 }
 

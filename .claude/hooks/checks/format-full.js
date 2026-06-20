@@ -1,5 +1,5 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
-import { denyIfToolMissing, denyOnToolError } from './tools.js';
+import { denyIfToolMissing, denyOnToolError, denyIfRuffMissing, getRuffInvocation } from './tools.js';
 
 /** @param {string} [cwd] */
 export async function runFormatFull(cwd) {
@@ -27,11 +27,12 @@ export async function runFormatFull(cwd) {
   }
 
   if (hasPyproject) {
-    const ruffMissing = denyIfToolMissing('ruff', 'format-ruff', cwd);
+    const ruffMissing = denyIfRuffMissing('format-ruff', cwd);
     if (ruffMissing) return ruffMissing;
+    const ruff = getRuffInvocation(cwd);
     try {
       const ruffFmtResult = await withTimeout(
-        execCommandAsync('ruff format --check .', { cwd, timeout: 60000 }),
+        execCommandAsync(`${ruff} format --check .`, { cwd, timeout: 60000 }),
         60000,
         'ruff format 超时 (60s)',
       );

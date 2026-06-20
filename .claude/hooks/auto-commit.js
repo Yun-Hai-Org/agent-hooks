@@ -2,7 +2,7 @@
 /**
  * Auto Commit - Stop hook
  *
- * AUTO_COMMIT_MODE=agent（默认）：Stop 时检查工作区；有未提交变更 → block，要求 Agent 自行 git commit（commit-gate 校验）
+ * AUTO_COMMIT_MODE=agent（默认）：Stop 时检查工作区；有未提交变更 → block，要求 Agent 自行 git commit（native pre-commit 校验）
  * AUTO_COMMIT_MODE=auto：有暂存变更时 hook 自动 git commit（quality-gate profile=commit → git commit）
  *
  * 环境变量：
@@ -14,17 +14,9 @@
  */
 
 import { execCommand, log, getCurrentBranch } from './security-orchestrator.js';
-import {
-  getStagedFiles,
-  hasUncommittedChanges,
-  buildUncommittedWorktreeDenyReason,
-} from './checks/git-policy.js';
-import { runQualityGate, summarizeResults, formatChecksForLog } from './quality-gate.js';
-import {
-  getPlatform,
-  formatStopContinueOutput,
-  formatStopSuccessOutput,
-} from './hook-adapter.js';
+import { getStagedFiles, hasUncommittedChanges, buildUncommittedWorktreeDenyReason } from './checks/git-policy.js';
+import { summarizeResults } from './quality-gate.js';
+import { getPlatform, formatStopContinueOutput, formatStopSuccessOutput } from './hook-adapter.js';
 
 const HOOK_NAME = 'auto-commit';
 const MAIN_BRANCHES = ['main', 'master'];
@@ -95,9 +87,7 @@ export function buildCommitMessage(stagedFiles) {
   else if (allChore) type = 'chore';
 
   const names =
-    stagedFiles.length <= 3
-      ? stagedFiles.map((f) => f.split('/').pop()).join(', ')
-      : `${stagedFiles.length} files`;
+    stagedFiles.length <= 3 ? stagedFiles.map((f) => f.split('/').pop()).join(', ') : `${stagedFiles.length} files`;
 
   return `${type}: auto-commit ${names}`.slice(0, 200);
 }
@@ -132,11 +122,7 @@ export function buildFixFollowupMessage(gateResult, options = {}) {
  * @param {string} stderr
  */
 export function buildCommitFailureMessage(stderr) {
-  return [
-    '[auto-commit] git commit 执行失败，请修复后结束本轮重试：',
-    '',
-    stderr.trim().slice(0, 4000),
-  ].join('\n');
+  return ['[auto-commit] git commit 执行失败，请修复后结束本轮重试：', '', stderr.trim().slice(0, 4000)].join('\n');
 }
 
 /**
@@ -168,25 +154,7 @@ export async function runAutoCommit(cwd, options = {}) {
   const message = buildCommitMessage(stagedFiles);
   const commitCmd = `git commit -m "${message.replace(/"/g, '\\"')}"`;
 
-  const gateResult = await runQualityGate({ profile: 'commit', cwd, commitCmd });
-  if (!gateResult.passed) {
-    log(HOOK_NAME, {
-      level: 'BLOCKED',
-      branch,
-      reason: gateResult.decision.reason?.slice(0, 500),
-      checks: formatChecksForLog(gateResult.results),
-      session_id: options.sessionId,
-      cwd,
-    });
-    return {
-      committed: false,
-      reason: gateResult.decision.reason,
-      gateFailed: true,
-      gateResult,
-    };
-  }
-
-  const commitResult = execCommand(commitCmd, { cwd, timeout: 30000 });
+  const commitResult = execCommand(commitCmd, { cwd, timeout: 120000 });
   if (!commitResult.success) {
     const errText = commitResult.stderr || commitResult.stdout || 'unknown error';
     log(HOOK_NAME, {
@@ -197,7 +165,12 @@ export async function runAutoCommit(cwd, options = {}) {
       session_id: options.sessionId,
       cwd,
     });
-    return { committed: false, reason: errText, commitFailed: true };
+    return {
+      committed: false,
+      reason: errText,
+      commitFailed: true,
+      gateFailed: /pre-commit|commit-msg|quality gate|hook/i.test(errText),
+    };
   }
 
   const sha = execCommand('git rev-parse --short HEAD', { cwd }).stdout?.trim();
@@ -207,7 +180,6 @@ export async function runAutoCommit(cwd, options = {}) {
     message,
     sha,
     files: stagedFiles.length,
-    checks: formatChecksForLog(gateResult.results),
     session_id: options.sessionId,
     cwd,
   });
@@ -281,14 +253,12 @@ async function main() {
     const result = await runAutoCommit(cwd, { sessionId });
 
     if (result.committed) {
-      console.log(
-        formatStopSuccessOutput(`[auto-commit] 已提交 ${result.sha}: ${result.message}`, hookEvent),
-      );
+      console.log(formatStopSuccessOutput(`[auto-commit] 已提交 ${result.sha}: ${result.message}`, hookEvent));
       return;
     }
 
-    if (result.gateFailed && result.gateResult) {
-      const followup = buildFixFollowupMessage(result.gateResult, { loopCount });
+    if (result.gateFailed && result.reason) {
+      const followup = buildCommitFailureMessage(result.reason);
       console.log(formatStopContinueOutput(followup, hookEvent));
       return;
     }
