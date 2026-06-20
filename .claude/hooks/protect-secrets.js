@@ -13,7 +13,16 @@
 
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
-import { LOG_DIR } from './security-orchestrator.js';
+import { LOG_DIR, readStdin } from './security-orchestrator.js';
+import {
+  normalizeInput,
+  normalizeFileEditInput,
+  formatDenyOutput,
+  formatAllowOutput,
+  isShellTool,
+  getPlatform,
+} from './hook-adapter.js';
+import { notifySecurityEventAsync } from './notify-security-event.js';
 
 const SAFETY_LEVEL = 'strict';
 
@@ -598,16 +607,39 @@ function check(toolName, toolInput, safetyLevel = SAFETY_LEVEL) {
   return { blocked: false, pattern: null };
 }
 
-async function main() {
-  let input = '';
-  for await (const chunk of process.stdin) input += chunk;
+async function readProtectSecretsInput() {
+  const raw = await readStdin();
+  if (getPlatform() === 'cursor' && typeof raw.file_path === 'string' && !raw.tool_name && !raw.toolName) {
+    const normalized = normalizeFileEditInput(raw);
+    return { ...normalized, tool_name: 'Read' };
+  }
+  const data = normalizeInput(raw);
+  let toolName = data.tool_name;
+  if (isShellTool(toolName)) toolName = 'Bash';
+  else if (/^write$/i.test(toolName)) toolName = 'Write';
+  else if (/^edit$/i.test(toolName)) toolName = 'Edit';
+  else if (/^read$/i.test(toolName)) toolName = 'Read';
+  return { ...data, tool_name: toolName };
+}
 
+/** @param {string} reason @param {string} [session_id] */
+function denyProtectSecrets(reason, session_id) {
+  notifySecurityEventAsync({
+    hook: 'protect-secrets',
+    severity: 'critical',
+    reason,
+    session_id,
+  });
+  return formatDenyOutput('deny', reason);
+}
+
+async function main() {
   try {
-    const data = JSON.parse(input);
+    const data = await readProtectSecretsInput();
     const { tool_name, tool_input, session_id, cwd, permission_mode } = data;
 
     if (!['Read', 'Edit', 'Write', 'Bash'].includes(tool_name)) {
-      return console.log('{}');
+      return console.log(formatAllowOutput());
     }
 
     const result = check(tool_name, tool_input);
@@ -620,20 +652,13 @@ async function main() {
       const action = { Read: 'read', Edit: 'modify', Write: 'write to', Bash: 'execute' }[
         /** @type {'Read'|'Edit'|'Write'|'Bash'} */ (tool_name)
       ];
-      return console.log(
-        JSON.stringify({
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            permissionDecision: 'deny',
-            permissionDecisionReason: `${EMOJIS[/** @type {keyof typeof EMOJIS} */ (p.level)]} [${p.id}] Cannot ${action}: ${p.reason}`,
-          },
-        }),
-      );
+      const reason = `${EMOJIS[/** @type {keyof typeof EMOJIS} */ (p.level)]} [${p.id}] Cannot ${action}: ${p.reason}`;
+      return console.log(denyProtectSecrets(reason, session_id));
     }
-    console.log('{}');
+    console.log(formatAllowOutput());
   } catch (e) {
     log({ level: 'ERROR', error: /** @type {Error} */ (e).message });
-    console.log('{}');
+    console.log(formatAllowOutput());
   }
 }
 

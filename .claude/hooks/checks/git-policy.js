@@ -1,4 +1,5 @@
 import { execCommand, formatResult, DECISION } from '../security-orchestrator.js';
+import { readFileSync } from 'fs';
 
 const COMMIT_MSG_PATTERN = /^(feat|fix|refactor|docs|test|chore|style|perf):\s+\S/;
 
@@ -89,7 +90,7 @@ export function buildUncommittedWorktreeDenyReason(cwd, action, options = {}) {
       '步骤：',
       '1. git checkout -b feat/your-feature',
       '2. git add 相关文件（auto-stage 会自动暂存）',
-      '3. git commit -m "类型: 描述"（需通过 commit-gate）',
+      '3. git commit -m "类型: 描述"（需通过 pre-commit 质量门）',
       actionSteps[action],
     ].join('\n');
   }
@@ -104,7 +105,7 @@ export function buildUncommittedWorktreeDenyReason(cwd, action, options = {}) {
     '步骤：',
     '1. git status 确认变更',
     '2. git add 相关文件（auto-stage 已暂存则跳过）',
-    '3. git commit -m "类型: 描述"（feat/fix/docs/test/chore…，需通过 commit-gate）',
+    '3. git commit -m "类型: 描述"（feat/fix/docs/test/chore…，需通过 pre-commit 质量门）',
     actionSteps[action],
   ].join('\n');
 }
@@ -126,6 +127,32 @@ export function checkCommitMessage(cmd) {
   if (!message) {
     return formatResult('commit-msg', DECISION.DENY, '无法提取 commit message，请使用 -m "类型: 描述" 格式');
   }
+  return validateCommitMessageText(message);
+}
+
+/**
+ * @param {string} msgFilePath
+ */
+export function checkCommitMessageFromFile(msgFilePath) {
+  try {
+    const raw = readFileSync(msgFilePath, 'utf8');
+    const message = raw
+      .split('\n')
+      .filter((line) => !line.startsWith('#'))
+      .join('\n')
+      .trim();
+    if (!message) {
+      return formatResult('commit-msg', DECISION.DENY, 'Commit message 为空');
+    }
+    return validateCommitMessageText(message);
+  } catch (e) {
+    const err = e instanceof Error ? e.message : String(e);
+    return formatResult('commit-msg', DECISION.DENY, `无法读取 commit message 文件: ${err}`);
+  }
+}
+
+/** @param {string} message */
+function validateCommitMessageText(message) {
   if (!COMMIT_MSG_PATTERN.test(message)) {
     return formatResult('commit-msg', DECISION.DENY, `Commit message 格式错误: "${message}" — 必须匹配 "类型: 描述"`);
   }

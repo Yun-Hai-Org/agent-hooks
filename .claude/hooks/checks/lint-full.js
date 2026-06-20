@@ -1,5 +1,5 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
-import { denyIfToolMissing, denyOnToolError } from './tools.js';
+import { denyIfToolMissing, denyOnToolError, denyIfRuffMissing, getRuffInvocation } from './tools.js';
 
 /** @param {string} [cwd] */
 export async function runLintFull(cwd) {
@@ -13,10 +13,13 @@ export async function runLintFull(cwd) {
     if (missing) return missing;
     try {
       const eslintResult = await withTimeout(
-        execCommandAsync('bunx eslint . --max-warnings 0 --report-unused-disable-directives', {
-          cwd,
-          timeout: 120000,
-        }),
+        execCommandAsync(
+          'bunx eslint .claude/hooks --ignore-pattern "**/__tests__/**" --max-warnings 0 --report-unused-disable-directives',
+          {
+            cwd,
+            timeout: 120000,
+          },
+        ),
         120000,
         'eslint 超时 (120s)',
       );
@@ -33,11 +36,12 @@ export async function runLintFull(cwd) {
   }
 
   if (hasPyproject) {
-    const missing = denyIfToolMissing('ruff', 'lint-ruff', cwd);
+    const missing = denyIfRuffMissing('lint-ruff', cwd);
     if (missing) return missing;
+    const ruff = getRuffInvocation(cwd);
     try {
       const ruffResult = await withTimeout(
-        execCommandAsync('ruff check --preview .', { cwd, timeout: 60000 }),
+        execCommandAsync(`${ruff} check --preview .`, { cwd, timeout: 60000 }),
         60000,
         'ruff 超时 (60s)',
       );

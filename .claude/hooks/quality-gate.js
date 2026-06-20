@@ -8,6 +8,7 @@ import { decide, formatResult, log, DECISION } from './security-orchestrator.js'
 import {
   checkBranch,
   checkCommitMessage,
+  checkCommitMessageFromFile,
   checkSensitiveStagedFiles,
 } from './checks/git-policy.js';
 import { runDepAudit } from './checks/dependency.js';
@@ -35,7 +36,7 @@ import { runSchemaLintStaged, runSchemaLintFull } from './checks/schema-lint.js'
  * @param {string[]} argv
  */
 export function parseArgs(argv) {
-  /** @type {{ profile: QualityProfile; cwd: string; json: boolean; commitCmd?: string }} */
+  /** @type {{ profile: QualityProfile; cwd: string; json: boolean; commitCmd?: string; commitMsgFile?: string }} */
   const options = { profile: 'full', cwd: process.cwd(), json: false };
   for (const arg of argv) {
     if (arg.startsWith('--profile=')) {
@@ -47,6 +48,8 @@ export function parseArgs(argv) {
       options.json = true;
     } else if (arg.startsWith('--commit-cmd=')) {
       options.commitCmd = arg.slice('--commit-cmd='.length);
+    } else if (arg.startsWith('--commit-msg-file=')) {
+      options.commitMsgFile = arg.slice('--commit-msg-file='.length);
     }
   }
   return options;
@@ -56,12 +59,16 @@ export function parseArgs(argv) {
  * @param {{ profile: QualityProfile; cwd: string; commitCmd?: string }} options
  */
 export async function runQualityGate(options) {
-  const { profile, cwd, commitCmd } = options;
+  const { profile, cwd, commitCmd, commitMsgFile } = options;
 
   if (profile === 'commit') {
     const syncResults = [
       checkBranch(cwd),
-      commitCmd ? checkCommitMessage(commitCmd) : formatResult('commit-msg', DECISION.SKIP, '无 commit message'),
+      commitMsgFile
+        ? checkCommitMessageFromFile(commitMsgFile)
+        : commitCmd
+          ? checkCommitMessage(commitCmd)
+          : formatResult('commit-msg', DECISION.SKIP, '无 commit message'),
       checkSensitiveStagedFiles(cwd),
     ];
     const syncDecision = decide(syncResults);
@@ -178,7 +185,10 @@ export function summarizeCheckDetails(details) {
     for (const failure of details.failures) {
       if (!failure || typeof failure !== 'object') continue;
       const f = /** @type {{ tool?: string; stdout?: string; stderr?: string }} */ (failure);
-      const text = [f.stderr, f.stdout].filter((s) => typeof s === 'string' && s.trim()).join('\n').trim();
+      const text = [f.stderr, f.stdout]
+        .filter((s) => typeof s === 'string' && s.trim())
+        .join('\n')
+        .trim();
       parts.push(text ? `${f.tool ?? 'tool'}:\n${text}` : `${f.tool ?? 'tool'}: failed`);
     }
   }

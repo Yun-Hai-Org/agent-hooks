@@ -1,13 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Gate Retry Stop - Stop hook
- * push/merge 被 gate 拒绝后，Stop 时 block/followup 驱动修复；
- * merge 检查通过后可自动重试 git merge（GATE_AUTO_RETRY_MERGE=1，默认开启）。
- *
- * 环境变量：
- *   GATE_RETRY_STOP=0        关闭
- *   GATE_RETRY_MAX_LOOPS=8   Cursor 最大 follow-up
- *   GATE_AUTO_RETRY_MERGE=0  关闭 merge 通过后自动执行
+ * push/merge 被 native gate 拒绝后，Stop 时 block/followup 驱动修复
  */
 
 import { log, execCommand } from './security-orchestrator.js';
@@ -20,17 +14,12 @@ import {
   buildGateRetryMergeSuccessMessage,
   buildGateRetryMergeFailureMessage,
 } from './gate-fix.js';
-import { runFullOnSourceBranch } from './merge-gate.js';
-import {
-  getPlatform,
-  formatStopContinueOutput,
-  formatStopSuccessOutput,
-} from './hook-adapter.js';
+import { getPlatform, formatStopContinueOutput, formatStopSuccessOutput } from './hook-adapter.js';
 
 const HOOK_NAME = 'gate-retry-stop';
 const DEFAULT_MAX_LOOPS = 8;
 
-const GATE_LABELS = { push: 'push-gate', merge: 'merge-gate' };
+const GATE_LABELS = { push: 'pre-push', merge: 'pre-merge-commit' };
 
 export function isGateRetryStopEnabled() {
   const v = (process.env.GATE_RETRY_STOP ?? '1').toLowerCase();
@@ -51,17 +40,7 @@ export function getMaxGateRetryLoops() {
  * @param {import('./gate-pending.js').GatePendingEntry} pending
  */
 export async function rerunPendingGate(pending) {
-  if (pending.type === 'push') {
-    return runQualityGate({ profile: 'full', cwd: pending.cwd });
-  }
-  if (pending.type === 'merge' && pending.sourceBranch) {
-    return runFullOnSourceBranch(pending.cwd, pending.sourceBranch);
-  }
-  return {
-    passed: false,
-    results: [],
-    decision: { reason: 'invalid pending merge entry' },
-  };
+  return runQualityGate({ profile: 'full', cwd: pending.cwd });
 }
 
 /**
@@ -73,14 +52,14 @@ export function executePendingMerge(pending) {
 
 /**
  * @param {string} sessionId
- * @param {{ loopCount?: number }} [options]
+ * @param {{ loopCount?: number; cwd?: string }} [options]
  */
 export async function runGateRetryStop(sessionId, options = {}) {
   if (!isGateRetryStopEnabled()) {
     return { action: 'skip', reason: 'GATE_RETRY_STOP disabled' };
   }
 
-  const pending = getPendingGateFailure(sessionId);
+  const pending = getPendingGateFailure(sessionId, options.cwd);
   if (!pending) {
     return { action: 'skip', reason: 'no pending gate failure' };
   }
@@ -98,7 +77,7 @@ export async function runGateRetryStop(sessionId, options = {}) {
     };
   }
 
-  clearPendingGateFailure(sessionId);
+  clearPendingGateFailure(sessionId, pending.cwd);
 
   if (pending.type === 'merge' && isAutoRetryMergeEnabled()) {
     const mergeResult = executePendingMerge(pending);
@@ -134,7 +113,7 @@ async function main() {
 
   try {
     const data = input.trim() ? JSON.parse(input) : {};
-    const { sessionId, hookEvent, loopCount, status } = parseStopInput(data);
+    const { sessionId, hookEvent, loopCount, status, cwd } = parseStopInput(data);
     const platform = getPlatform();
 
     if (!isGateRetryStopEnabled()) {
@@ -155,7 +134,7 @@ async function main() {
       return;
     }
 
-    const result = await runGateRetryStop(sessionId, { loopCount });
+    const result = await runGateRetryStop(sessionId, { loopCount, cwd });
 
     if (result.action === 'block' && result.gateResult) {
       const followup = buildGateRetryStopMessage(result.gateName, result.command, result.gateResult, {

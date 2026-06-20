@@ -1,6 +1,20 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
 
+const TRIVY_EXTRA_SKIP_DIRS = ['_bmad', '_bmad-output', 'node_modules', '.venv', '.claude/worktrees'];
+const TRIVY_TIMEOUT_MS = 300000;
+
+/** @param {string} [cwd] */
+function getGitleaksConfigArg(cwd) {
+  return execCommand('test -f .gitleaks.toml', { cwd }).success ? ' --config .gitleaks.toml' : '';
+}
+
+/** @param {string[]} ignoredDirs */
+function buildTrivySkipArgs(ignoredDirs) {
+  const dirs = [...new Set([...ignoredDirs, ...TRIVY_EXTRA_SKIP_DIRS])];
+  return dirs.map((d) => `--skip-dirs "${d}"`).join(' ');
+}
+
 /** @param {string} [cwd] */
 export function getGitIgnoredDirs(cwd) {
   const result = execCommand('git ls-files --others --ignored --exclude-standard --directory | head -20', {
@@ -22,7 +36,11 @@ export async function runSemgrep(cwd) {
     const ignoredDirs = getGitIgnoredDirs(cwd);
     const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
     const semgrepCmd = `semgrep --config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten --severity ERROR,WARNING,INFO --json ${excludeFlags} .`;
-    const result = await withTimeout(execCommandAsync(semgrepCmd, { cwd, timeout: 60000 }), 60000, 'semgrep 超时 (60s)');
+    const result = await withTimeout(
+      execCommandAsync(semgrepCmd, { cwd, timeout: 60000 }),
+      60000,
+      'semgrep 超时 (60s)',
+    );
     if (!result.success && result.stdout) {
       try {
         const json = JSON.parse(result.stdout);
@@ -34,7 +52,11 @@ export async function runSemgrep(cwd) {
         }
       } catch {}
     }
-    return formatResult('semgrep', DECISION.ALLOW, result.success ? 'Semgrep 扫描通过' : 'Semgrep 扫描完成（无 ERROR）');
+    return formatResult(
+      'semgrep',
+      DECISION.ALLOW,
+      result.success ? 'Semgrep 扫描通过' : 'Semgrep 扫描完成（无 ERROR）',
+    );
   } catch (e) {
     return denyOnToolError(e, 'semgrep', 'semgrep');
   }
@@ -56,10 +78,15 @@ export async function runKnip(cwd) {
         const unusedFiles = json.files ? Object.keys(json.files).length : 0;
         const unusedDeps = json.dependencies ? Object.keys(json.dependencies).length : 0;
         if (unusedFiles > 0 || unusedDeps > 0) {
-          return formatResult('knip', DECISION.DENY, `Knip 发现 ${unusedFiles} 个未使用文件, ${unusedDeps} 个未使用依赖`, {
-            unusedFiles,
-            unusedDeps,
-          });
+          return formatResult(
+            'knip',
+            DECISION.DENY,
+            `Knip 发现 ${unusedFiles} 个未使用文件, ${unusedDeps} 个未使用依赖`,
+            {
+              unusedFiles,
+              unusedDeps,
+            },
+          );
         }
       } catch {
         return formatResult('knip', DECISION.DENY, 'Knip 检查失败', {
@@ -79,9 +106,13 @@ export async function runTrivy(cwd) {
   if (missing) return missing;
   try {
     const ignoredDirs = getGitIgnoredDirs(cwd);
-    const skipDirs = ignoredDirs.map((d) => `--skip-dirs "${d}"`).join(' ');
+    const skipDirs = buildTrivySkipArgs(ignoredDirs);
     const trivyCmd = `trivy fs --scanners vuln,misconfig,secret,license --severity CRITICAL,HIGH,MEDIUM --format json ${skipDirs} .`;
-    const result = await withTimeout(execCommandAsync(trivyCmd, { cwd, timeout: 60000 }), 60000, 'trivy 超时 (60s)');
+    const result = await withTimeout(
+      execCommandAsync(trivyCmd, { cwd, timeout: TRIVY_TIMEOUT_MS }),
+      TRIVY_TIMEOUT_MS,
+      `trivy 超时 (${TRIVY_TIMEOUT_MS / 1000}s)`,
+    );
     if (result.stdout) {
       try {
         const json = JSON.parse(result.stdout);
@@ -109,9 +140,10 @@ export async function runTrivy(cwd) {
 export async function runGitleaksStaged(cwd) {
   const missing = denyIfToolMissing('gitleaks', 'gitleaks-staged', cwd);
   if (missing) return missing;
+  const configArg = getGitleaksConfigArg(cwd);
   try {
     const result = await withTimeout(
-      execCommandAsync('gitleaks protect --staged --no-banner --redact', { cwd, timeout: 30000 }),
+      execCommandAsync(`gitleaks protect --staged --no-banner --redact${configArg}`, { cwd, timeout: 30000 }),
       30000,
       'gitleaks staged 超时 (30s)',
     );
@@ -130,9 +162,10 @@ export async function runGitleaksStaged(cwd) {
 export async function runGitleaks(cwd) {
   const missing = denyIfToolMissing('gitleaks', 'gitleaks', cwd);
   if (missing) return missing;
+  const configArg = getGitleaksConfigArg(cwd);
   try {
     const result = await withTimeout(
-      execCommandAsync('gitleaks detect --source . --no-banner --redact', { cwd, timeout: 60000 }),
+      execCommandAsync(`gitleaks detect --source . --no-banner --redact${configArg}`, { cwd, timeout: 60000 }),
       60000,
       'gitleaks 超时 (60s)',
     );

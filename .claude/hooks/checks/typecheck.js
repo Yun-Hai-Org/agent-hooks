@@ -4,7 +4,10 @@ import { denyIfPyrightMissing, denyIfToolMissing, denyOnToolError, isPyrightAvai
 
 /** @param {{ tool?: string; stdout?: string; stderr?: string; success?: boolean }} result */
 function formatTypecheckToolOutput(result) {
-  const text = [result.stderr, result.stdout].filter((s) => typeof s === 'string' && s.trim()).join('\n').trim();
+  const text = [result.stderr, result.stdout]
+    .filter((s) => typeof s === 'string' && s.trim())
+    .join('\n')
+    .trim();
   return text || `${result.tool ?? 'tool'}: failed (exit non-zero)`;
 }
 

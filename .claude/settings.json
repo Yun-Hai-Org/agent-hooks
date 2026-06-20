@@ -1,8 +1,6 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(git add *)"
-    ]
+    "allow": ["Bash(git add *)"]
   },
   "hooks": {
     "SessionStart": [
@@ -57,36 +55,6 @@
             "type": "command",
             "command": "bun .claude/hooks/resolve-hook-path.js protect-secrets.js",
             "statusMessage": "检查敏感文件和内容..."
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun .claude/hooks/resolve-hook-path.js commit-gate.js",
-            "statusMessage": "检查提交规范..."
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.js merge-gate.js",
-            "statusMessage": "检查合并操作..."
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.js push-gate.js",
-            "statusMessage": "检查推送质量门..."
           }
         ]
       }

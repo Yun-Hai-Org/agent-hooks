@@ -34,6 +34,25 @@ export function isToolInstalled(tool, cwd) {
   return execCommand(`command -v ${tool}`, { cwd, env }).success;
 }
 
+/** @param {string} [cwd] */
+export function getRuffInvocation(cwd) {
+  if (execCommand('test -f pyproject.toml', { cwd }).success && isToolInstalled('uv', cwd)) {
+    return 'uv run ruff';
+  }
+  return 'ruff';
+}
+
+/**
+ * @param {string} checkId
+ * @param {string} [cwd]
+ */
+export function denyIfRuffMissing(checkId, cwd) {
+  if (execCommand('test -f pyproject.toml', { cwd }).success && isToolInstalled('uv', cwd)) {
+    return null;
+  }
+  return denyIfToolMissing('ruff', checkId, cwd);
+}
+
 /**
  * @param {string} tool
  * @param {string} checkId
@@ -56,7 +75,9 @@ export function isPyrightAvailable(cwd) {
 export function denyIfPyrightMissing(checkId, cwd) {
   if (!isPyrightAvailable(cwd)) {
     const hint = `${getToolInstallHint('pyright')}；或 ${getToolInstallHint('uv')}`;
-    return formatResult(checkId, DECISION.DENY, `pyright 未安装（需 pyright 或 uv）。请执行: ${hint}`, { installHint: hint });
+    return formatResult(checkId, DECISION.DENY, `pyright 未安装（需 pyright 或 uv）。请执行: ${hint}`, {
+      installHint: hint,
+    });
   }
   return null;
 }

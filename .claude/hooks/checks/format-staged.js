@@ -1,13 +1,11 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
-import { denyIfToolMissing, denyOnToolError } from './tools.js';
+import { denyIfToolMissing, denyOnToolError, denyIfRuffMissing, getRuffInvocation } from './tools.js';
 
 /** @param {string} [cwd] */
 export async function runFormatStaged(cwd) {
   const stagedFiles = getStagedFiles(cwd);
-  const jsFiles = stagedFiles.filter((f) =>
-    /\.(js|ts|jsx|tsx|mjs|cjs|json|md|mdx|yaml|yml|css|scss|less)$/i.test(f),
-  );
+  const jsFiles = stagedFiles.filter((f) => /\.(js|ts|jsx|tsx|mjs|cjs|json|md|mdx|yaml|yml|css|scss|less)$/i.test(f));
   const pyFiles = stagedFiles.filter((f) => f.endsWith('.py'));
 
   if (jsFiles.length === 0 && pyFiles.length === 0) {
@@ -39,12 +37,13 @@ export async function runFormatStaged(cwd) {
   }
 
   if (pyFiles.length > 0 && execCommand('test -f pyproject.toml', { cwd }).success) {
-    const missing = denyIfToolMissing('ruff', 'format-staged-ruff', cwd);
+    const missing = denyIfRuffMissing('format-staged-ruff', cwd);
     if (missing) return missing;
     const files = pyFiles.map((f) => `"${f}"`).join(' ');
+    const ruff = getRuffInvocation(cwd);
     try {
       const ruffFmtResult = await withTimeout(
-        execCommandAsync(`ruff format --check ${files}`, { cwd, timeout: 30000 }),
+        execCommandAsync(`${ruff} format --check ${files}`, { cwd, timeout: 30000 }),
         30000,
         'ruff format staged 超时 (30s)',
       );

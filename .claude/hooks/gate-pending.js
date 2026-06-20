@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { createHash } from 'crypto';
 import { LOG_DIR } from './security-orchestrator.js';
 
 const PENDING_FILE = join(LOG_DIR, 'gate-pending.json');
@@ -30,28 +31,57 @@ function writeStore(store) {
 }
 
 /**
+ * @param {GatePendingEntry} entry
+ */
+export function makeCwdPendingKey(entry) {
+  const hash = createHash('sha256').update(`${entry.type}:${entry.cwd}`).digest('hex').slice(0, 16);
+  return `cwd:${hash}`;
+}
+
+/**
  * @param {string} sessionId
  * @param {GatePendingEntry} entry
  */
 export function setPendingGateFailure(sessionId, entry) {
-  if (!sessionId) return;
   const store = readStore();
-  store[sessionId] = { ...entry, ts: Date.now() };
+  const record = { ...entry, ts: Date.now() };
+  const key = sessionId || makeCwdPendingKey(entry);
+  store[key] = record;
+  if (sessionId) {
+    store[makeCwdPendingKey(entry)] = record;
+  }
   writeStore(store);
 }
 
-/** @param {string} sessionId */
-export function getPendingGateFailure(sessionId) {
-  if (!sessionId) return null;
+/** @param {string} sessionId @param {string} [cwd] */
+export function getPendingGateFailure(sessionId, cwd) {
   const store = readStore();
-  return store[sessionId] || null;
+  if (sessionId && store[sessionId]) return store[sessionId];
+  if (cwd) {
+    for (const type of /** @type {GatePendingType[]} */ (['push', 'merge'])) {
+      const key = makeCwdPendingKey({ type, command: '', cwd });
+      if (store[key]) return store[key];
+    }
+  }
+  return null;
 }
 
-/** @param {string} sessionId */
-export function clearPendingGateFailure(sessionId) {
-  if (!sessionId) return;
+/** @param {string} sessionId @param {string} [cwd] */
+export function clearPendingGateFailure(sessionId, cwd) {
   const store = readStore();
-  if (!store[sessionId]) return;
-  delete store[sessionId];
-  writeStore(store);
+  let changed = false;
+  if (sessionId && store[sessionId]) {
+    delete store[sessionId];
+    changed = true;
+  }
+  if (cwd) {
+    for (const type of /** @type {GatePendingType[]} */ (['push', 'merge'])) {
+      const key = makeCwdPendingKey({ type, command: '', cwd });
+      if (store[key]) {
+        delete store[key];
+        changed = true;
+      }
+    }
+  }
+  if (changed) writeStore(store);
 }

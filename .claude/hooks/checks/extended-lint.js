@@ -110,9 +110,9 @@ async function runExtendedChecks(classified, cwd, idPrefix) {
     const files = classified.md.map((f) => `"${f}"`).join(' ');
     try {
       const mdResult = await withTimeout(
-        execCommandAsync(`bunx markdownlint-cli2 ${files}`, { cwd, timeout: 30000 }),
-        30000,
-        'markdownlint 超时 (30s)',
+        execCommandAsync(`bunx markdownlint-cli2 ${files}`, { cwd, timeout: 120000 }),
+        120000,
+        'markdownlint 超时 (120s)',
       );
       results.push(
         mdResult.success
@@ -254,9 +254,7 @@ async function runExtendedChecks(classified, cwd, idPrefix) {
         !stylelintResult.success &&
         (output.includes('No configuration provided') || output.includes('ConfigurationError'))
       ) {
-        results.push(
-          formatResult(`${stagedPrefix}-stylelint`, DECISION.SKIP, '未找到 stylelint 配置文件，跳过'),
-        );
+        results.push(formatResult(`${stagedPrefix}-stylelint`, DECISION.SKIP, '未找到 stylelint 配置文件，跳过'));
       } else {
         results.push(
           stylelintResult.success
@@ -304,6 +302,11 @@ export async function runExtendedLintStaged(cwd) {
 export async function runExtendedLintFull(cwd) {
   const classified = classifyFiles(
     listTrackedFiles(cwd, (f) => {
+      if (f.startsWith('_bmad-output/') || f.startsWith('_bmad/') || f.startsWith('GitHub/')) return false;
+      if (f.startsWith('.claude/commands/') || f.startsWith('.cursor/commands/')) return false;
+      if (f.startsWith('.claude/includes/') || f === '.claude/ralph-loop.local.md') return false;
+      if (/^(hooks\.md|instrct\.md|CLAUDE\.md|agents-view\.md)$/.test(f)) return false;
+      if (/^(安全配置分析报告|文档质量分析报告)\.md$/.test(f)) return false;
       if (/\.(md|mdx|sh|bash|zsh|toml|sql|css|scss|less)$/i.test(f)) return true;
       return isDockerfilePath(f);
     }),

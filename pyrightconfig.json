@@ -49,9 +49,7 @@
   "reportUntypedNamedTuple": "error",
   "reportPrivateUsage": "warning",
   "reportTypeCommentUsage": "error",
-  "include": [
-    "."
-  ],
+  "include": ["."],
   "exclude": [
     "**/__pycache__",
     "**/.venv",

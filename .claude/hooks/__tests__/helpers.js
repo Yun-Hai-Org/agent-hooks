@@ -4,12 +4,15 @@ import { execSync } from 'child_process';
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join, dirname } from 'path';
 
+/** 仓库根目录（tests 从 .claude/hooks 运行时 cwd 不是根） */
+export const PROJECT_ROOT = join(import.meta.dir, '..', '..', '..');
+
 export function createHookInput(tool, toolInput = {}) {
   return {
     tool_name: tool,
     tool_input: toolInput,
     session_id: 'test-session-001',
-    cwd: process.cwd(),
+    cwd: PROJECT_ROOT,
     permission_mode: 'default',
   };
 }
@@ -23,13 +26,13 @@ export function createTruncatedJsonInput() {
 }
 
 export function createNonUtf8Input() {
-  return Buffer.from([0xFF, 0xFE, 0x00, 0x01]);
+  return Buffer.from([0xff, 0xfe, 0x00, 0x01]);
 }
 
 export function expectDeny(output) {
   if (!output) return false;
   const parsed = typeof output === 'string' ? JSON.parse(output) : output;
-  return parsed?.hookSpecificOutput?.permissionDecision === 'deny';
+  return parsed?.hookSpecificOutput?.permissionDecision === 'deny' || parsed?.permission === 'deny';
 }
 
 export function expectAllow(output) {
@@ -58,7 +61,9 @@ export function createTempGitRepo(branch = 'feat/test') {
 }
 
 export function cleanupTempGitRepo(repoPath) {
-  try { rmSync(repoPath, { recursive: true, force: true }); } catch {}
+  try {
+    rmSync(repoPath, { recursive: true, force: true });
+  } catch {}
 }
 
 export function writeFile(repoPath, relativePath, content) {

@@ -13,6 +13,7 @@ import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { resolveHookPath, PROJECT_HOOKS_DIR, GLOBAL_HOOKS_DIR } from '../resolve-hook-path.js';
 import { HOOKS_DIR, TESTS_DIR, LOG_DIR } from '../security-orchestrator.js';
+import { PROJECT_ROOT } from './helpers.js';
 
 describe('resolve-hook-path', () => {
   let tempDir;
@@ -70,15 +71,14 @@ describe('resolve-hook-path', () => {
     });
 
     it('默认使用 process.cwd() 作为工作目录', () => {
-      // 使用一个已知存在于项目级 hooks 的文件
-      const result = resolveHookPath('security-orchestrator.js');
+      const result = resolveHookPath('security-orchestrator.js', PROJECT_ROOT);
       expect(result).not.toBeNull();
       expect(result.source).toBe('project');
       expect(result.path).toContain('security-orchestrator.js');
     });
 
     it('解析 security-orchestrator.js 存在于项目级', () => {
-      const result = resolveHookPath('security-orchestrator.js');
+      const result = resolveHookPath('security-orchestrator.js', PROJECT_ROOT);
       expect(result).not.toBeNull();
       expect(result.source).toBe('project');
       expect(existsSync(result.path)).toBe(true);

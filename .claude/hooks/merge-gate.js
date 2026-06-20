@@ -9,7 +9,12 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { execCommand, safeMain, log, getCurrentBranch, DECISION } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
-import { extractMergeTarget, isGitMergeCommand, hasUncommittedChanges, buildUncommittedWorktreeDenyReason } from './checks/git-policy.js';
+import {
+  extractMergeTarget,
+  isGitMergeCommand,
+  hasUncommittedChanges,
+  buildUncommittedWorktreeDenyReason,
+} from './checks/git-policy.js';
 import { runQualityGate, logGateResult } from './quality-gate.js';
 import { buildGateDenyReason } from './gate-fix.js';
 import { setPendingGateFailure, clearPendingGateFailure } from './gate-pending.js';
@@ -23,7 +28,10 @@ const HOOK_NAME = 'merge-gate';
 async function runFullOnSourceBranch(repoCwd, sourceBranch) {
   const worktreeDir = mkdtempSync(join(tmpdir(), 'merge-gate-'));
   try {
-    const addResult = execCommand(`git worktree add "${worktreeDir}" "${sourceBranch}"`, { cwd: repoCwd, timeout: 60000 });
+    const addResult = execCommand(`git worktree add "${worktreeDir}" "${sourceBranch}"`, {
+      cwd: repoCwd,
+      timeout: 60000,
+    });
     if (!addResult.success) {
       return {
         passed: false,
@@ -59,7 +67,12 @@ async function main() {
 
     const currentBranch = getCurrentBranch(workingDir);
     if (currentBranch !== 'main' && currentBranch !== 'master') {
-      log(HOOK_NAME, { level: 'SKIP', reason: `当前分支 ${currentBranch} 非 main/master`, session_id, cwd: workingDir });
+      log(HOOK_NAME, {
+        level: 'SKIP',
+        reason: `当前分支 ${currentBranch} 非 main/master`,
+        session_id,
+        cwd: workingDir,
+      });
       console.log(formatAllowOutput());
       return;
     }
@@ -76,9 +89,7 @@ async function main() {
     }
 
     if (hasUncommittedChanges(workingDir)) {
-      console.log(
-        formatDenyOutput(DECISION.DENY, buildUncommittedWorktreeDenyReason(workingDir, 'merge')),
-      );
+      console.log(formatDenyOutput(DECISION.DENY, buildUncommittedWorktreeDenyReason(workingDir, 'merge')));
       return;
     }
 
@@ -116,9 +127,4 @@ if (isDirectRun) {
   main();
 }
 
-export {
-  extractMergeTarget,
-  getCurrentBranch,
-  runFullOnSourceBranch,
-  main,
-};
+export { extractMergeTarget, getCurrentBranch, runFullOnSourceBranch, main };

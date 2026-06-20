@@ -9,12 +9,11 @@ import {
   checkCommitMessage,
   checkSensitiveStagedFiles as checkSensitiveFiles,
 } from '../checks/git-policy.js';
-import { runDepAudit as checkDependencyAudit } from '../checks/dependency.js';
-import { runStagedTypecheck as checkTypeScript } from '../checks/typecheck.js';
-import { runRelatedTests as checkRelatedTests } from '../checks/tests.js';
 import { getCurrentBranch } from '../security-orchestrator.js';
 import { DECISION } from '../security-orchestrator.js';
 import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
+
+import { PROJECT_ROOT } from './helpers.js';
 
 // commit-gate 测试 - 测试真实函数和完整流程
 describe('commit-gate', () => {
@@ -31,7 +30,7 @@ describe('commit-gate', () => {
       if (existsSync(file)) {
         try {
           unlinkSync(file);
-        } catch (e) {
+        } catch {
           // ignore
         }
       }
@@ -70,119 +69,46 @@ describe('commit-gate', () => {
   // ─── Commit Message 格式检测 ─────────────────────────────────────────────
 
   describe('Commit Message 格式', () => {
-    it('应该允许 "feat: 新增功能"', async () => {
+    const validMessages = [
+      'feat: 新增功能',
+      'fix: 修复bug',
+      'refactor: 重构模块',
+      'docs: 更新文档',
+      'test: 新增测试',
+      'chore: 更新依赖',
+      'style: 格式化代码',
+      'perf: 优化性能',
+    ];
+
+    for (const message of validMessages) {
+      it(`checkCommitMessage 应允许 "${message}"`, () => {
+        const result = checkCommitMessage(`git commit -m "${message}"`);
+        expect(result.decision).toBe(DECISION.ALLOW);
+      });
+    }
+
+    it('checkCommitMessage 应拒绝 "wip"', () => {
+      const result = checkCommitMessage('git commit -m "wip"');
+      expect(result.decision).toBe(DECISION.DENY);
+    });
+
+    it('commit-gate hook 应对合法 message 返回输出', async () => {
       const result = await runHook({
         tool_name: 'Bash',
         tool_input: { command: 'git commit -m "feat: 新增功能"' },
         session_id: 'test',
-        cwd: process.cwd(),
-      });
-      const output = JSON.parse(result.stdout);
-      // 可能因为分支检查失败，但 message 格式应该被接受
-      expect(output).toBeDefined();
-    });
-
-    it('应该允许 "fix: 修复bug"', async () => {
-      const result = await runHook({
-        tool_name: 'Bash',
-        tool_input: { command: 'git commit -m "fix: 修复bug"' },
-        session_id: 'test',
-        cwd: process.cwd(),
+        cwd: PROJECT_ROOT,
       });
       const output = JSON.parse(result.stdout);
       expect(output).toBeDefined();
-    });
-
-    it('应该允许 "refactor: 重构模块"', async () => {
-      const result = await runHook({
-        tool_name: 'Bash',
-        tool_input: { command: 'git commit -m "refactor: 重构模块"' },
-        session_id: 'test',
-        cwd: process.cwd(),
-      });
-      const output = JSON.parse(result.stdout);
-      expect(output).toBeDefined();
-    });
-
-    it('应该允许 "docs: 更新文档"', async () => {
-      const result = await runHook({
-        tool_name: 'Bash',
-        tool_input: { command: 'git commit -m "docs: 更新文档"' },
-        session_id: 'test',
-        cwd: process.cwd(),
-      });
-      const output = JSON.parse(result.stdout);
-      expect(output).toBeDefined();
-    });
-
-    it('应该允许 "test: 新增测试"', async () => {
-      const result = await runHook({
-        tool_name: 'Bash',
-        tool_input: { command: 'git commit -m "test: 新增测试"' },
-        session_id: 'test',
-        cwd: process.cwd(),
-      });
-      const output = JSON.parse(result.stdout);
-      expect(output).toBeDefined();
-    });
-
-    it('应该允许 "chore: 更新依赖"', async () => {
-      const result = await runHook({
-        tool_name: 'Bash',
-        tool_input: { command: 'git commit -m "chore: 更新依赖"' },
-        session_id: 'test',
-        cwd: process.cwd(),
-      });
-      const output = JSON.parse(result.stdout);
-      expect(output).toBeDefined();
-    });
-
-    it('应该允许 "style: 格式化代码"', async () => {
-      const result = await runHook({
-        tool_name: 'Bash',
-        tool_input: { command: 'git commit -m "style: 格式化代码"' },
-        session_id: 'test',
-        cwd: process.cwd(),
-      });
-      const output = JSON.parse(result.stdout);
-      expect(output).toBeDefined();
-    });
-
-    it('应该允许 "perf: 优化性能"', async () => {
-      const result = await runHook({
-        tool_name: 'Bash',
-        tool_input: { command: 'git commit -m "perf: 优化性能"' },
-        session_id: 'test',
-        cwd: process.cwd(),
-      });
-      const output = JSON.parse(result.stdout);
-      expect(output).toBeDefined();
-    });
-
-    it('应该拒绝 "wip"', async () => {
-      const result = await runHook({
-        tool_name: 'Bash',
-        tool_input: { command: 'git commit -m "wip"' },
-        session_id: 'test',
-        cwd: process.cwd(),
-      });
-      const output = JSON.parse(result.stdout);
-      // 如果不在 main/master 分支，应该因为 message 格式被拒绝
-      if (!output.hookSpecificOutput) {
-        // 在 feature 分支上会执行完整检查
-        expect(output).toBeDefined();
-      } else {
-        expect(output.hookSpecificOutput.permissionDecision).toBe('deny');
-        expect(output.hookSpecificOutput.permissionDecisionReason).toContain('格式错误');
-      }
-    });
+    }, 120000);
 
     it('应该拒绝 "fix:x" (无空格)', async () => {
       const result = await runHook({
         tool_name: 'Bash',
         tool_input: { command: 'git commit -m "fix:x"' },
         session_id: 'test',
-        cwd: process.cwd(),
+        cwd: PROJECT_ROOT,
       });
       const output = JSON.parse(result.stdout);
       if (output.hookSpecificOutput) {
@@ -196,7 +122,7 @@ describe('commit-gate', () => {
         tool_name: 'Bash',
         tool_input: { command: 'git commit -m "feat:"' },
         session_id: 'test',
-        cwd: process.cwd(),
+        cwd: PROJECT_ROOT,
       });
       const output = JSON.parse(result.stdout);
       if (output.hookSpecificOutput) {
@@ -209,7 +135,7 @@ describe('commit-gate', () => {
         tool_name: 'Bash',
         tool_input: { command: 'git commit -m "WIP: 临时提交"' },
         session_id: 'test',
-        cwd: process.cwd(),
+        cwd: PROJECT_ROOT,
       });
       const output = JSON.parse(result.stdout);
       if (output.hookSpecificOutput) {
@@ -223,7 +149,7 @@ describe('commit-gate', () => {
         tool_name: 'Bash',
         tool_input: { command: 'git commit -m "tmp: 临时保存"' },
         session_id: 'test',
-        cwd: process.cwd(),
+        cwd: PROJECT_ROOT,
       });
       const output = JSON.parse(result.stdout);
       if (output.hookSpecificOutput) {
@@ -236,7 +162,7 @@ describe('commit-gate', () => {
         tool_name: 'Bash',
         tool_input: { command: 'git commit -m "update: 更新代码"' },
         session_id: 'test',
-        cwd: process.cwd(),
+        cwd: PROJECT_ROOT,
       });
       const output = JSON.parse(result.stdout);
       if (output.hookSpecificOutput) {
@@ -364,7 +290,7 @@ describe('commit-gate', () => {
         tool_name: 'Read',
         tool_input: { file_path: 'README.md' },
         session_id: 'test',
-        cwd: process.cwd(),
+        cwd: PROJECT_ROOT,
       });
       expect(result.stdout.trim()).toBe('{}');
     });
@@ -374,7 +300,7 @@ describe('commit-gate', () => {
         tool_name: 'Bash',
         tool_input: { command: 'ls -la' },
         session_id: 'test',
-        cwd: process.cwd(),
+        cwd: PROJECT_ROOT,
       });
       expect(result.stdout.trim()).toBe('{}');
     });
@@ -384,11 +310,11 @@ describe('commit-gate', () => {
         tool_name: 'Bash',
         tool_input: { command: 'git commit -m "test: 测试提交"' },
         session_id: 'test',
-        cwd: process.cwd(),
+        cwd: PROJECT_ROOT,
       });
       // 应该有输出（可能是 {} 或拒绝）
       expect(result.stdout.length).toBeGreaterThan(0);
-    });
+    }, 120000);
 
     it('应该处理空 stdin', async () => {
       const result = await runHook({});

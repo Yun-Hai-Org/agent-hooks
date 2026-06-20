@@ -2,11 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { existsSync, rmSync } from 'fs';
 import { join } from 'path';
 import { LOG_DIR } from '../security-orchestrator.js';
-import {
-  setPendingGateFailure,
-  getPendingGateFailure,
-  clearPendingGateFailure,
-} from '../gate-pending.js';
+import { setPendingGateFailure, getPendingGateFailure, clearPendingGateFailure } from '../gate-pending.js';
 import { buildGateDenyReason, buildGateRetryPassMessage, buildGateRetryMergeSuccessMessage } from '../gate-fix.js';
 import { isAutoRetryMergeEnabled } from '../gate-retry-stop.js';
 
@@ -34,7 +30,12 @@ describe('gate-pending', () => {
   });
 
   it('clear 后应为空', () => {
-    setPendingGateFailure('sess-1', { type: 'merge', command: 'git merge feat/x', cwd: '/tmp', sourceBranch: 'feat/x' });
+    setPendingGateFailure('sess-1', {
+      type: 'merge',
+      command: 'git merge feat/x',
+      cwd: '/tmp',
+      sourceBranch: 'feat/x',
+    });
     clearPendingGateFailure('sess-1');
     expect(getPendingGateFailure('sess-1')).toBeNull();
   });
