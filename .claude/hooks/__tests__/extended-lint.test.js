@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'bun:test';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { classifyFiles, isDockerfilePath } from '../checks/file-patterns.js';
+import {
+  classifyFiles,
+  isDockerComposePath,
+  isDockerfilePath,
+  isK8sManifestCandidatePath,
+} from '../checks/file-patterns.js';
 import {
   HADOLINT_SECURITY_RULES,
   getHadolintSeverity,
@@ -21,11 +26,26 @@ describe('extended-lint', () => {
       expect(isDockerfilePath('src/index.js')).toBe(false);
     });
 
+    it('isDockerComposePath 应识别 compose 文件并排除 override', () => {
+      expect(isDockerComposePath('docker-compose.yml')).toBe(true);
+      expect(isDockerComposePath('docker-compose.prod.yaml')).toBe(true);
+      expect(isDockerComposePath('compose.yml')).toBe(true);
+      expect(isDockerComposePath('docker-compose.override.yml')).toBe(false);
+      expect(isDockerComposePath('k8s/deployment.yaml')).toBe(false);
+    });
+
+    it('isK8sManifestCandidatePath 应识别 K8s 路径', () => {
+      expect(isK8sManifestCandidatePath('k8s/deployment.yaml')).toBe(true);
+      expect(isK8sManifestCandidatePath('docker-compose.yml')).toBe(false);
+      expect(isK8sManifestCandidatePath('.github/workflows/ci.yml')).toBe(false);
+    });
+
     it('classifyFiles 应按扩展名分类', () => {
       const files = [
         'README.md',
         'scripts/deploy.sh',
         'Dockerfile',
+        'docker-compose.yml',
         'pyproject.toml',
         'query.sql',
         'styles/app.css',
@@ -36,6 +56,7 @@ describe('extended-lint', () => {
       expect(c.md).toEqual(['README.md']);
       expect(c.shell).toEqual(['scripts/deploy.sh']);
       expect(c.docker).toEqual(['Dockerfile']);
+      expect(c.compose).toEqual(['docker-compose.yml']);
       expect(c.toml).toEqual(['pyproject.toml']);
       expect(c.sql).toEqual(['query.sql']);
       expect(c.css).toEqual(['styles/app.css']);
@@ -122,6 +143,7 @@ describe('extended-lint', () => {
     it('扩展 lint 工具应有安装 hint', () => {
       expect(getToolInstallHint('shellcheck')).toContain('shellcheck');
       expect(getToolInstallHint('hadolint')).toContain('hadolint');
+      expect(getToolInstallHint('docker')).toContain('docker');
       expect(getToolInstallHint('taplo')).toContain('taplo');
       expect(getToolInstallHint('sqlfluff')).toContain('sqlfluff');
     });
@@ -133,6 +155,13 @@ describe('extended-lint', () => {
       const content = readFileSync(sourceFile, 'utf-8');
       expect(content).toContain('sqlfluff lint');
       expect(content).toContain('--dialect ansi');
+    });
+
+    it('应包含 docker compose config 校验', () => {
+      const sourceFile = join(import.meta.dir, '..', 'checks', 'extended-lint.js');
+      const content = readFileSync(sourceFile, 'utf-8');
+      expect(content).toContain('docker compose -f');
+      expect(content).toContain('config --quiet');
     });
 
     it('shell 检查块内应先 shfmt 后 shellcheck', () => {

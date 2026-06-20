@@ -1,6 +1,12 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
-import { classifyFiles, hasStylelintConfig, isDockerfilePath, listTrackedFiles } from './file-patterns.js';
+import {
+  classifyFiles,
+  hasStylelintConfig,
+  isDockerComposePath,
+  isDockerfilePath,
+  listTrackedFiles,
+} from './file-patterns.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
 
 /** @type {Record<string, string>} */
@@ -193,6 +199,31 @@ async function runExtendedChecks(classified, cwd, idPrefix) {
     }
   }
 
+  if (classified.compose.length > 0) {
+    const missing = denyIfToolMissing('docker', `${stagedPrefix}-compose`, cwd);
+    if (missing) return missing;
+
+    for (const file of classified.compose) {
+      try {
+        const composeResult = await withTimeout(
+          execCommandAsync(`docker compose -f "${file}" config --quiet`, { cwd, timeout: 30000 }),
+          30000,
+          `docker compose 超时 (30s): ${file}`,
+        );
+        const rawOutput = composeResult.stdout || composeResult.stderr;
+        results.push(
+          composeResult.success
+            ? formatResult(`${stagedPrefix}-compose`, DECISION.ALLOW, `docker compose 检查通过: ${file}`)
+            : formatResult(`${stagedPrefix}-compose`, DECISION.DENY, `docker compose 检查失败: ${file}`, {
+                output: rawOutput.slice(0, 500),
+              }),
+        );
+      } catch (e) {
+        results.push(denyOnToolError(e, `${stagedPrefix}-compose`, 'docker compose'));
+      }
+    }
+  }
+
   if (classified.toml.length > 0) {
     const missing = denyIfToolMissing('taplo', `${formatPrefix}-taplo`, cwd);
     if (missing) return missing;
@@ -281,11 +312,12 @@ async function runExtendedChecks(classified, cwd, idPrefix) {
 /** @param {string} [cwd] */
 export async function runExtendedLintStaged(cwd) {
   const staged = getStagedFiles(cwd);
-  const classified = classifyFiles(staged);
+  const classified = classifyFiles(staged, cwd);
   const hasTargets =
     classified.md.length +
       classified.shell.length +
       classified.docker.length +
+      classified.compose.length +
       classified.toml.length +
       classified.sql.length +
       classified.css.length >
@@ -308,14 +340,17 @@ export async function runExtendedLintFull(cwd) {
       if (/^(hooks\.md|instrct\.md|CLAUDE\.md|agents-view\.md)$/.test(f)) return false;
       if (/^(安全配置分析报告|文档质量分析报告)\.md$/.test(f)) return false;
       if (/\.(md|mdx|sh|bash|zsh|toml|sql|css|scss|less)$/i.test(f)) return true;
+      if (isDockerComposePath(f)) return true;
       return isDockerfilePath(f);
     }),
+    cwd,
   );
 
   const hasTargets =
     classified.md.length +
       classified.shell.length +
       classified.docker.length +
+      classified.compose.length +
       classified.toml.length +
       classified.sql.length +
       classified.css.length >

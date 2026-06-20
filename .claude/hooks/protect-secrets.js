@@ -133,6 +133,12 @@ const SENSITIVE_FILES = [
   },
   { level: 'strict', id: 'gitconfig', regex: /(?:^|\/)\.gitconfig$/, reason: '.gitconfig may contain credentials' },
   { level: 'strict', id: 'curlrc', regex: /(?:^|\/)\.curlrc$/, reason: '.curlrc may contain auth' },
+  {
+    level: 'strict',
+    id: 'docker-compose-override',
+    regex: /(?:^|\/)docker-compose\.override\.ya?ml$/i,
+    reason: 'docker-compose.override.yml may contain environment secrets',
+  },
 ];
 
 // Bash patterns that expose or exfiltrate secrets

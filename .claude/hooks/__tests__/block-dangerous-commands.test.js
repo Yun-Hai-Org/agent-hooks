@@ -135,6 +135,31 @@ describe('block-dangerous-commands', () => {
     expect(r.blocked).toBe(false);
   });
 
+  it('应该阻止 kubectl get secret', () => {
+    const r = checkCommand('kubectl get secret my-secret -n default');
+    expect(r.blocked).toBe(true);
+  });
+
+  it('应该阻止 kubectl describe secret', () => {
+    const r = checkCommand('kubectl describe secret my-secret');
+    expect(r.blocked).toBe(true);
+  });
+
+  it('应该允许 kubectl get pods', () => {
+    const r = checkCommand('kubectl get pods -n default');
+    expect(r.blocked).toBe(false);
+  });
+
+  it('应该阻止 docker exec 打印环境变量', () => {
+    const r = checkCommand('docker exec mycontainer env');
+    expect(r.blocked).toBe(true);
+  });
+
+  it('应该允许 docker ps', () => {
+    const r = checkCommand('docker ps');
+    expect(r.blocked).toBe(false);
+  });
+
   // Hook 绕过防护
   it('应该阻止 git -c core.hooksPath 绕过', () => {
     const r = checkCommand('git -c core.hooksPath=/dev/null commit -m "msg"');
