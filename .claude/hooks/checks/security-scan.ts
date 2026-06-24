@@ -97,12 +97,9 @@ const CODE_FILE_PATTERN =
 
 const SEMGREP_CONFIGS = '--config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten';
 const SEMGREP_SEVERITY = '--severity ERROR --severity WARNING --severity INFO';
-// 领域结构性误报规则：本仓库是本地 git hook CLI，核心职责即执行 git/lint 命令并基于受信 cwd 解析路径，
-// 故停用 child_process / path-join-traversal 两条规则；其余 secrets/owasp/injection 规则保持强制。
-const SEMGREP_EXCLUDED_RULES = [
-  'javascript.lang.security.detect-child-process.detect-child-process',
-  'javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal',
-];
+// 全部规则保持全局强制。原先全局停用的 child_process / path-join-traversal 两条规则，
+// 已改为在确属受信的调用点用行内 `// nosemgrep: <rule-id>` 精确豁免，避免全局停用掩盖真实风险。
+const SEMGREP_EXCLUDED_RULES: string[] = [];
 const SEMGREP_EXCLUDE_RULE_FLAGS = SEMGREP_EXCLUDED_RULES.map((r) => `--exclude-rule ${r}`).join(' ');
 const SEMGREP_STAGED_TIMEOUT_MS = 60000;
 // 全量扫描需遍历全仓库且与 trivy/全量测试等重负载并行，60s 在满载下不足，给 180s 余量。

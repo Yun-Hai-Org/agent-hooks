@@ -19,7 +19,9 @@ export function runLockfileFreshness(cwd: string = process.cwd(), options: { sta
   const checked: string[] = [];
   const failures: string[] = [];
 
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 为受信仓库根，第二参为常量文件名
   const hasPackageJson = existsSync(join(cwd, 'package.json'));
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 为受信仓库根，第二参为常量文件名
   const hasBunLock = existsSync(join(cwd, 'bun.lock')) || existsSync(join(cwd, 'bun.lockb'));
   const jsTrigger = staged ? isStaged('package.json') : hasPackageJson;
   if (jsTrigger && hasPackageJson && hasBunLock) {
@@ -30,7 +32,9 @@ export function runLockfileFreshness(cwd: string = process.cwd(), options: { sta
     }
   }
 
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 为受信仓库根，第二参为常量文件名
   const hasPyproject = existsSync(join(cwd, 'pyproject.toml'));
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 为受信仓库根，第二参为常量文件名
   const hasUvLock = existsSync(join(cwd, 'uv.lock'));
   const pyTrigger = staged ? isStaged('pyproject.toml') : hasPyproject;
   if (pyTrigger && hasPyproject && hasUvLock) {

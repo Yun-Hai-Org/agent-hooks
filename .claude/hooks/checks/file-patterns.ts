@@ -32,6 +32,7 @@ export function isOpenApiSpecPath(filePath: string, cwd?: string): boolean {
   if (OPENAPI_FILENAME.test(basename(filePath)) || OPENAPI_DIR.test(filePath)) return true;
   if (!cwd) return false;
   try {
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 受信，filePath 为待检测的暂存文件路径，仅读取首 4KB 做类型判定
     const content = readFileSync(join(cwd, filePath), 'utf-8').slice(0, 4096);
     return looksLikeOpenApiSpecContent(content);
   } catch {
@@ -82,6 +83,7 @@ export function isK8sManifestPath(filePath: string, cwd?: string): boolean {
   if (K8S_RESOURCE_FILENAME.test(basename(filePath))) return true;
   if (!cwd) return false;
   try {
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 受信，filePath 为待检测的暂存文件路径，仅读取首 4KB 做类型判定
     const content = readFileSync(join(cwd, filePath), 'utf-8').slice(0, 4096);
     return looksLikeK8sManifestContent(content);
   } catch {

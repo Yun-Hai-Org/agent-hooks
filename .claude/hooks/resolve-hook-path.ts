@@ -39,12 +39,14 @@ export function resolveHookPath(hookFile: string, cwd?: string) {
   const workingDir = cwd ?? process.cwd();
 
   // 1. 项目级优先
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- workingDir 受信，hookFile 已校验为 .ts 且仅用于解析 hook 脚本
   const projectPath = resolve(workingDir, PROJECT_HOOKS_DIR, hookFile);
   if (existsSync(projectPath)) {
     return { path: projectPath, source: 'project' };
   }
 
   // 2. 回退到全局
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- GLOBAL_HOOKS_DIR 为常量，hookFile 已校验为 .ts
   const globalPath = resolve(GLOBAL_HOOKS_DIR, hookFile);
   if (existsSync(globalPath)) {
     return { path: globalPath, source: 'global' };

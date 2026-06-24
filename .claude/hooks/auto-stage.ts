@@ -31,6 +31,7 @@ function isInGitRepo(filePath: string) {
 function stageFile(filePath: string) {
   try {
     const dir = dirname(filePath);
+    // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process -- 命令参数为内部构造，cwd 为受信文件目录
     execSync(`git add "${filePath}"`, { cwd: dir, stdio: 'pipe' });
     return { success: true };
   } catch (/** @type {unknown} */ e) {

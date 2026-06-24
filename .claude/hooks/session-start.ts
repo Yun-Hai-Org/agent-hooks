@@ -30,6 +30,7 @@ function log(data: Record<string, unknown>) {
 
 function getToolVersion(command: string): string {
   try {
+    // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process -- command 为内部固定的工具版本探测命令
     const output = execSync(command, {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -48,6 +49,7 @@ function getToolVersion(command: string): string {
 
 function checkTool(name: string, binary: string, versionCmd?: string): ToolStatus {
   try {
+    // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process -- binary 为内部固定的工具名
     execSync(`which ${binary}`, { stdio: 'pipe', timeout: PER_TOOL_TIMEOUT_MS });
     const version = versionCmd ? getToolVersion(versionCmd) : '';
     return { name, available: true, version };

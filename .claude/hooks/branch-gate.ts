@@ -53,6 +53,7 @@ function getCurrentBranch(cwd: string) {
 
 function isInsideWorktree(cwd: string) {
   try {
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 为受信工作目录，第二参为常量
     const gitPath = join(cwd, '.git');
     if (!existsSync(gitPath)) return false;
     return statSync(gitPath).isFile();
