@@ -24,18 +24,18 @@ async function main() {
       return;
     }
 
-    const cmd = tool_input?.command || '';
+    const cmd = tool_input.command ?? '';
     if (!isGitCommitCommand(cmd)) {
       console.log(formatAllowOutput());
       return;
     }
 
-    const gateResult = await runQualityGate({ profile: 'commit', cwd: cwd || process.cwd(), commitCmd: cmd });
+    const gateResult = await runQualityGate({ profile: 'commit', cwd, commitCmd: cmd });
 
-    logGateResult(HOOK_NAME, gateResult, { profile: 'commit', session_id, cwd: cwd || process.cwd() });
+    logGateResult(HOOK_NAME, gateResult, { profile: 'commit', session_id, cwd });
 
     if (!gateResult.passed) {
-      console.log(formatDenyOutput(DECISION.DENY, `🚫 提交门未通过:\n${gateResult.decision.reason}`));
+      console.log(formatDenyOutput(DECISION.DENY, `🚫 提交门未通过:\n${gateResult.decision.reason ?? ''}`));
       return;
     }
 
@@ -44,7 +44,7 @@ async function main() {
 }
 
 if (import.meta.main) {
-  main();
+  void main();
 }
 
 export { main };

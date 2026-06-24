@@ -7,7 +7,7 @@ import { denyIfToolMissing, denyOnToolError } from './tools.js';
 import type { CheckResult } from '../types.js';
 
 export function findSchemaFile(filePath: string, cwd?: string): string | null {
-  const absPath = filePath.startsWith('/') ? filePath : join(cwd || process.cwd(), filePath);
+  const absPath = filePath.startsWith('/') ? filePath : join(cwd ?? process.cwd(), filePath);
   const dir = dirname(absPath);
   const ext = extname(absPath);
   const baseName = basename(absPath, ext);
@@ -15,7 +15,7 @@ export function findSchemaFile(filePath: string, cwd?: string): string | null {
   if (ext === '.json') {
     try {
       const content = readFileSync(absPath, 'utf-8');
-      const parsed = JSON.parse(content);
+      const parsed = JSON.parse(content) as { $schema?: string };
       if (parsed.$schema) {
         if (parsed.$schema.startsWith('http://') || parsed.$schema.startsWith('https://')) {
           return parsed.$schema;
@@ -81,7 +81,7 @@ async function runSchemaChecks(jsonFiles: string[], yamlFiles: string[], idPrefi
     return formatResult(`${idPrefix}-schema`, DECISION.SKIP, '无 JSON/YAML 文件，跳过 schema 检查');
   }
 
-  const schemaTargets: Array<{ file: string; format: 'json' | 'yaml' }> = [
+  const schemaTargets: { file: string; format: 'json' | 'yaml' }[] = [
     ...jsonFiles.map((f) => ({ file: f, format: 'json' as const })),
     ...yamlFiles.map((f) => ({ file: f, format: 'yaml' as const })),
   ];

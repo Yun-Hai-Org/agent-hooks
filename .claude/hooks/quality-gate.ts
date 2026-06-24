@@ -32,14 +32,24 @@ import { runSchemaLintStaged, runSchemaLintFull } from './checks/schema-lint.js'
 import { runK8sLintStaged, runK8sLintFull } from './checks/k8s-lint.js';
 import { runOpenApiContractStaged, runOpenApiContractFull } from './checks/openapi-contract.js';
 
-import type { QualityGateParseOptions, QualityGateProfile, CheckResult, QualityGateResult } from './types.js';
+import type { QualityGateParseOptions, CheckResult, QualityGateResult } from './types.js';
+
+interface CheckFailureDetail {
+  tool?: string;
+  stdout?: string;
+  stderr?: string;
+}
+
+function isCheckFailureDetail(value: unknown): value is CheckFailureDetail {
+  return typeof value === 'object' && value !== null;
+}
 
 export function parseArgs(argv: string[]): QualityGateParseOptions {
   const options: QualityGateParseOptions = { profile: 'full', cwd: process.cwd(), json: false };
   for (const arg of argv) {
     if (arg.startsWith('--profile=')) {
       const p = arg.slice('--profile='.length);
-      if (p === 'commit' || p === 'full') options.profile = p as QualityGateProfile;
+      if (p === 'commit' || p === 'full') options.profile = p;
     } else if (arg.startsWith('--cwd=')) {
       options.cwd = arg.slice('--cwd='.length);
     } else if (arg === '--json') {
@@ -96,7 +106,7 @@ export async function runQualityGate(
       runLintStaged(cwd),
       runFormatStaged(cwd),
       runGitleaksStaged(cwd),
-      runCodeReview(cwd, { staged: true }),
+      Promise.resolve(runCodeReview(cwd, { staged: true })),
       runHookAdversarialIfStaged(cwd),
       runExtendedLintStaged(cwd),
       runSchemaLintStaged(cwd),
@@ -152,8 +162,8 @@ export async function runQualityGate(
     runKnip(cwd),
     runTrivy(cwd),
     runFormatFull(cwd),
-    runCoverage(cwd),
-    runCodeReview(cwd),
+    Promise.resolve(runCoverage(cwd)),
+    Promise.resolve(runCodeReview(cwd)),
     runExtendedLintFull(cwd),
     runSchemaLintFull(cwd),
     runK8sLintFull(cwd),
@@ -194,13 +204,12 @@ export function summarizeCheckDetails(details: Record<string, unknown> | undefin
   }
   if (Array.isArray(details['failures'])) {
     for (const failure of details['failures']) {
-      if (!failure || typeof failure !== 'object') continue;
-      const f = /** @type {{ tool?: string; stdout?: string; stderr?: string }} */ failure;
-      const text = [f.stderr, f.stdout]
+      if (!isCheckFailureDetail(failure)) continue;
+      const text = [failure.stderr, failure.stdout]
         .filter((s) => typeof s === 'string' && s.trim())
         .join('\n')
         .trim();
-      parts.push(text ? `${f.tool ?? 'tool'}:\n${text}` : `${f.tool ?? 'tool'}: failed`);
+      parts.push(text ? `${failure.tool ?? 'tool'}:\n${text}` : `${failure.tool ?? 'tool'}: failed`);
     }
   }
   if (Array.isArray(details['findings']) && details['findings'].length > 0) {
@@ -249,7 +258,7 @@ export function logGateResult(
 const DECISION_ICONS: Record<string, string> = { allow: '✅', deny: '❌', skip: '⏭️', warn: '⚠️' };
 
 export function formatCheckSummaryLine(r: CheckResult) {
-  const icon = DECISION_ICONS[r.decision] || '📋';
+  const icon = DECISION_ICONS[r.decision] ?? '📋';
   let line = `${icon} [${r.checkId}] ${r.message}`;
   if (r.decision === DECISION.DENY || r.decision === DECISION.WARN) {
     const details = summarizeCheckDetails(r.details);
@@ -292,5 +301,5 @@ async function main() {
 
 const isDirectRun = import.meta.main;
 if (isDirectRun) {
-  main();
+  void main();
 }

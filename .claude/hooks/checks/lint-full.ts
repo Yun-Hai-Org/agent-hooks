@@ -63,5 +63,5 @@ export async function runLintFull(cwd?: string) {
     return formatResult('lint-full', DECISION.SKIP, '未找到 lint 配置，跳过');
   }
   const failure = results.find((r) => r.decision === DECISION.DENY);
-  return failure || formatResult('lint-full', DECISION.ALLOW, '全量 lint 通过');
+  return failure ?? formatResult('lint-full', DECISION.ALLOW, '全量 lint 通过');
 }

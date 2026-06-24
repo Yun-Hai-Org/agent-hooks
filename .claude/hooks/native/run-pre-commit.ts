@@ -30,11 +30,11 @@ async function main() {
   logGateResult(HOOK_NAME, gateResult, { profile: 'commit', cwd });
 
   if (!gateResult.passed) {
-    console.error(gateResult.decision.reason || 'pre-commit quality gate failed');
+    console.error(gateResult.decision.reason ?? 'pre-commit quality gate failed');
     process.exit(1);
   }
 
   process.exit(0);
 }
 
-main();
+void main();

@@ -58,7 +58,7 @@ async function main() {
       return;
     }
 
-    const cmd = tool_input?.command || '';
+    const cmd = tool_input.command ?? '';
     if (!isGitMergeCommand(cmd)) {
       console.log(formatAllowOutput());
       return;
@@ -68,7 +68,7 @@ async function main() {
     if (currentBranch !== 'main' && currentBranch !== 'master') {
       log(HOOK_NAME, {
         level: 'SKIP',
-        reason: `当前分支 ${currentBranch} 非 main/master`,
+        reason: `当前分支 ${currentBranch ?? 'unknown'} 非 main/master`,
         session_id,
         cwd: workingDir,
       });
@@ -122,7 +122,7 @@ async function main() {
 }
 
 if (import.meta.main) {
-  main();
+  void main();
 }
 
 export { extractMergeTarget, getCurrentBranch, runFullOnSourceBranch, main };

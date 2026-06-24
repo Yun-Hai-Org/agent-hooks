@@ -22,7 +22,7 @@ async function runOasdiffBreaking(filePath: string, idPrefix: string, cwd?: stri
     const result = await withTimeout(
       execCommandAsync(cmd, { cwd, timeout: OASDIFF_STAGED_TIMEOUT_MS }),
       OASDIFF_STAGED_TIMEOUT_MS,
-      `oasdiff 超时 (${OASDIFF_STAGED_TIMEOUT_MS / 1000}s): ${filePath}`,
+      `oasdiff 超时 (${String(OASDIFF_STAGED_TIMEOUT_MS / 1000)}s): ${filePath}`,
     );
     const output = [result.stderr, result.stdout].filter(Boolean).join('\n').trim();
     if (!result.success) {
@@ -52,7 +52,7 @@ async function runOpenApiChecks(files: string[], idPrefix: string, cwd?: string,
       const result = await withTimeout(
         execCommandAsync(cmd, { cwd, timeout: timeoutMs }),
         timeoutMs,
-        `oasdiff 超时 (${timeoutMs / 1000}s): ${file}`,
+        `oasdiff 超时 (${String(timeoutMs / 1000)}s): ${file}`,
       );
       const output = [result.stderr, result.stdout].filter(Boolean).join('\n').trim();
       results.push(
@@ -75,7 +75,7 @@ async function runOpenApiChecks(files: string[], idPrefix: string, cwd?: string,
     return formatResult(idPrefix, DECISION.SKIP, 'OpenAPI spec 无 HEAD 基线，跳过 breaking 检测');
   }
 
-  return formatResult(idPrefix, DECISION.ALLOW, `OpenAPI 契约检查通过（${checked.length} 个 spec）`);
+  return formatResult(idPrefix, DECISION.ALLOW, `OpenAPI 契约检查通过（${String(checked.length)} 个 spec）`);
 }
 
 export async function runOpenApiContractStaged(cwd?: string) {
@@ -101,7 +101,7 @@ export async function runOpenApiContractStaged(cwd?: string) {
     return formatResult('openapi-staged', DECISION.SKIP, '暂存 OpenAPI spec 无 HEAD 基线，跳过 breaking 检测');
   }
 
-  return formatResult('openapi-staged', DECISION.ALLOW, `OpenAPI 契约检查通过（${checked.length} 个 spec）`);
+  return formatResult('openapi-staged', DECISION.ALLOW, `OpenAPI 契约检查通过（${String(checked.length)} 个 spec）`);
 }
 
 export async function runOpenApiContractFull(cwd?: string) {

@@ -80,7 +80,7 @@ export async function runStagedTypecheck(cwd?: string) {
       (v) => !v.success,
     );
     if (failures.length > 0) {
-      const messages = failures.map((f) => `${formatTypecheckToolOutput(f)}`).join('\n\n');
+      const messages = failures.map((f) => formatTypecheckToolOutput(f)).join('\n\n');
       return formatResult('type-check', DECISION.DENY, `类型检查失败:\n${messages.slice(0, 800)}`, { failures });
     }
     return formatResult('type-check', DECISION.ALLOW, '类型检查通过');

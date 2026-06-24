@@ -30,8 +30,8 @@ interface NotificationHookInput {
 }
 
 export async function handleNotification(data: NotificationHookInput) {
-  const message = data?.tool_input?.message || '';
-  const session_id = data?.session_id || '';
+  const message = data.tool_input?.message ?? '';
+  const session_id = data.session_id ?? '';
   return dispatchSecurityNotification({ message, session_id }, HOOK_NAME);
 }
 
@@ -42,7 +42,7 @@ async function main() {
 }
 
 if (import.meta.main) {
-  safeMain(main);
+  void safeMain(main);
 }
 
 export { HOOK_NAME };

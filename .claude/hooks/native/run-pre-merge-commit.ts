@@ -29,11 +29,11 @@ async function main() {
       command: 'git merge',
       cwd,
     });
-    console.error(gateResult.decision.reason || 'pre-merge-commit quality gate failed');
+    console.error(gateResult.decision.reason ?? 'pre-merge-commit quality gate failed');
     process.exit(1);
   }
 
   process.exit(0);
 }
 
-main();
+void main();

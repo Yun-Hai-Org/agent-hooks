@@ -28,7 +28,7 @@ export const TOOL_INSTALL_HINTS: Record<string, string> = {
 };
 
 export function getToolInstallHint(tool: string): string {
-  return TOOL_INSTALL_HINTS[tool] || `请先安装 ${tool}`;
+  return TOOL_INSTALL_HINTS[tool] ?? `请先安装 ${tool}`;
 }
 
 export function isToolInstalled(tool: string, cwd?: string): boolean {

@@ -43,16 +43,16 @@ const SEVERITY_EMOJI: Record<NotificationSeverity, string> = {
 };
 
 export function mapSeverityEmoji(severity: string): string {
-  const key = severity?.toLowerCase() as NotificationSeverity;
-  return SEVERITY_EMOJI[key] || '⚠️';
+  const key = severity.toLowerCase() as NotificationSeverity;
+  return key in SEVERITY_EMOJI ? SEVERITY_EMOJI[key] : '⚠️';
 }
 
 export function parseNotificationMessage(message: string): NotificationEvent {
   if (!message || typeof message !== 'string') {
-    return { hook: 'unknown', severity: 'info', reason: message || '' };
+    return { hook: 'unknown', severity: 'info', reason: typeof message === 'string' ? message : '' };
   }
 
-  const hookMatch = message.match(/\[([a-z][a-z0-9-]*)\]/);
+  const hookMatch = /\[([a-z][a-z0-9-]*)\]/.exec(message);
   const hook = hookMatch?.[1] ?? 'unknown';
 
   let severity = 'info';
@@ -95,7 +95,8 @@ const FEISHU_COLOR: Record<NotificationSeverity, string> = {
 
 export function formatFeishuMessage(event: NotificationEvent, timestamp: string): Record<string, unknown> {
   const emoji = mapSeverityEmoji(event.severity);
-  const color = FEISHU_COLOR[event.severity.toLowerCase() as NotificationSeverity] || 'grey';
+  const severityKey = event.severity.toLowerCase() as NotificationSeverity;
+  const color = severityKey in FEISHU_COLOR ? FEISHU_COLOR[severityKey] : 'grey';
 
   return {
     msg_type: 'interactive',
@@ -135,7 +136,8 @@ const SLACK_COLOR: Record<NotificationSeverity, string> = {
 
 export function formatSlackMessage(event: NotificationEvent, timestamp: string): Record<string, unknown> {
   const emoji = mapSeverityEmoji(event.severity);
-  const color = SLACK_COLOR[event.severity.toLowerCase() as NotificationSeverity] || '#999999';
+  const severityKey = event.severity.toLowerCase() as NotificationSeverity;
+  const color = severityKey in SLACK_COLOR ? SLACK_COLOR[severityKey] : '#999999';
 
   return {
     attachments: [
@@ -172,10 +174,12 @@ export function formatSlackMessage(event: NotificationEvent, timestamp: string):
 }
 
 export async function sendWebhook(url: string, body: Record<string, unknown>, timeoutMs?: number) {
-  const resolvedTimeout = timeoutMs ?? (parseInt(process.env['NOTIFY_TIMEOUT_MS'] || '', 10) || 5000);
+  const resolvedTimeout = timeoutMs ?? (parseInt(process.env['NOTIFY_TIMEOUT_MS'] ?? '', 10) || 5000);
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), resolvedTimeout);
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, resolvedTimeout);
 
     const response = await fetch(url, {
       method: 'POST',
@@ -187,12 +191,12 @@ export async function sendWebhook(url: string, body: Record<string, unknown>, ti
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      return { success: false, status: response.status, error: `HTTP ${response.status}` };
+      return { success: false, status: response.status, error: `HTTP ${String(response.status)}` };
     }
     return { success: true, status: response.status };
   } catch (error: unknown) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return { success: false, error: `请求超时 (${resolvedTimeout}ms)` };
+      return { success: false, error: `请求超时 (${String(resolvedTimeout)}ms)` };
     }
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
@@ -239,10 +243,10 @@ export async function notifyAllChannels(event: NotificationEvent, timestamp: str
 }
 
 export async function dispatchSecurityNotification(input: DispatchInput, logHookName = 'notify-security-event') {
-  const message = input.message || input.reason || '';
+  const message = input.message ?? input.reason ?? '';
   const event =
     input.hook && input.severity
-      ? { hook: input.hook, severity: input.severity, reason: message || input.reason || '' }
+      ? { hook: input.hook, severity: input.severity, reason: message || (input.reason ?? '') }
       : parseNotificationMessage(message);
 
   if (input.hook) event.hook = input.hook;
@@ -250,8 +254,8 @@ export async function dispatchSecurityNotification(input: DispatchInput, logHook
   if (input.reason && !event.reason) event.reason = input.reason;
 
   const eventKey = makeEventKey(event);
-  const cooldownMs = parseInt(process.env['NOTIFY_COOLDOWN_MS'] || '', 10) || DEFAULT_COOLDOWN_MS;
-  const session_id = input.session_id || '';
+  const cooldownMs = parseInt(process.env['NOTIFY_COOLDOWN_MS'] ?? '', 10) || DEFAULT_COOLDOWN_MS;
+  const session_id = input.session_id ?? '';
 
   if (isCoolingDown(eventKey, cooldownMs)) {
     log(logHookName, { level: 'SKIP', reason: '频控冷却期内', eventKey, session_id });

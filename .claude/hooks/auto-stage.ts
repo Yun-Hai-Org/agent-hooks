@@ -45,25 +45,29 @@ async function main() {
 
     if (!isFileEditTool(tool_name)) {
       log({ level: 'SKIP', reason: `unsupported tool: ${tool_name || '(empty)'}`, session_id });
-      return console.log('{}');
+      console.log('{}');
+      return;
     }
 
-    const filePath = tool_input?.file_path;
+    const filePath = tool_input.file_path;
     if (!filePath || typeof filePath !== 'string') {
       log({ level: 'SKIP', reason: 'no file_path', tool: tool_name, session_id });
-      return console.log('{}');
+      console.log('{}');
+      return;
     }
 
-    const absPath = isAbsolute(filePath) ? filePath : join(cwd || process.cwd(), filePath);
+    const absPath = isAbsolute(filePath) ? filePath : join(cwd, filePath);
 
     if (!isInGitRepo(absPath)) {
       log({ level: 'SKIP', reason: 'not in git repo', file: absPath, session_id });
-      return console.log('{}');
+      console.log('{}');
+      return;
     }
 
     if (process.env['CLAUDE_HOOK_PREVIOUS_DENIED'] === 'true') {
       log({ level: 'SKIP', reason: 'previous hook denied', file: absPath, session_id });
-      return console.log('{}');
+      console.log('{}');
+      return;
     }
 
     const result = stageFile(absPath);
@@ -82,7 +86,7 @@ async function main() {
 }
 
 if (import.meta.main) {
-  main();
+  void main();
 }
 
 export { isInGitRepo, stageFile, log };

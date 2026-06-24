@@ -21,7 +21,7 @@ import { spawnSync } from 'child_process';
 
 const HOOK_NAME = 'resolve-hook-path';
 const PROJECT_HOOKS_DIR = '.claude/hooks';
-const GLOBAL_HOOKS_DIR = join(process.env['HOME'] || '', '.claude', 'hooks');
+const GLOBAL_HOOKS_DIR = join(process.env['HOME'] ?? '', '.claude', 'hooks');
 
 // ─── 路径解析 ───────────────────────────────────────────────────────────────
 
@@ -36,7 +36,7 @@ const GLOBAL_HOOKS_DIR = join(process.env['HOME'] || '', '.claude', 'hooks');
 export function resolveHookPath(hookFile: string, cwd?: string) {
   if (!hookFile || typeof hookFile !== 'string' || !hookFile.trim()) return null;
   if (!hookFile.endsWith('.ts')) return null;
-  const workingDir = cwd || process.cwd();
+  const workingDir = cwd ?? process.cwd();
 
   // 1. 项目级优先
   const projectPath = resolve(workingDir, PROJECT_HOOKS_DIR, hookFile);
@@ -55,7 +55,7 @@ export function resolveHookPath(hookFile: string, cwd?: string) {
 
 // ─── 主流程 ──────────────────────────────────────────────────────────────────
 
-async function main() {
+function main() {
   const hookFile = process.argv[2];
 
   if (!hookFile) {

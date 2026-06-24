@@ -59,7 +59,7 @@ function checkTool(name: string, binary: string, versionCmd?: string): ToolStatu
 /**
  * 所有待检查工具列表
  */
-const TOOLS: Array<{ name: string; binary: string; versionCmd?: string }> = [
+const TOOLS: { name: string; binary: string; versionCmd?: string }[] = [
   // 核心运行时（优先检测）
   { name: 'bun', binary: 'bun', versionCmd: 'bun --version' },
   { name: 'uv', binary: 'uv', versionCmd: 'uv --version' },
@@ -106,7 +106,7 @@ const TOOLS: Array<{ name: string; binary: string; versionCmd?: string }> = [
  * 顺序检查所有工具（带全局超时保护）
  * @returns {Promise<Array<{ name: string, available: boolean, version: string }>>}
  */
-async function checkAllTools() {
+function checkAllTools() {
   const results: ToolStatus[] = [];
   const startTime = Date.now();
 
@@ -143,7 +143,7 @@ function formatReport(results: ToolStatus[]) {
   const total = results.length;
   const okCount = available.length;
 
-  const lines = [`ℹ️ [session-start] 工具健康检查 (${okCount}/${total} 可用)`, ''];
+  const lines = [`ℹ️ [session-start] 工具健康检查 (${String(okCount)}/${String(total)} 可用)`, ''];
 
   // 先显示可用工具
   for (const tool of available) {
@@ -187,11 +187,11 @@ function formatJsonResult(results: ToolStatus[]) {
   });
 }
 
-async function main() {
+function main() {
   const startTime = Date.now();
 
   try {
-    const results = await checkAllTools();
+    const results = checkAllTools();
     const elapsed = Date.now() - startTime;
 
     process.stderr.write(formatReport(results) + '\n');

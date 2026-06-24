@@ -6,24 +6,39 @@
 
 import { readStdin as readStdinBase } from './security-orchestrator.js';
 import type { HookInput, HookPlatform, HookToolInput } from './types.js';
+import { asString } from './types.js';
 
 export function getPlatform(): HookPlatform {
-  const p = (process.env['HOOK_PLATFORM'] || 'claude').toLowerCase();
+  const raw = process.env['HOOK_PLATFORM'];
+  const p = (typeof raw === 'string' ? raw : 'claude').toLowerCase();
   if (p === 'cursor' || p === 'kiro') return p;
   return 'claude';
 }
 
-function extractShellCommand(data: Record<string, unknown>): string {
-  if (typeof data['command'] === 'string') return data['command'];
-  const toolInput = data['tool_input'] || data['toolInput'];
-  if (toolInput && typeof toolInput === 'object' && 'command' in toolInput) {
-    return String((toolInput as { command?: string })['command'] || '');
+function toolInputField(toolInput: unknown, field: 'command' | 'file_path'): string {
+  if (toolInput && typeof toolInput === 'object' && field in toolInput) {
+    return asString((toolInput as Record<string, unknown>)[field]);
   }
   return '';
 }
 
+function extractShellCommand(data: Record<string, unknown>): string {
+  const direct = asString(data['command']);
+  if (direct) return direct;
+  const toolInput = data['tool_input'] ?? data['toolInput'];
+  return toolInputField(toolInput, 'command');
+}
+
+function resolveCwd(data: Record<string, unknown>): string {
+  const cwd = asString(data['cwd']);
+  if (cwd) return cwd;
+  const roots = data['workspace_roots'];
+  if (Array.isArray(roots) && typeof roots[0] === 'string') return roots[0];
+  return process.cwd();
+}
+
 export function isShellTool(toolName?: string): boolean {
-  return /^(bash|shell)$/i.test(toolName || '');
+  return /^(bash|shell)$/i.test(toolName ?? '');
 }
 
 export function isShellHookInput(data: { tool_name?: string; tool_input?: { command?: string } }): boolean {
@@ -36,49 +51,47 @@ export function normalizeInput(data: Record<string, unknown>): HookInput {
   if (platform === 'cursor') {
     const command = extractShellCommand(data);
     const isBeforeShell = typeof data['command'] === 'string';
-    const toolInput = data['tool_input'] || data['toolInput'];
-    const mergedCommand =
-      command ||
-      (toolInput && typeof toolInput === 'object' && 'command' in toolInput
-        ? String((toolInput as { command?: string })['command'] || '')
-        : '');
+    const toolInput = data['tool_input'] ?? data['toolInput'];
+    const mergedCommand = command || toolInputField(toolInput, 'command');
+    let tool_name = asString(data['tool_name']);
+    if (!tool_name) tool_name = asString(data['toolName']);
+    if (!tool_name && (isBeforeShell || command)) tool_name = 'Shell';
     return {
-      tool_name: String(data['tool_name'] || data['toolName'] || (isBeforeShell || command ? 'Shell' : '')),
+      tool_name,
       tool_input: { command: mergedCommand },
-      session_id: String(data['session_id'] || data['conversation_id'] || ''),
-      cwd: String(
-        data['cwd'] || (Array.isArray(data['workspace_roots']) ? data['workspace_roots'][0] : '') || process.cwd(),
-      ),
+      session_id: asString(data['session_id']) || asString(data['conversation_id']),
+      cwd: resolveCwd(data),
     };
   }
   if (platform === 'kiro') {
-    const toolInput = data['tool_input'] || data['toolInput'];
+    const toolInput = data['tool_input'] ?? data['toolInput'];
+    let tool_name = asString(data['tool_name']);
+    if (!tool_name) tool_name = asString(data['toolName']);
     return {
-      tool_name: String(data['tool_name'] || data['toolName'] || ''),
+      tool_name,
       tool_input:
         toolInput && typeof toolInput === 'object'
           ? {
-              command: 'command' in toolInput ? String((toolInput as { command?: string })['command'] || '') : '',
-              file_path:
-                'file_path' in toolInput ? String((toolInput as { file_path?: string })['file_path'] || '') : '',
+              command: toolInputField(toolInput, 'command'),
+              file_path: toolInputField(toolInput, 'file_path'),
             }
           : {},
-      session_id: String(data['session_id'] || data['sessionId'] || ''),
-      cwd: String(data['cwd'] || process.cwd()),
+      session_id: asString(data['session_id']) || asString(data['sessionId']),
+      cwd: resolveCwd(data),
     };
   }
   const toolInput = data['tool_input'];
   return {
-    tool_name: String(data['tool_name'] || ''),
+    tool_name: asString(data['tool_name']),
     tool_input:
       toolInput && typeof toolInput === 'object'
         ? {
-            command: 'command' in toolInput ? String((toolInput as { command?: string })['command'] || '') : '',
-            file_path: 'file_path' in toolInput ? String((toolInput as { file_path?: string })['file_path'] || '') : '',
+            command: toolInputField(toolInput, 'command'),
+            file_path: toolInputField(toolInput, 'file_path'),
           }
         : {},
-    session_id: String(data['session_id'] || ''),
-    cwd: String(data['cwd'] || process.cwd()),
+    session_id: asString(data['session_id']),
+    cwd: resolveCwd(data),
   };
 }
 
@@ -88,17 +101,17 @@ export async function readHookInput(): Promise<HookInput> {
 }
 
 export function isFileEditTool(toolName?: string): boolean {
-  return /^(edit|write)$/i.test(toolName || '');
+  return /^(edit|write)$/i.test(toolName ?? '');
 }
 
 function parseHookToolInput(rawInput: unknown): HookToolInput {
   const tool_input: HookToolInput = {};
   if (!rawInput || typeof rawInput !== 'object') return tool_input;
   const obj = rawInput as Record<string, unknown>;
-  if ('command' in obj) tool_input.command = String(obj['command'] || '');
-  if ('file_path' in obj) tool_input.file_path = String(obj['file_path'] || '');
-  if ('content' in obj) tool_input.content = String(obj['content'] || '');
-  if ('new_string' in obj) tool_input.new_string = String(obj['new_string'] || '');
+  if ('command' in obj) tool_input.command = asString(obj['command']);
+  if ('file_path' in obj) tool_input.file_path = asString(obj['file_path']);
+  if ('content' in obj) tool_input.content = asString(obj['content']);
+  if ('new_string' in obj) tool_input.new_string = asString(obj['new_string']);
   return tool_input;
 }
 
@@ -123,10 +136,12 @@ export function normalizeFileEditInput(data: Record<string, unknown>): HookInput
             : process.cwd(),
     };
   }
-  const rawInput = data['tool_input'] || data['toolInput'];
+  const rawInput = data['tool_input'] ?? data['toolInput'];
   const tool_input = parseHookToolInput(rawInput);
+  let tool_name = asString(data['tool_name']);
+  if (!tool_name) tool_name = asString(data['toolName']);
   return {
-    tool_name: String(data['tool_name'] || data['toolName'] || ''),
+    tool_name,
     tool_input,
     session_id:
       typeof data['session_id'] === 'string'
@@ -190,7 +205,7 @@ export function formatStopSuccessOutput(message: string, hookEvent = 'Stop'): st
   }
   return JSON.stringify({
     hookSpecificOutput: {
-      hookEventName: hookEvent || 'Stop',
+      hookEventName: hookEvent,
       additionalContext: message,
     },
   });

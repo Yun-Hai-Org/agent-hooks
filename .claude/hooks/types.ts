@@ -7,6 +7,10 @@ export const DECISION_VALUES = {
 
 export type Decision = (typeof DECISION_VALUES)[keyof typeof DECISION_VALUES];
 
+export function asString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
 export const SEVERITY_VALUES = {
   CRITICAL: 'critical',
   HIGH: 'high',
@@ -19,14 +23,14 @@ export type Severity = (typeof SEVERITY_VALUES)[keyof typeof SEVERITY_VALUES];
 
 export interface CheckResult {
   checkId: string;
-  decision: Decision | string;
+  decision: Decision;
   message: string;
   timestamp?: string;
   details?: Record<string, unknown>;
 }
 
 export interface DecideResult {
-  decision: Decision | string;
+  decision: Decision;
   reason: string;
   denyResults: CheckResult[];
   warnResults: CheckResult[];
@@ -67,7 +71,7 @@ export interface HookInput {
 export type QualityGateProfile = 'commit' | 'full';
 
 export interface QualityGateDecision {
-  decision: Decision | string;
+  decision: Decision;
   reason?: string;
 }
 
@@ -85,6 +89,12 @@ export interface ExecErrorLike {
 
 export function isExecErrorLike(error: unknown): error is ExecErrorLike {
   return typeof error === 'object' && error !== null;
+}
+
+export function stringifyUnknown(value: unknown): string {
+  if (value instanceof Error) return value.message;
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value);
 }
 
 export interface ToolStatus {

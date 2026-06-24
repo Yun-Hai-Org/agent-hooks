@@ -25,7 +25,7 @@ export async function runRelatedTests(cwd?: string) {
     return formatResult('related-tests', DECISION.SKIP, '暂存区无代码文件，跳过关联测试');
   }
 
-  const testPatterns: Array<(f: string) => string> = [
+  const testPatterns: ((f: string) => string)[] = [
     (f) => f.replace(/\.py$/, '_test.py').replace(/\/src\//, '/tests/'),
     (f) => f.replace(/\.py$/, '_test.py'),
     (f) => f.replace(/\.(js|ts)$/, '.test.$1'),
@@ -199,7 +199,7 @@ export async function runFullProjectTests(cwd?: string) {
     return formatResult('full-tests', DECISION.SKIP, '未找到测试配置');
   }
   const failure = results.find((r) => r.decision === DECISION.DENY);
-  return failure || formatResult('full-tests', DECISION.ALLOW, '所有全量测试通过');
+  return failure ?? formatResult('full-tests', DECISION.ALLOW, '所有全量测试通过');
 }
 
 export async function runHookUnitTests(cwd?: string) {

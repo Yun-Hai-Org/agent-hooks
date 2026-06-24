@@ -1,10 +1,11 @@
 import js from '@eslint/js';
+import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
 const tsFiles = ['**/*.{ts,tsx,mts,cts}'];
 const hookTsFiles = ['.claude/hooks/**/*.ts'];
 
-export default [
+export default defineConfig(
   {
     ignores: [
       '**/.venv/**',
@@ -17,10 +18,8 @@ export default [
     ],
   },
   js.configs.recommended,
-  ...tseslint.configs.strict.map((config) => ({
-    ...config,
-    files: 'files' in config && config.files ? config.files : tsFiles,
-  })),
+  ...tseslint.configs.strictTypeChecked,
+  ...tseslint.configs.stylisticTypeChecked,
   {
     files: tsFiles,
     languageOptions: {
@@ -53,14 +52,6 @@ export default [
       'no-console': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],
       'no-useless-escape': 'off',
-      '@typescript-eslint/no-unsafe-assignment': 'off',
-      '@typescript-eslint/no-unsafe-call': 'off',
-      '@typescript-eslint/no-unsafe-member-access': 'off',
-      '@typescript-eslint/no-unsafe-return': 'off',
-      '@typescript-eslint/restrict-template-expressions': 'off',
-      '@typescript-eslint/no-unnecessary-condition': 'off',
-      '@typescript-eslint/no-dynamic-delete': 'off',
-      '@typescript-eslint/no-base-to-string': 'off',
     },
   },
-];
+);

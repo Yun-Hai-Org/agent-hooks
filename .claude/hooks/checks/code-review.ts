@@ -7,9 +7,9 @@ const DIFF_BLOCK_PATTERNS = [
 ];
 
 /** @param {string} [cwd] @param {{ base?: string; staged?: boolean }} [options] */
-export async function runCodeReview(cwd?: string, options: { base?: string; staged?: boolean } = {}) {
+export function runCodeReview(cwd?: string, options: { base?: string; staged?: boolean } = {}) {
   const staged = options.staged === true;
-  const diffCmd = staged ? 'git diff --cached --unified=0' : `git diff ${options.base || 'HEAD~1'}..HEAD --unified=0`;
+  const diffCmd = staged ? 'git diff --cached --unified=0' : `git diff ${options.base ?? 'HEAD~1'}..HEAD --unified=0`;
   const diffResult = execCommand(diffCmd, { cwd, timeout: 30000 });
   if (!diffResult.success || !diffResult.stdout.trim()) {
     return formatResult(
@@ -34,7 +34,7 @@ export async function runCodeReview(cwd?: string, options: { base?: string; stag
 
   const checkId = staged ? 'code-review-staged' : 'code-review';
   if (findings.length > 0) {
-    return formatResult(checkId, DECISION.WARN, `静态 review 发现 ${findings.length} 项提醒`, {
+    return formatResult(checkId, DECISION.WARN, `静态 review 发现 ${String(findings.length)} 项提醒`, {
       findings: findings.slice(0, 10),
     });
   }

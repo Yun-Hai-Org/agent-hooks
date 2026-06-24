@@ -49,9 +49,9 @@ export async function runSemgrep(cwd?: string): Promise<CheckResult> {
     if (!result.success && result.stdout) {
       try {
         const json = JSON.parse(result.stdout) as { results?: SemgrepResult[] };
-        const errors = json.results?.filter((r) => r.extra?.severity === 'ERROR') || [];
+        const errors = json.results?.filter((r) => r.extra?.severity === 'ERROR') ?? [];
         if (errors.length > 0) {
-          return formatResult('semgrep', DECISION.DENY, `Semgrep 发现 ${errors.length} 个 ERROR 级别问题`, {
+          return formatResult('semgrep', DECISION.DENY, `Semgrep 发现 ${String(errors.length)} 个 ERROR 级别问题`, {
             count: errors.length,
           });
         }
@@ -88,7 +88,7 @@ export async function runKnip(cwd?: string): Promise<CheckResult> {
           return formatResult(
             'knip',
             DECISION.DENY,
-            `Knip 发现 ${unusedFiles} 个未使用文件, ${unusedDeps} 个未使用依赖`,
+            `Knip 发现 ${String(unusedFiles)} 个未使用文件, ${String(unusedDeps)} 个未使用依赖`,
             {
               unusedFiles,
               unusedDeps,
@@ -117,12 +117,12 @@ export async function runTrivy(cwd?: string): Promise<CheckResult> {
     const result = await withTimeout(
       execCommandAsync(trivyCmd, { cwd, timeout: TRIVY_TIMEOUT_MS }),
       TRIVY_TIMEOUT_MS,
-      `trivy 超时 (${TRIVY_TIMEOUT_MS / 1000}s)`,
+      `trivy 超时 (${String(TRIVY_TIMEOUT_MS / 1000)}s)`,
     );
     if (result.stdout) {
       try {
-        const json = JSON.parse(result.stdout) as { Results?: Array<{ Vulnerabilities?: TrivyVulnerability[] }> };
-        const vulns = json.Results?.flatMap((r) => r.Vulnerabilities || []) || [];
+        const json = JSON.parse(result.stdout) as { Results?: { Vulnerabilities?: TrivyVulnerability[] }[] };
+        const vulns = json.Results?.flatMap((r) => r.Vulnerabilities ?? []) ?? [];
         const criticals = vulns.filter((v) => v.Severity === 'CRITICAL');
         const highs = vulns.filter((v) => v.Severity === 'HIGH');
         const mediums = vulns.filter((v) => v.Severity === 'MEDIUM');
@@ -130,7 +130,7 @@ export async function runTrivy(cwd?: string): Promise<CheckResult> {
           return formatResult(
             'trivy',
             DECISION.DENY,
-            `Trivy 发现 ${criticals.length} CRITICAL, ${highs.length} HIGH, ${mediums.length} MEDIUM 漏洞`,
+            `Trivy 发现 ${String(criticals.length)} CRITICAL, ${String(highs.length)} HIGH, ${String(mediums.length)} MEDIUM 漏洞`,
             { critical: criticals.length, high: highs.length, medium: mediums.length },
           );
         }

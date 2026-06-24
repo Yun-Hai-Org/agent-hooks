@@ -42,7 +42,7 @@ export function isAutoRetryMergeEnabled() {
  *
  */
 export function getMaxGateRetryLoops() {
-  const n = parseInt(process.env['GATE_RETRY_MAX_LOOPS'] || String(DEFAULT_MAX_LOOPS), 10);
+  const n = parseInt(process.env['GATE_RETRY_MAX_LOOPS'] ?? String(DEFAULT_MAX_LOOPS), 10);
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_MAX_LOOPS;
 }
 
@@ -86,7 +86,7 @@ export async function runGateRetryStop(sessionId: string, options: { cwd?: strin
   if (pending.type === 'merge' && isAutoRetryMergeEnabled()) {
     const mergeResult = executePendingMerge(pending);
     if (mergeResult.success) {
-      const sha = execCommand('git rev-parse --short HEAD', { cwd: pending.cwd }).stdout?.trim();
+      const sha = execCommand('git rev-parse --short HEAD', { cwd: pending.cwd }).stdout.trim();
       return {
         action: 'merged',
         gateName,
@@ -116,10 +116,10 @@ export async function runGateRetryStop(sessionId: string, options: { cwd?: strin
  */
 async function main() {
   let input = '';
-  for await (const chunk of process.stdin) input += chunk;
+  for await (const chunk of process.stdin) input += typeof chunk === 'string' ? chunk : String(chunk);
 
   try {
-    const data = input.trim() ? JSON.parse(input) : {};
+    const data = input.trim() ? (JSON.parse(input) as Record<string, unknown>) : {};
     const { sessionId, hookEvent, loopCount, status, cwd } = parseStopInput(data);
     const platform = getPlatform();
 
@@ -135,8 +135,8 @@ async function main() {
 
     const maxLoops = getMaxGateRetryLoops();
     if (platform === 'cursor' && loopCount >= maxLoops) {
-      log(HOOK_NAME, { level: 'SKIP', reason: `loop_limit ${maxLoops}`, session_id: sessionId });
-      console.error(`[gate-retry] 已达最大重试次数 (${maxLoops})，请手动修复后重新 push/merge`);
+      log(HOOK_NAME, { level: 'SKIP', reason: `loop_limit ${String(maxLoops)}`, session_id: sessionId });
+      console.error(`[gate-retry] 已达最大重试次数 (${String(maxLoops)})，请手动修复后重新 push/merge`);
       console.log('{}');
       return;
     }
@@ -154,33 +154,30 @@ async function main() {
     }
 
     if (result.action === 'merged') {
-      log(HOOK_NAME, { level: 'MERGED', gate: result.gateName, sha: result.sha, session_id: sessionId });
+      const { gateName, command, sha } = result;
+      log(HOOK_NAME, { level: 'MERGED', gate: gateName, sha, session_id: sessionId });
       console.log(
-        formatStopSuccessOutput(
-          buildGateRetryMergeSuccessMessage(result.gateName ?? '', result.command ?? '', result.sha ?? undefined),
-          hookEvent ?? 'Stop',
-        ),
+        formatStopSuccessOutput(buildGateRetryMergeSuccessMessage(gateName ?? '', command ?? '', sha), hookEvent),
       );
       return;
     }
 
     if (result.action === 'merge-failed') {
-      log(HOOK_NAME, { level: 'MERGE_FAILED', gate: result.gateName, session_id: sessionId });
+      const { gateName, command } = result;
+      log(HOOK_NAME, { level: 'MERGE_FAILED', gate: gateName, session_id: sessionId });
       console.log(
-        formatStopContinueOutput(
-          buildGateRetryMergeFailureMessage(result.command ?? '', result.mergeError ?? ''),
-          hookEvent ?? 'Stop',
-        ),
+        formatStopContinueOutput(buildGateRetryMergeFailureMessage(command ?? '', result.mergeError ?? ''), hookEvent),
       );
       return;
     }
 
     if (result.action === 'pass') {
-      log(HOOK_NAME, { level: 'PASSED', gate: result.gateName, session_id: sessionId });
+      const { gateName, command } = result;
+      log(HOOK_NAME, { level: 'PASSED', gate: gateName, session_id: sessionId });
       console.log(
         formatStopSuccessOutput(
-          buildGateRetryPassMessage(result.gateName ?? '', result.command ?? '', result.pendingType),
-          hookEvent ?? 'Stop',
+          buildGateRetryPassMessage(gateName ?? '', command ?? '', result.pendingType),
+          hookEvent,
         ),
       );
       return;
@@ -194,7 +191,7 @@ async function main() {
 }
 
 if (import.meta.main) {
-  main();
+  void main();
 }
 
 export { main };

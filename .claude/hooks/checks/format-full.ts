@@ -49,5 +49,5 @@ export async function runFormatFull(cwd?: string) {
   }
 
   const failure = results.find((r) => r.decision === DECISION.DENY);
-  return failure || formatResult('format-full', DECISION.ALLOW, 'Format 检查通过');
+  return failure ?? formatResult('format-full', DECISION.ALLOW, 'Format 检查通过');
 }

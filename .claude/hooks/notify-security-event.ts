@@ -36,5 +36,5 @@ export async function notifySecurityEvent(input: SecurityEventInput) {
 }
 
 export function notifySecurityEventAsync(input: SecurityEventInput) {
-  notifySecurityEvent(input).catch(() => {});
+  void notifySecurityEvent(input).catch(() => undefined);
 }

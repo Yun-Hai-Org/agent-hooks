@@ -56,7 +56,7 @@ export function parseHadolintOutput(output: string): HadolintIssue[] {
   const lines = cleanOutput.split('\n').filter((l) => l.trim());
 
   for (const line of lines) {
-    const match = line.match(/^(.+?):(\d+)(?::\d+)?:?\s+(DL\d+)\s+(\w+):\s+(.+)$/);
+    const match = /^(.+?):(\d+)(?::\d+)?:?\s+(DL\d+)\s+(\w+):\s+(.+)$/.exec(line);
     if (match?.[1] && match[2] && match[3] && match[4] && match[5]) {
       const file = match[1];
       const lineNum = match[2];
@@ -83,7 +83,7 @@ function formatHadolintDenyOutput(output: string) {
   issues.sort((a, b) => (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3));
   return issues
     .slice(0, 15)
-    .map((i) => `[${i.severity}] ${i.ruleId}: ${i.file}:${i.line} — ${i.message}`)
+    .map((i) => `[${i.severity}] ${i.ruleId}: ${i.file}:${String(i.line)} — ${i.message}`)
     .join('\n');
 }
 
@@ -98,7 +98,7 @@ function aggregateExtendedResults(
     return formatResult(skipId, DECISION.SKIP, skipMsg);
   }
   const failure = results.find((r) => r.decision === DECISION.DENY);
-  return failure || formatResult(allowId, DECISION.ALLOW, allowMsg);
+  return failure ?? formatResult(allowId, DECISION.ALLOW, allowMsg);
 }
 
 async function runExtendedChecks(classified: ReturnType<typeof classifyFiles>, idPrefix: string, cwd?: string) {

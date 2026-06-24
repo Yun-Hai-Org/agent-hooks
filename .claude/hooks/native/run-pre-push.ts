@@ -36,11 +36,11 @@ async function main() {
       command: 'git push',
       cwd,
     });
-    console.error(gateResult.decision.reason || 'pre-push quality gate failed');
+    console.error(gateResult.decision.reason ?? 'pre-push quality gate failed');
     process.exit(1);
   }
 
   process.exit(0);
 }
 
-main();
+void main();

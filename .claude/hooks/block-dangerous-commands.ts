@@ -329,9 +329,9 @@ function checkCommand(cmd: string, safetyLevel: string = SAFETY_LEVEL) {
     return { blocked: false, pattern: null, allowed: true };
   }
 
-  const threshold = (LEVELS[safetyLevel as PatternLevel] ?? LEVELS.high) as number;
+  const threshold = LEVELS[safetyLevel as PatternLevel];
   for (const p of PATTERNS) {
-    if ((LEVELS[p.level as PatternLevel] ?? LEVELS.high) <= threshold && p.regex.test(cmd)) {
+    if (LEVELS[p.level as PatternLevel] <= threshold && p.regex.test(cmd)) {
       return { blocked: true, pattern: p, allowed: false };
     }
   }
@@ -352,7 +352,7 @@ async function main() {
         return;
       }
 
-      const cmd = tool_input?.command || '';
+      const cmd = tool_input.command ?? '';
       const result = checkCommand(cmd);
 
       if (result.blocked) {
@@ -390,7 +390,7 @@ async function main() {
 
 // 只在直接运行时执行 main，导入时不执行
 if (import.meta.main) {
-  main();
+  void main();
 }
 
 // 导出供测试使用

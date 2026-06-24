@@ -8,6 +8,7 @@
 
 import { CONTENT_PATTERNS } from './protect-secrets.js';
 import { readStdin, log, safeMain } from './security-orchestrator.js';
+import { asString } from './types.js';
 
 const HOOK_NAME = 'user-prompt-filter';
 
@@ -31,15 +32,16 @@ export function scanPrompt(prompt: string): { blocked: boolean; pattern: Content
 async function main() {
   const data = await readStdin();
   const tool_input = data['tool_input'] as { user_prompt?: string } | undefined;
-  const session_id = String(data['session_id'] || '');
-  const cwd = String(data['cwd'] || process.cwd());
+  const session_id = asString(data['session_id']);
+  const cwd = asString(data['cwd']) || process.cwd();
 
   // Only process UserPromptSubmit events
-  if (data?.['tool_name'] !== 'UserPromptSubmit') {
-    return console.log('{}');
+  if (data['tool_name'] !== 'UserPromptSubmit') {
+    console.log('{}');
+    return;
   }
 
-  const prompt = tool_input?.user_prompt || '';
+  const prompt = tool_input?.user_prompt ?? '';
   const result = scanPrompt(prompt);
 
   if (result.blocked && result.pattern) {
@@ -53,7 +55,7 @@ async function main() {
       promptLength: prompt.length,
     });
 
-    return console.log(
+    console.log(
       JSON.stringify({
         hookSpecificOutput: {
           hookEventName: 'UserPromptSubmit',
@@ -62,6 +64,7 @@ async function main() {
         },
       }),
     );
+    return;
   }
 
   console.log('{}');
@@ -69,5 +72,5 @@ async function main() {
 
 // Only call main() when run directly, not when imported
 if (import.meta.main) {
-  safeMain(main);
+  void safeMain(main);
 }

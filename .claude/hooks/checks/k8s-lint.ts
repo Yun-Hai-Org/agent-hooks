@@ -19,9 +19,26 @@ interface KubeLinterDiagnostic {
   message?: string;
 }
 
+interface KubeconformSummaryJson {
+  summary?: {
+    resources_invalid?: number;
+    invalid?: number;
+    resources_valid?: number;
+    valid?: number;
+    resources_scanned?: number;
+    total?: number;
+  };
+  resources_invalid?: number;
+  invalid?: number;
+  resources_valid?: number;
+  valid?: number;
+  resources_scanned?: number;
+  total?: number;
+}
+
 export function parseKubeconformSummary(output: string): KubeconformSummary | null {
   try {
-    const json = JSON.parse(output);
+    const json = JSON.parse(output) as KubeconformSummaryJson;
     const summary = json.summary ?? json;
     const invalid = summary.resources_invalid ?? summary.invalid ?? 0;
     const valid = summary.resources_valid ?? summary.valid ?? 0;
@@ -34,7 +51,7 @@ export function parseKubeconformSummary(output: string): KubeconformSummary | nu
 
 export function parseKubeLinterDiagnostics(output: string) {
   try {
-    const json = JSON.parse(output) as { reports?: Array<{ diagnostics?: KubeLinterDiagnostic[] }> };
+    const json = JSON.parse(output) as { reports?: { diagnostics?: KubeLinterDiagnostic[] }[] };
     const reports = json.reports ?? [];
     const diagnostics = reports.flatMap((r) => r.diagnostics ?? []);
     const errors = diagnostics.filter((d) => String(d.severity).toLowerCase() === 'error');
@@ -71,7 +88,7 @@ async function runK8sChecks(files: string[], idPrefix: string, cwd?: string) {
           timeout: KUBECONFORM_TIMEOUT_MS,
         }),
         KUBECONFORM_TIMEOUT_MS,
-        `kubeconform 超时 (${KUBECONFORM_TIMEOUT_MS / 1000}s): ${file}`,
+        `kubeconform 超时 (${String(KUBECONFORM_TIMEOUT_MS / 1000)}s): ${file}`,
       );
       const kubeconformOutput = kubeconformResult.stdout || kubeconformResult.stderr;
       const summary = parseKubeconformSummary(kubeconformOutput);
@@ -94,7 +111,7 @@ async function runK8sChecks(files: string[], idPrefix: string, cwd?: string) {
           timeout: KUBE_LINTER_TIMEOUT_MS,
         }),
         KUBE_LINTER_TIMEOUT_MS,
-        `kube-linter 超时 (${KUBE_LINTER_TIMEOUT_MS / 1000}s): ${file}`,
+        `kube-linter 超时 (${String(KUBE_LINTER_TIMEOUT_MS / 1000)}s): ${file}`,
       );
       const kubeLinterOutput = kubeLinterResult.stdout || kubeLinterResult.stderr;
       const { errors, warnings } = parseKubeLinterDiagnostics(kubeLinterOutput);
@@ -110,7 +127,7 @@ async function runK8sChecks(files: string[], idPrefix: string, cwd?: string) {
           formatResult(
             `${idPrefix}-kube-linter`,
             DECISION.WARN,
-            `kube-linter 发现 ${warnings.length} 个 warning: ${file}`,
+            `kube-linter 发现 ${String(warnings.length)} 个 warning: ${file}`,
             {
               output: formatKubeLinterDenyOutput(kubeLinterOutput),
               warningCount: warnings.length,
@@ -130,7 +147,7 @@ async function runK8sChecks(files: string[], idPrefix: string, cwd?: string) {
 
   const warnings = results.filter((r) => r.decision === DECISION.WARN);
   if (warnings.length > 0) {
-    return formatResult(idPrefix, DECISION.WARN, `K8s lint 通过（${warnings.length} 个 warning）`, {
+    return formatResult(idPrefix, DECISION.WARN, `K8s lint 通过（${String(warnings.length)} 个 warning）`, {
       warnings: warnings.map((w) => w.message),
     });
   }
