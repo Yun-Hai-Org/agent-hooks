@@ -266,7 +266,7 @@ export async function runHookUnitTests(cwd?: string, options: { coverageThreshol
           output: combinedOutput.slice(0, 500),
         });
       }
-      const pct = parseCoveragePercent(combinedOutput);
+      const pct = parseCoveragePercent(coverageResult.stdout + coverageResult.stderr);
       if (pct === null || pct < options.coverageThreshold) {
         return formatResult(
           'hook-unit-tests',
