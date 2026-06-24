@@ -116,6 +116,20 @@ const PATTERNS = [
     regex: /\b(curl|wget)\b[^\n]*\s-o\s[^\n]*(&&|;|\|)[^\n]*\b(ba)?sh\s+\S/,
     reason: '下载文件后执行（RCE 风险）',
   },
+  // 10e. 反弹 shell（/dev/tcp 或 /dev/udp 网络重定向）
+  {
+    level: 'high',
+    id: 'reverse-shell-devtcp',
+    regex: /\/dev\/(tcp|udp)\//,
+    reason: '反弹 shell（/dev/tcp 网络重定向，RCE 风险）',
+  },
+  // 10f. netcat 执行程序（nc/ncat -e 或 -c，反弹 shell 常用手法）
+  {
+    level: 'high',
+    id: 'reverse-shell-netcat',
+    regex: /\bn(c|cat)\b[^\n]*\s-(e|c)\b/,
+    reason: 'netcat 执行程序（反弹 shell 风险）',
+  },
   // 11. git push --force main/master
   {
     level: 'high',

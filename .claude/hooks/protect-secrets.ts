@@ -163,6 +163,13 @@ const BASH_PATTERNS = [
     regex: /\b(cat|less|head|tail|more)\s+[^|;]*\.aws\/credentials/i,
     reason: 'Reading AWS credentials',
   },
+  {
+    level: 'critical',
+    id: 'altreader-secret',
+    regex:
+      /\b(grep|egrep|fgrep|awk|sed|xxd|od|strings|nl|tac|rev|hexdump)\b[^|;]*(\.env\b|id_rsa|id_ed25519|id_ecdsa|\.pem\b|\.key\b|\.aws\/credentials)/i,
+    reason: 'Reading secrets via non-standard reader (grep/awk/sed/xxd/...)',
+  },
 
   // CRITICAL - Destructive commands
   {
@@ -279,6 +286,18 @@ const BASH_PATTERNS = [
     id: 'nc-secrets',
     regex: /\bnc\b[^;|&]*<[^;|&]*(\.env|credentials|secrets|id_rsa)/i,
     reason: 'Exfiltrating secrets via netcat',
+  },
+  {
+    level: 'high',
+    id: 'aws-s3-exfil',
+    regex: /\baws\s+s3\s+(cp|sync|mv)\b[^;|&]*(\.env|credentials|secrets|id_rsa|\.pem|\.key)/i,
+    reason: 'Exfiltrating secrets via aws s3',
+  },
+  {
+    level: 'high',
+    id: 'gcs-exfil',
+    regex: /\b(gsutil|gcloud)\b[^;|&]*(cp|sync)[^;|&]*(\.env|credentials|secrets|id_rsa|\.pem|\.key)/i,
+    reason: 'Exfiltrating secrets via gsutil/gcloud',
   },
 
   // HIGH - Copy/move/delete secrets

