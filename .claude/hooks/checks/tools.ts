@@ -16,6 +16,7 @@ export const TOOL_INSTALL_HINTS: Record<string, string> = {
   shfmt: 'brew install shfmt',
   hadolint: 'brew install hadolint  # 或见 https://github.com/hadolint/hadolint#installing',
   docker: 'brew install --cask docker  # 或见 https://docs.docker.com/get-docker/',
+  podman: 'brew install podman  # 或见 https://podman.io/docs/installation',
   kubeconform: 'brew install kubeconform',
   'kube-linter': 'brew install kube-linter',
   taplo: 'brew install taplo',
