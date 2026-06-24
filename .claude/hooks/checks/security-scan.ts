@@ -38,23 +38,25 @@ interface TrivyVulnerability {
 const CODE_FILE_PATTERN =
   /\.(js|ts|jsx|tsx|mjs|cjs|py|go|java|rb|php|rs|swift|kt|scala|cs|cpp|c|h|yaml|yml|json|toml|sh|bash|zsh)$/i;
 
-function evaluateSemgrepOutput(stdout: string, checkId: string): CheckResult | null {
+export function evaluateSemgrepOutput(stdout: string, checkId: string): CheckResult | null {
+  let json: { results?: SemgrepResult[] };
   try {
-    const json = JSON.parse(stdout) as { results?: SemgrepResult[] };
-    const blocking =
-      json.results?.filter((r) => r.extra?.severity === 'ERROR' || r.extra?.severity === 'WARNING') ?? [];
-    if (blocking.length === 0) return null;
-    const errors = blocking.filter((r) => r.extra?.severity === 'ERROR');
-    const warnings = blocking.filter((r) => r.extra?.severity === 'WARNING');
-    return formatResult(
-      checkId,
-      DECISION.DENY,
-      `Semgrep 发现 ${String(errors.length)} ERROR, ${String(warnings.length)} WARNING`,
-      { count: blocking.length, errors: errors.length, warnings: warnings.length },
-    );
+    json = JSON.parse(stdout) as { results?: SemgrepResult[] };
   } catch {
-    return null;
+    return formatResult(checkId, DECISION.DENY, 'Semgrep 输出无法解析，按失败处理（fail-closed）', {
+      output: stdout.slice(0, 500),
+    });
   }
+  const blocking = json.results?.filter((r) => r.extra?.severity === 'ERROR' || r.extra?.severity === 'WARNING') ?? [];
+  if (blocking.length === 0) return null;
+  const errors = blocking.filter((r) => r.extra?.severity === 'ERROR');
+  const warnings = blocking.filter((r) => r.extra?.severity === 'WARNING');
+  return formatResult(
+    checkId,
+    DECISION.DENY,
+    `Semgrep 发现 ${String(errors.length)} ERROR, ${String(warnings.length)} WARNING`,
+    { count: blocking.length, errors: errors.length, warnings: warnings.length },
+  );
 }
 
 export async function runSemgrepStaged(cwd?: string): Promise<CheckResult> {
@@ -67,7 +69,7 @@ export async function runSemgrepStaged(cwd?: string): Promise<CheckResult> {
   if (missing) return missing;
 
   const files = stagedFiles.map((f) => `"${f}"`).join(' ');
-  const semgrepCmd = `semgrep --config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten --severity ERROR,WARNING,INFO --json ${files}`;
+  const semgrepCmd = `semgrep --config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten --severity ERROR --severity WARNING --severity INFO --error --json ${files}`;
 
   try {
     const result = await withTimeout(
@@ -75,15 +77,17 @@ export async function runSemgrepStaged(cwd?: string): Promise<CheckResult> {
       60000,
       'semgrep staged 超时 (60s)',
     );
-    if (!result.success && result.stdout) {
+    if (result.stdout) {
       const deny = evaluateSemgrepOutput(result.stdout, 'semgrep-staged');
       if (deny) return deny;
+      return formatResult('semgrep-staged', DECISION.ALLOW, 'Semgrep 暂存文件扫描通过（无 ERROR/WARNING）');
     }
-    return formatResult(
-      'semgrep-staged',
-      DECISION.ALLOW,
-      result.success ? 'Semgrep 暂存文件扫描通过' : 'Semgrep 暂存扫描完成（无 ERROR/WARNING）',
-    );
+    if (!result.success) {
+      return formatResult('semgrep-staged', DECISION.DENY, 'Semgrep 执行失败且无输出，按失败处理（fail-closed）', {
+        output: result.stderr.slice(0, 500),
+      });
+    }
+    return formatResult('semgrep-staged', DECISION.ALLOW, 'Semgrep 暂存文件扫描通过');
   } catch (e) {
     return denyOnToolError(e, 'semgrep-staged', 'semgrep');
   }
@@ -95,21 +99,23 @@ export async function runSemgrep(cwd?: string): Promise<CheckResult> {
   try {
     const ignoredDirs = getGitIgnoredDirs(cwd);
     const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
-    const semgrepCmd = `semgrep --config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten --severity ERROR,WARNING,INFO --json ${excludeFlags} .`;
+    const semgrepCmd = `semgrep --config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten --severity ERROR --severity WARNING --severity INFO --error --json ${excludeFlags} .`;
     const result = await withTimeout(
       execCommandAsync(semgrepCmd, { cwd, timeout: 60000 }),
       60000,
       'semgrep 超时 (60s)',
     );
-    if (!result.success && result.stdout) {
+    if (result.stdout) {
       const deny = evaluateSemgrepOutput(result.stdout, 'semgrep');
       if (deny) return deny;
+      return formatResult('semgrep', DECISION.ALLOW, 'Semgrep 扫描通过（无 ERROR/WARNING）');
     }
-    return formatResult(
-      'semgrep',
-      DECISION.ALLOW,
-      result.success ? 'Semgrep 扫描通过' : 'Semgrep 扫描完成（无 ERROR/WARNING）',
-    );
+    if (!result.success) {
+      return formatResult('semgrep', DECISION.DENY, 'Semgrep 执行失败且无输出，按失败处理（fail-closed）', {
+        output: result.stderr.slice(0, 500),
+      });
+    }
+    return formatResult('semgrep', DECISION.ALLOW, 'Semgrep 扫描通过');
   } catch (e) {
     return denyOnToolError(e, 'semgrep', 'semgrep');
   }
@@ -168,21 +174,32 @@ export async function runTrivy(cwd?: string): Promise<CheckResult> {
       `trivy 超时 (${String(TRIVY_TIMEOUT_MS / 1000)}s)`,
     );
     if (result.stdout) {
+      let json: { Results?: { Vulnerabilities?: TrivyVulnerability[] }[] };
       try {
-        const json = JSON.parse(result.stdout) as { Results?: { Vulnerabilities?: TrivyVulnerability[] }[] };
-        const vulns = json.Results?.flatMap((r) => r.Vulnerabilities ?? []) ?? [];
-        const criticals = vulns.filter((v) => v.Severity === 'CRITICAL');
-        const highs = vulns.filter((v) => v.Severity === 'HIGH');
-        const mediums = vulns.filter((v) => v.Severity === 'MEDIUM');
-        if (criticals.length > 0 || highs.length > 0 || mediums.length > 0) {
-          return formatResult(
-            'trivy',
-            DECISION.DENY,
-            `Trivy 发现 ${String(criticals.length)} CRITICAL, ${String(highs.length)} HIGH, ${String(mediums.length)} MEDIUM 漏洞`,
-            { critical: criticals.length, high: highs.length, medium: mediums.length },
-          );
-        }
-      } catch {}
+        json = JSON.parse(result.stdout) as { Results?: { Vulnerabilities?: TrivyVulnerability[] }[] };
+      } catch {
+        return formatResult('trivy', DECISION.DENY, 'Trivy 输出无法解析，按失败处理（fail-closed）', {
+          output: result.stdout.slice(0, 500),
+        });
+      }
+      const vulns = json.Results?.flatMap((r) => r.Vulnerabilities ?? []) ?? [];
+      const criticals = vulns.filter((v) => v.Severity === 'CRITICAL');
+      const highs = vulns.filter((v) => v.Severity === 'HIGH');
+      const mediums = vulns.filter((v) => v.Severity === 'MEDIUM');
+      if (criticals.length > 0 || highs.length > 0 || mediums.length > 0) {
+        return formatResult(
+          'trivy',
+          DECISION.DENY,
+          `Trivy 发现 ${String(criticals.length)} CRITICAL, ${String(highs.length)} HIGH, ${String(mediums.length)} MEDIUM 漏洞`,
+          { critical: criticals.length, high: highs.length, medium: mediums.length },
+        );
+      }
+      return formatResult('trivy', DECISION.ALLOW, 'Trivy 扫描通过');
+    }
+    if (!result.success) {
+      return formatResult('trivy', DECISION.DENY, 'Trivy 执行失败且无输出，按失败处理（fail-closed）', {
+        output: result.stderr.slice(0, 500),
+      });
     }
     return formatResult('trivy', DECISION.ALLOW, 'Trivy 扫描通过');
   } catch (e) {
