@@ -188,7 +188,7 @@ describe('session-start', () => {
       expect(toolNames).toContain('shfmt');
       // Docker 工具
       expect(toolNames).toContain('hadolint');
-      expect(toolNames).toContain('docker');
+      expect(toolNames).toContain('container-runtime');
       // K8s 工具
       expect(toolNames).toContain('kubeconform');
       expect(toolNames).toContain('kube-linter');

@@ -15,6 +15,7 @@ import { existsSync, appendFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { LOG_DIR } from './security-orchestrator.js';
 import { getPlatform } from './hook-adapter.js';
+import { resolveContainerRuntime } from './checks/container-runtime.js';
 import type { ToolStatus } from './types.js';
 const HOOK_NAME = 'session-start';
 const GLOBAL_TIMEOUT_MS = 2000;
@@ -47,7 +48,19 @@ function getToolVersion(command: string): string {
   }
 }
 
+function checkContainerRuntime(): ToolStatus {
+  const runtime = resolveContainerRuntime();
+  if (!runtime) {
+    return { name: 'container-runtime', available: false, version: '' };
+  }
+  const version = getToolVersion(`${runtime.binary} --version`);
+  return { name: `container-runtime (${runtime.name})`, available: true, version };
+}
+
 function checkTool(name: string, binary: string, versionCmd?: string): ToolStatus {
+  if (binary === '__container_runtime__') {
+    return checkContainerRuntime();
+  }
   try {
     // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process -- binary 为内部固定的工具名
     execSync(`which ${binary}`, { stdio: 'pipe', timeout: PER_TOOL_TIMEOUT_MS });
@@ -71,7 +84,8 @@ const TOOLS: { name: string; binary: string; versionCmd?: string }[] = [
   { name: 'shfmt', binary: 'shfmt', versionCmd: 'shfmt --version' },
   // Docker 工具
   { name: 'hadolint', binary: 'hadolint', versionCmd: 'hadolint --version' },
-  { name: 'docker', binary: 'docker', versionCmd: 'docker --version' },
+  // 容器运行时（podman 优先，docker 回退）
+  { name: 'container-runtime', binary: '__container_runtime__', versionCmd: 'podman --version' },
   // K8s 工具
   { name: 'kubeconform', binary: 'kubeconform', versionCmd: 'kubeconform -v' },
   { name: 'kube-linter', binary: 'kube-linter', versionCmd: 'kube-linter version' },
