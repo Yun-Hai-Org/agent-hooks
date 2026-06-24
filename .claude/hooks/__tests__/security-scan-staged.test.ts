@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach } from 'bun:test';
+import { execSync } from 'child_process';
 import { runSemgrepStaged, evaluateSemgrepOutput } from '../checks/security-scan.js';
 import { DECISION } from '../security-orchestrator.js';
-import { createTempGitRepo, cleanupTempGitRepo } from './helpers.js';
+import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
 
 describe('runSemgrepStaged', () => {
   let repoDir: string | undefined;
@@ -17,6 +18,14 @@ describe('runSemgrepStaged', () => {
     repoDir = createTempGitRepo('feature');
     const result = await runSemgrepStaged(repoDir);
     expect(result.checkId).toBe('semgrep-staged');
+    expect(result.decision).toBe(DECISION.SKIP);
+  });
+
+  it('仅暂存 __tests__ 文件时应 SKIP（测试夹具被排除）', async () => {
+    repoDir = createTempGitRepo('feature');
+    writeFile(repoDir, '.claude/hooks/__tests__/x.test.ts', 'export const a = 1;\n');
+    execSync('git add .', { cwd: repoDir });
+    const result = await runSemgrepStaged(repoDir);
     expect(result.decision).toBe(DECISION.SKIP);
   });
 });
