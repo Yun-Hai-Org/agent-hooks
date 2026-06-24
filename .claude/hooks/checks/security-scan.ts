@@ -5,6 +5,14 @@ import type { CheckResult } from '../types.js';
 
 const TRIVY_EXTRA_SKIP_DIRS = ['_bmad', '_bmad-output', 'node_modules', '.venv', '.claude/worktrees'];
 const TRIVY_TIMEOUT_MS = 300000;
+// trivy 漏洞库下载源：国内镜像（南大）为主选放最前，官方源在后做 fallback（5xx/429 时按序回退）。
+// 注意：设置 --db-repository 会覆盖默认源，故须显式保留官方源以维持回退能力。
+const TRIVY_DB_REPOS = [
+  'ghcr.nju.edu.cn/aquasecurity/trivy-db:2',
+  'mirror.gcr.io/aquasec/trivy-db:2',
+  'ghcr.io/aquasecurity/trivy-db:2',
+];
+const TRIVY_DB_REPO_FLAGS = TRIVY_DB_REPOS.map((r) => `--db-repository ${r}`).join(' ');
 
 function getGitleaksConfigArg(cwd?: string): string {
   return execCommand('test -f .gitleaks.toml', { cwd }).success ? ' --config .gitleaks.toml' : '';
@@ -229,7 +237,7 @@ export async function runTrivy(cwd?: string): Promise<CheckResult> {
   try {
     const ignoredDirs = getGitIgnoredDirs(cwd);
     const skipDirs = buildTrivySkipArgs(ignoredDirs);
-    const trivyCmd = `trivy fs --scanners vuln,misconfig,secret,license --severity CRITICAL,HIGH,MEDIUM --format json ${skipDirs} .`;
+    const trivyCmd = `trivy fs ${TRIVY_DB_REPO_FLAGS} --scanners vuln,misconfig,secret,license --severity CRITICAL,HIGH,MEDIUM --format json ${skipDirs} .`;
     const result = await withTimeout(
       execCommandAsync(trivyCmd, { cwd, timeout: TRIVY_TIMEOUT_MS }),
       TRIVY_TIMEOUT_MS,
