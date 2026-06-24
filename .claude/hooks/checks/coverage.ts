@@ -19,13 +19,13 @@ export function runCoverage(cwd?: string, options: { threshold?: number } = {}):
     return formatResult('coverage', DECISION.SKIP, '无 Hook 测试目录，跳过覆盖率');
   }
 
-  const testList = execCommand(`find "${TESTS_DIR}" -maxdepth 1 -name '*.test.ts'`, { cwd, timeout: 5000 });
+  const testList = execCommand('find .claude/hooks/__tests__ -maxdepth 1 -name "*.test.ts"', { cwd, timeout: 5000 });
   const testFiles = testList.success ? testList.stdout.trim().split('\n').filter(Boolean) : [];
   if (testFiles.length === 0) {
     return formatResult('coverage', DECISION.SKIP, '无 Hook 单测文件，跳过覆盖率');
   }
 
-  const files = testFiles.map((f) => `"${f}"`).join(' ');
+  const files = testFiles.map((f) => `"./${f}"`).join(' ');
   const result = execCommand(`bun test ${files} --coverage 2>&1`, { cwd, timeout: 120000 });
   const output = result.stdout + result.stderr;
 

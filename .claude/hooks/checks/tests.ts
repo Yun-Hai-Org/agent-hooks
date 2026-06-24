@@ -209,13 +209,13 @@ export async function runHookUnitTests(cwd?: string) {
   if (!execCommand(`test -d "${TESTS_DIR}"`, { cwd }).success) {
     return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 测试目录不存在');
   }
-  const list = execCommand(`find "${TESTS_DIR}" -maxdepth 1 -name '*.test.ts'`, { cwd, timeout: 5000 });
+  const list = execCommand('find .claude/hooks/__tests__ -maxdepth 1 -name "*.test.ts"', { cwd, timeout: 5000 });
   const files = list.success ? list.stdout.trim().split('\n').filter(Boolean) : [];
   if (files.length === 0) {
     return formatResult('hook-unit-tests', DECISION.DENY, '无 Hook 常规单测文件');
   }
   try {
-    const cmd = `bun test ${files.map((f) => `"${f}"`).join(' ')}`;
+    const cmd = `bun test ${files.map((f) => `"./${f}"`).join(' ')}`;
     const result = await withTimeout(
       execCommandAsync(cmd, { cwd, timeout: 300000 }),
       300000,
@@ -250,7 +250,7 @@ export async function runHookAdversarialTests(cwd?: string) {
   }
   try {
     const result = await withTimeout(
-      execCommandAsync(`bun test "${ADVERSARIAL_DIR}"`, { cwd, timeout: 60000 }),
+      execCommandAsync(`bun test "./.claude/hooks/__tests__/adversarial"`, { cwd, timeout: 60000 }),
       60000,
       '对抗性测试超时 (60s)',
     );
