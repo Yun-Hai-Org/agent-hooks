@@ -92,6 +92,24 @@ describe('commit-gate', () => {
       expect(result.decision).toBe(DECISION.DENY);
     });
 
+    it('checkCommitMessage 应允许带 scope 的 header', () => {
+      expect(checkCommitMessage('git commit -m "feat(api): 新增端点"').decision).toBe(DECISION.ALLOW);
+    });
+
+    it('checkCommitMessage 应允许破坏性标记 "!"', () => {
+      expect(checkCommitMessage('git commit -m "feat!: 重大变更"').decision).toBe(DECISION.ALLOW);
+      expect(checkCommitMessage('git commit -m "refactor(core)!: 重构内部"').decision).toBe(DECISION.ALLOW);
+    });
+
+    it('checkCommitMessage 应拒绝过长首行(>72)', () => {
+      const long = `feat: ${'长'.repeat(80)}`;
+      expect(checkCommitMessage(`git commit -m "${long}"`).decision).toBe(DECISION.DENY);
+    });
+
+    it('checkCommitMessage 应拒绝占位描述 "feat: wip"', () => {
+      expect(checkCommitMessage('git commit -m "feat: wip"').decision).toBe(DECISION.DENY);
+    });
+
     it('commit-gate hook 应对合法 message 返回输出', async () => {
       const result = await runHook({
         tool_name: 'Bash',

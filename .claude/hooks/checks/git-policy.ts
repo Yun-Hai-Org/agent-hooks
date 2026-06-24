@@ -2,7 +2,23 @@ import { execCommand, formatResult, DECISION } from '../security-orchestrator.js
 import { readFileSync } from 'fs';
 import type { CheckResult } from '../types.js';
 
-const COMMIT_MSG_PATTERN = /^(feat|fix|refactor|docs|test|chore|style|perf):\s+\S/;
+const COMMIT_TYPES = [
+  'feat',
+  'fix',
+  'refactor',
+  'docs',
+  'test',
+  'chore',
+  'style',
+  'perf',
+  'build',
+  'ci',
+  'revert',
+] as const;
+const COMMIT_HEADER_PATTERN =
+  /^(feat|fix|refactor|docs|test|chore|style|perf|build|ci|revert)(\([a-z0-9][a-z0-9._/-]*\))?(!)?: (.+)$/;
+const COMMIT_SUBJECT_MAX = 72;
+const PLACEHOLDER_SUBJECTS = /^(wip|tbd|todo|fixme|xxx|\.+)$/i;
 
 const SENSITIVE_PATTERNS = [
   /\.env$/,
@@ -152,11 +168,31 @@ export function checkCommitMessageFromFile(msgFilePath: string): CheckResult {
   }
 }
 
-function validateCommitMessageText(message: string): CheckResult {
-  if (!COMMIT_MSG_PATTERN.test(message)) {
-    return formatResult('commit-msg', DECISION.DENY, `Commit message 格式错误: "${message}" — 必须匹配 "类型: 描述"`);
+export function validateCommitMessageText(message: string): CheckResult {
+  const header = (message.split('\n')[0] ?? '').trim();
+  if (header.length === 0) {
+    return formatResult('commit-msg', DECISION.DENY, 'Commit message 为空');
   }
-  return formatResult('commit-msg', DECISION.ALLOW, `Commit message 格式正确: "${message}"`);
+  const match = COMMIT_HEADER_PATTERN.exec(header);
+  if (!match) {
+    return formatResult(
+      'commit-msg',
+      DECISION.DENY,
+      `Commit message 格式错误: "${header}" — 需为 "type(scope)!: 描述"，type ∈ {${COMMIT_TYPES.join(', ')}}`,
+    );
+  }
+  if (header.length > COMMIT_SUBJECT_MAX) {
+    return formatResult(
+      'commit-msg',
+      DECISION.DENY,
+      `Commit 首行过长（${String(header.length)} > ${String(COMMIT_SUBJECT_MAX)}），请精简`,
+    );
+  }
+  const subject = (match[4] ?? '').trim();
+  if (PLACEHOLDER_SUBJECTS.test(subject)) {
+    return formatResult('commit-msg', DECISION.DENY, `Commit 描述过于笼统: "${subject}"`);
+  }
+  return formatResult('commit-msg', DECISION.ALLOW, `Commit message 合规: "${header}"`);
 }
 
 export function checkSensitiveStagedFiles(cwd?: string): CheckResult {

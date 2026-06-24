@@ -11,18 +11,42 @@ function hasPythonDependencies(cwd?: string): boolean {
   return /\[\s*"[^"]+"/.test(block) || /\[\s*'[^']+'/.test(block);
 }
 
-function parseOsvScannerOutput(output: string): boolean {
-  const hasCritical = /"severity"\s*:\s*"CRITICAL"/i.test(output);
-  const hasHigh = /"severity"\s*:\s*"HIGH"/i.test(output);
-  const hasMedium = /"severity"\s*:\s*"MEDIUM"/i.test(output);
-  return hasCritical || hasHigh || hasMedium;
+interface OsvJson {
+  results?: { packages?: { vulnerabilities?: unknown[] }[] }[];
 }
 
-function parsePipAuditOutput(output: string): boolean {
-  const hasCritical = /\bcritical\b/i.test(output);
-  const hasHigh = /\bhigh\b/i.test(output);
-  const hasMedium = /\bmedium\b/i.test(output);
-  return hasCritical || hasHigh || hasMedium;
+interface PipAuditDep {
+  vulns?: unknown[];
+}
+
+/** 解析 osv-scanner --format json：任一包含 vulnerabilities 即判定有漏洞；无法解析返回 null（fail-closed）。 */
+export function osvHasVulnerabilities(stdout: string): boolean | null {
+  let json: OsvJson;
+  try {
+    json = JSON.parse(stdout) as OsvJson;
+  } catch {
+    return null;
+  }
+  for (const result of json.results ?? []) {
+    for (const pkg of result.packages ?? []) {
+      if ((pkg.vulnerabilities?.length ?? 0) > 0) return true;
+    }
+  }
+  return false;
+}
+
+/** 解析 pip-audit --format json（兼容 {dependencies:[...]} 与裸数组两种结构）；无法解析返回 null。 */
+export function pipAuditHasVulnerabilities(stdout: string): boolean | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return null;
+  }
+  const deps: PipAuditDep[] = Array.isArray(parsed)
+    ? (parsed as PipAuditDep[])
+    : ((parsed as { dependencies?: PipAuditDep[] }).dependencies ?? []);
+  return deps.some((d) => (d.vulns?.length ?? 0) > 0);
 }
 
 export async function runPyDepAudit(cwd?: string): Promise<CheckResult> {
@@ -47,10 +71,15 @@ export async function runPyDepAudit(cwd?: string): Promise<CheckResult> {
         60000,
         'osv-scanner 超时 (60s)',
       );
-      const output = result.stdout + result.stderr;
-      if (!result.success || parseOsvScannerOutput(output)) {
+      const has = osvHasVulnerabilities(result.stdout);
+      if (has === null) {
+        return formatResult('py-dep-audit', DECISION.DENY, 'osv-scanner 输出不可解析，按失败处理（fail-closed）', {
+          output: (result.stderr || result.stdout).slice(0, 500),
+        });
+      }
+      if (has) {
         return formatResult('py-dep-audit', DECISION.DENY, 'Python 依赖审计发现漏洞 (osv-scanner)', {
-          output: output.slice(0, 500),
+          output: result.stdout.slice(0, 500),
         });
       }
       return formatResult('py-dep-audit', DECISION.ALLOW, 'Python 依赖审计通过 (osv-scanner)');
@@ -62,13 +91,18 @@ export async function runPyDepAudit(cwd?: string): Promise<CheckResult> {
   if (hasPipAudit || hasUv) {
     const missing = denyIfToolMissing(hasUv ? 'uv' : 'pip-audit', 'py-dep-audit', cwd);
     if (missing) return missing;
-    const cmd = hasUv ? 'uv run pip-audit' : 'pip-audit';
+    const cmd = hasUv ? 'uv run pip-audit --format json' : 'pip-audit --format json';
     try {
       const result = await withTimeout(execCommandAsync(cmd, { cwd, timeout: 60000 }), 60000, 'pip-audit 超时 (60s)');
-      const output = result.stdout + result.stderr;
-      if (!result.success || parsePipAuditOutput(output)) {
+      const has = pipAuditHasVulnerabilities(result.stdout);
+      if (has === null) {
+        return formatResult('py-dep-audit', DECISION.DENY, 'pip-audit 输出不可解析，按失败处理（fail-closed）', {
+          output: (result.stderr || result.stdout).slice(0, 500),
+        });
+      }
+      if (has) {
         return formatResult('py-dep-audit', DECISION.DENY, 'Python 依赖审计发现漏洞 (pip-audit)', {
-          output: output.slice(0, 500),
+          output: result.stdout.slice(0, 500),
         });
       }
       return formatResult('py-dep-audit', DECISION.ALLOW, 'Python 依赖审计通过 (pip-audit)');

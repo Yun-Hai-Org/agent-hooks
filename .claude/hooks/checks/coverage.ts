@@ -2,8 +2,11 @@ import { execCommand, formatResult, DECISION, TESTS_DIR } from '../security-orch
 import { denyIfToolMissing } from './tools.js';
 import type { CheckResult } from '../types.js';
 
-/** 实测全量 hook 单测行覆盖约 49.7%（2026-06）；逐步 ratchet 至 80% → 100% */
-export const DEFAULT_COVERAGE_THRESHOLD = 49;
+/** 实测全量 hook 单测行覆盖约 51.8%（2026-06，已 ratchet）；持续 ratchet 至 80% → 100% */
+export const DEFAULT_COVERAGE_THRESHOLD = 51;
+
+/** 业务代码（非 hook）测试的行覆盖率下限，仅在存在项目级测试时强制 */
+export const BUSINESS_COVERAGE_THRESHOLD = 50;
 
 export function parseCoveragePercent(output: string): number | null {
   const allFilesMatch = /All files[^|\n]*\|\s*\d+(?:\.\d+)?\s*\|\s*(\d+(?:\.\d+)?)/i.exec(output);

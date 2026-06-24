@@ -1,8 +1,34 @@
-import { execCommand, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
+import { execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
+import type { CheckResult } from '../types.js';
 
-/** @param {string} [cwd] @param {{ staged?: boolean }} [options] */
+const DEP_AUDIT_TIMEOUT_MS = 30000;
+
+export function parseBunAuditSeverities(stdout: string): Record<string, number> | null {
+  try {
+    const json = JSON.parse(stdout) as { metadata?: { vulnerabilities?: Record<string, number> } };
+    return json.metadata?.vulnerabilities ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function evaluateBunAudit(severities: Record<string, number>): CheckResult {
+  const critical = severities['critical'] ?? 0;
+  const high = severities['high'] ?? 0;
+  const moderate = severities['moderate'] ?? 0;
+  if (critical + high + moderate > 0) {
+    return formatResult(
+      'dep-audit',
+      DECISION.DENY,
+      `依赖审计发现 ${String(critical)} critical, ${String(high)} high, ${String(moderate)} moderate 漏洞`,
+      { vulnerabilities: severities },
+    );
+  }
+  return formatResult('dep-audit', DECISION.ALLOW, '依赖审计通过（无 moderate+ 漏洞）');
+}
+
 export async function runDepAudit(cwd?: string, options: { staged?: boolean } = {}) {
   const { staged = false } = options;
   if (staged) {
@@ -19,21 +45,18 @@ export async function runDepAudit(cwd?: string, options: { staged?: boolean } = 
 
   try {
     const result = await withTimeout(
-      Promise.resolve(execCommand('bun pm audit --json', { cwd, timeout: 5000 })),
-      5000,
-      'bun pm audit 超时 (5s)',
+      execCommandAsync('bun audit --json', { cwd, timeout: DEP_AUDIT_TIMEOUT_MS }),
+      DEP_AUDIT_TIMEOUT_MS,
+      `bun audit 超时 (${String(DEP_AUDIT_TIMEOUT_MS / 1000)}s)`,
     );
-    if (result.success) return formatResult('dep-audit', DECISION.ALLOW, '依赖审计通过');
-    const output = result.stdout + result.stderr;
-    const hasCritical = /critical/i.test(output);
-    const hasHigh = /high/i.test(output);
-    const hasMedium = /medium/i.test(output);
-    const deny = hasCritical || hasHigh || hasMedium;
-    if (deny) {
-      return formatResult('dep-audit', DECISION.DENY, '依赖审计发现漏洞', { output: output.slice(0, 500) });
+    const severities = parseBunAuditSeverities(result.stdout);
+    if (severities === null) {
+      return formatResult('dep-audit', DECISION.WARN, '依赖审计无法执行（输出不可解析，可能离线或 registry 不可达）', {
+        output: (result.stderr || result.stdout).slice(0, 300),
+      });
     }
-    return formatResult('dep-audit', DECISION.ALLOW, '依赖审计通过（无阻断级漏洞）');
+    return evaluateBunAudit(severities);
   } catch (e) {
-    return denyOnToolError(e, 'dep-audit', 'bun pm audit');
+    return denyOnToolError(e, 'dep-audit', 'bun audit');
   }
 }

@@ -1,5 +1,5 @@
 import { join } from 'path';
-import { parseCoveragePercent } from './coverage.js';
+import { parseCoveragePercent, BUSINESS_COVERAGE_THRESHOLD } from './coverage.js';
 import type { CheckResult } from '../types.js';
 import {
   execCommand,
@@ -176,18 +176,37 @@ export async function runFullProjectTests(cwd?: string) {
         } else {
           const files = projectTestFiles.map((f) => `./${f}`).join(' ');
           const jsResult = await withTimeout(
-            execCommandAsync(`bun test ${files}`, { cwd, timeout: 120000 }),
+            execCommandAsync(`bun test ${files} --coverage`, { cwd, timeout: 120000 }),
             120000,
             'bun test 超时 (120s)',
           );
+          const output = jsResult.stdout + jsResult.stderr;
           if (!jsResult.success) {
             results.push(
               formatResult('full-test-js', DECISION.DENY, 'JS 全量测试失败', {
-                output: (jsResult.stderr || jsResult.stdout).slice(0, 500),
+                output: output.slice(0, 500),
               }),
             );
           } else {
-            results.push(formatResult('full-test-js', DECISION.ALLOW, 'JS 全量测试通过'));
+            const pct = parseCoveragePercent(output);
+            if (pct !== null && pct < BUSINESS_COVERAGE_THRESHOLD) {
+              results.push(
+                formatResult(
+                  'full-test-js',
+                  DECISION.DENY,
+                  `业务 JS 测试通过但覆盖率 ${String(pct)}% 低于 ${String(BUSINESS_COVERAGE_THRESHOLD)}%`,
+                  { output: output.slice(0, 500) },
+                ),
+              );
+            } else {
+              results.push(
+                formatResult(
+                  'full-test-js',
+                  DECISION.ALLOW,
+                  pct === null ? 'JS 全量测试通过' : `JS 全量测试通过，覆盖率 ${String(pct)}%`,
+                ),
+              );
+            }
           }
         }
       } catch (e) {
