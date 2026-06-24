@@ -49,18 +49,24 @@ export async function runSemgrep(cwd?: string): Promise<CheckResult> {
     if (!result.success && result.stdout) {
       try {
         const json = JSON.parse(result.stdout) as { results?: SemgrepResult[] };
-        const errors = json.results?.filter((r) => r.extra?.severity === 'ERROR') ?? [];
-        if (errors.length > 0) {
-          return formatResult('semgrep', DECISION.DENY, `Semgrep 发现 ${String(errors.length)} 个 ERROR 级别问题`, {
-            count: errors.length,
-          });
+        const blocking =
+          json.results?.filter((r) => r.extra?.severity === 'ERROR' || r.extra?.severity === 'WARNING') ?? [];
+        if (blocking.length > 0) {
+          const errors = blocking.filter((r) => r.extra?.severity === 'ERROR');
+          const warnings = blocking.filter((r) => r.extra?.severity === 'WARNING');
+          return formatResult(
+            'semgrep',
+            DECISION.DENY,
+            `Semgrep 发现 ${String(errors.length)} ERROR, ${String(warnings.length)} WARNING`,
+            { count: blocking.length, errors: errors.length, warnings: warnings.length },
+          );
         }
       } catch {}
     }
     return formatResult(
       'semgrep',
       DECISION.ALLOW,
-      result.success ? 'Semgrep 扫描通过' : 'Semgrep 扫描完成（无 ERROR）',
+      result.success ? 'Semgrep 扫描通过' : 'Semgrep 扫描完成（无 ERROR/WARNING）',
     );
   } catch (e) {
     return denyOnToolError(e, 'semgrep', 'semgrep');
