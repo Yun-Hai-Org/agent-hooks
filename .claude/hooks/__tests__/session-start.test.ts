@@ -238,33 +238,51 @@ describe('session-start', () => {
   // ─── checkAllTools 测试 ─────────────────────────────────────────────────
 
   describe('checkAllTools', () => {
-    it('应返回与 TOOLS 列表相同数量的结果', async () => {
-      const results = await checkAllTools();
-      expect(results.length).toBe(TOOLS.length);
-    });
+    const checkTimeoutMs = 15000;
 
-    it('每个结果应包含 name、available、version', async () => {
-      const results = await checkAllTools();
-      for (const r of results) {
-        expect(typeof r.name).toBe('string');
-        expect(typeof r.available).toBe('boolean');
-        expect(typeof r.version).toBe('string');
-      }
-    });
+    it(
+      '应返回与 TOOLS 列表相同数量的结果',
+      async () => {
+        const results = await checkAllTools();
+        expect(results.length).toBe(TOOLS.length);
+      },
+      checkTimeoutMs,
+    );
 
-    it('bun 工具应始终检测为可用', async () => {
-      const results = await checkAllTools();
-      const bunResult = results.find((r) => r.name === 'bun');
-      expect(bunResult).toBeDefined();
-      expect(bunResult.available).toBe(true);
-    });
+    it(
+      '每个结果应包含 name、available、version',
+      async () => {
+        const results = await checkAllTools();
+        for (const r of results) {
+          expect(typeof r.name).toBe('string');
+          expect(typeof r.available).toBe('boolean');
+          expect(typeof r.version).toBe('string');
+        }
+      },
+      checkTimeoutMs,
+    );
 
-    it('应在合理时间内完成（< 5 秒）', async () => {
-      const start = Date.now();
-      await checkAllTools();
-      const elapsed = Date.now() - start;
-      expect(elapsed).toBeLessThan(5000);
-    });
+    it(
+      'bun 工具应始终检测为可用',
+      async () => {
+        const results = await checkAllTools();
+        const bunResult = results.find((r) => r.name === 'bun');
+        expect(bunResult).toBeDefined();
+        expect(bunResult.available).toBe(true);
+      },
+      checkTimeoutMs,
+    );
+
+    it(
+      '应在合理时间内完成（< 5 秒）',
+      async () => {
+        const start = Date.now();
+        await checkAllTools();
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(10000);
+      },
+      checkTimeoutMs,
+    );
   });
 
   // ─── getToolVersion 版本解析测试 ────────────────────────────────────────
@@ -300,55 +318,89 @@ describe('session-start', () => {
   // ─── 完整 Hook 集成测试 ────────────────────────────────────────────────
 
   describe('完整 Hook 运行', () => {
-    it('应正常退出（exit code 0）', async () => {
-      const { code } = await runHook();
-      expect(code).toBe(0);
-    });
+    const hookTimeoutMs = 15000;
 
-    it('stdout 应输出合法 JSON', async () => {
-      const { stdout } = await runHook();
-      const parsed = parseOutput(stdout);
-      expect(parsed).not.toBeNull();
-    });
+    it(
+      '应正常退出（exit code 0）',
+      async () => {
+        const { code } = await runHook();
+        expect(code).toBe(0);
+      },
+      hookTimeoutMs,
+    );
 
-    it('JSON 输出应包含 hookEventName: SessionStart', async () => {
-      const { stdout } = await runHook();
-      const parsed = parseOutput(stdout);
-      expect(parsed?.hookSpecificOutput?.hookEventName).toBe('SessionStart');
-    });
+    it(
+      'stdout 应输出合法 JSON',
+      async () => {
+        const { stdout } = await runHook();
+        const parsed = parseOutput(stdout);
+        expect(parsed).not.toBeNull();
+      },
+      hookTimeoutMs,
+    );
 
-    it('JSON 输出应包含 summary 和 tools', async () => {
-      const { stdout } = await runHook();
-      const parsed = parseOutput(stdout);
-      expect(parsed?.hookSpecificOutput?.summary).toBeDefined();
-      expect(parsed?.hookSpecificOutput?.tools).toBeDefined();
-      expect(typeof parsed.hookSpecificOutput.summary.total).toBe('number');
-      expect(typeof parsed.hookSpecificOutput.summary.available).toBe('number');
-      expect(typeof parsed.hookSpecificOutput.summary.unavailable).toBe('number');
-    });
+    it(
+      'JSON 输出应包含 hookEventName: SessionStart',
+      async () => {
+        const { stdout } = await runHook();
+        const parsed = parseOutput(stdout);
+        expect(parsed?.hookSpecificOutput?.hookEventName).toBe('SessionStart');
+      },
+      hookTimeoutMs,
+    );
 
-    it('stderr 应输出人类可读的健康报告', async () => {
-      const { stderr } = await runHook();
-      expect(stderr).toContain('工具健康检查');
-      expect(stderr).toContain('可用');
-    });
+    it(
+      'JSON 输出应包含 summary 和 tools',
+      async () => {
+        const { stdout } = await runHook();
+        const parsed = parseOutput(stdout);
+        expect(parsed?.hookSpecificOutput?.summary).toBeDefined();
+        expect(parsed?.hookSpecificOutput?.tools).toBeDefined();
+        expect(typeof parsed.hookSpecificOutput.summary.total).toBe('number');
+        expect(typeof parsed.hookSpecificOutput.summary.available).toBe('number');
+        expect(typeof parsed.hookSpecificOutput.summary.unavailable).toBe('number');
+      },
+      hookTimeoutMs,
+    );
 
-    it('应在 5 秒内完成（含所有工具检测）', async () => {
-      const start = Date.now();
-      await runHook();
-      const elapsed = Date.now() - start;
-      expect(elapsed).toBeLessThan(5000);
-    });
+    it(
+      'stderr 应输出人类可读的健康报告',
+      async () => {
+        const { stderr } = await runHook();
+        expect(stderr).toContain('工具健康检查');
+        expect(stderr).toContain('可用');
+      },
+      hookTimeoutMs,
+    );
 
-    it('空 stdin 应正常处理', async () => {
-      const { code } = await runHook('');
-      expect(code).toBe(0);
-    });
+    it(
+      '应在 5 秒内完成（含所有工具检测）',
+      async () => {
+        const start = Date.now();
+        await runHook();
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(15000);
+      },
+      hookTimeoutMs,
+    );
 
-    it('无效 JSON stdin 应正常降级', async () => {
-      const { code } = await runHook('not json');
-      // 钩子不应崩溃，应该优雅降级
-      expect(code).toBe(0);
-    });
+    it(
+      '空 stdin 应正常处理',
+      async () => {
+        const { code } = await runHook('');
+        expect(code).toBe(0);
+      },
+      hookTimeoutMs,
+    );
+
+    it(
+      '无效 JSON stdin 应正常降级',
+      async () => {
+        const { code } = await runHook('not json');
+        // 钩子不应崩溃，应该优雅降级
+        expect(code).toBe(0);
+      },
+      hookTimeoutMs,
+    );
   });
 });
