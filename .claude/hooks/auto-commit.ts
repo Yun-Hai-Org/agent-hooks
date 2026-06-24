@@ -23,22 +23,21 @@ const MAIN_BRANCHES = ['main', 'master'];
 const DEFAULT_MAX_LOOPS = 8;
 
 /** @param {Record<string, unknown>} data */
-function resolveCwd(data) {
-  if (typeof data.cwd === 'string' && data.cwd) return data.cwd;
-  const roots = data.workspace_roots;
+function resolveCwd(data: Record<string, unknown>): string {
+  if (typeof data['cwd'] === 'string' && data['cwd']) return data['cwd'];
+  const roots = data['workspace_roots'];
   if (Array.isArray(roots) && typeof roots[0] === 'string') return roots[0];
   return process.cwd();
 }
 
-/** @param {Record<string, unknown>} data */
-export function parseStopInput(data) {
+export function parseStopInput(data: Record<string, unknown>) {
   return {
     cwd: resolveCwd(data),
-    sessionId: typeof data.session_id === 'string' ? data.session_id : '',
-    hookEvent: typeof data.hook_event_name === 'string' ? data.hook_event_name : '',
-    stopHookActive: data.stop_hook_active === true,
-    loopCount: typeof data.loop_count === 'number' ? data.loop_count : 0,
-    status: typeof data.status === 'string' ? data.status : 'completed',
+    sessionId: typeof data['session_id'] === 'string' ? data['session_id'] : '',
+    hookEvent: typeof data['hook_event_name'] === 'string' ? data['hook_event_name'] : '',
+    stopHookActive: data['stop_hook_active'] === true,
+    loopCount: typeof data['loop_count'] === 'number' ? data['loop_count'] : 0,
+    status: typeof data['status'] === 'string' ? data['status'] : 'completed',
   };
 }
 
@@ -46,13 +45,13 @@ export function parseStopInput(data) {
  *
  */
 export function isAutoCommitEnabled() {
-  const v = (process.env.AUTO_COMMIT ?? '1').toLowerCase();
+  const v = (process.env['AUTO_COMMIT'] ?? '1').toLowerCase();
   return v !== '0' && v !== 'false' && v !== 'off';
 }
 
 /** @returns {'agent' | 'auto'} */
 export function getAutoCommitMode() {
-  const mode = (process.env.AUTO_COMMIT_MODE ?? 'agent').toLowerCase();
+  const mode = (process.env['AUTO_COMMIT_MODE'] ?? 'agent').toLowerCase();
   return mode === 'auto' ? 'auto' : 'agent';
 }
 
@@ -60,27 +59,21 @@ export function getAutoCommitMode() {
  *
  */
 export function getMaxAutoCommitLoops() {
-  const n = parseInt(process.env.AUTO_COMMIT_MAX_LOOPS || String(DEFAULT_MAX_LOOPS), 10);
+  const n = parseInt(process.env['AUTO_COMMIT_MAX_LOOPS'] || String(DEFAULT_MAX_LOOPS), 10);
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_MAX_LOOPS;
 }
 
-/** @param {string} cwd */
-export function hasStagedChanges(cwd) {
+export function hasStagedChanges(cwd: string) {
   const result = execCommand('git diff --cached --quiet', { cwd });
   return !result.success;
 }
 
-/** @param {string} cwd */
-export function buildAgentCommitMessage(cwd) {
+export function buildAgentCommitMessage(cwd: string) {
   return buildUncommittedWorktreeDenyReason(cwd, 'stop', { prefix: '[auto-commit] ' });
 }
 
-/**
- * @param {string[]} stagedFiles
- * @returns {string}
- */
-export function buildCommitMessage(stagedFiles) {
-  const custom = process.env.AUTO_COMMIT_MESSAGE?.trim();
+export function buildCommitMessage(stagedFiles: string[]) {
+  const custom = process.env['AUTO_COMMIT_MESSAGE']?.trim();
   if (custom) return custom;
 
   const allTest = stagedFiles.every((f) => /\.(test|spec)\.(js|ts|jsx|tsx)$/.test(f) || f.includes('__tests__'));
@@ -127,10 +120,7 @@ export function buildFixFollowupMessage(
     .slice(0, 9500);
 }
 
-/**
- * @param {string} stderr
- */
-export function buildCommitFailureMessage(stderr) {
+export function buildCommitFailureMessage(stderr: string) {
   return ['[auto-commit] git commit 执行失败，请修复后结束本轮重试：', '', stderr.trim().slice(0, 4000)].join('\n');
 }
 
@@ -227,7 +217,7 @@ async function main() {
       return;
     }
 
-    if (hookEvent === 'SubagentStop' && process.env.AUTO_COMMIT_SUBAGENT !== '1') {
+    if (hookEvent === 'SubagentStop' && process.env['AUTO_COMMIT_SUBAGENT'] !== '1') {
       log(HOOK_NAME, { level: 'SKIP', reason: 'SubagentStop', session_id: sessionId, cwd });
       console.log('{}');
       return;

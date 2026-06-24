@@ -1,7 +1,7 @@
 import { execCommand, formatResult, DECISION } from '../security-orchestrator.js';
+import type { CheckResult } from '../types.js';
 
-/** @type {Record<string, string>} */
-export const TOOL_INSTALL_HINTS = {
+export const TOOL_INSTALL_HINTS: Record<string, string> = {
   bun: 'curl -fsSL https://bun.sh/install | bash',
   uv: 'curl -LsSf https://astral.sh/uv/install.sh | sh',
   ruff: 'uv tool install ruff  # 或 pip install ruff',
@@ -27,44 +27,30 @@ export const TOOL_INSTALL_HINTS = {
   oasdiff: 'brew install oasdiff  # 或 go install github.com/oasdiff/oasdiff@latest',
 };
 
-/** @param {string} tool */
-export function getToolInstallHint(tool) {
+export function getToolInstallHint(tool: string): string {
   return TOOL_INSTALL_HINTS[tool] || `请先安装 ${tool}`;
 }
 
-/** @param {string} tool @param {string} [cwd] */
-export function isToolInstalled(tool, cwd) {
+export function isToolInstalled(tool: string, cwd?: string): boolean {
   const env = { ...process.env };
   return execCommand(`command -v ${tool}`, { cwd, env }).success;
 }
 
-/** @param {string} [cwd] */
-export function getRuffInvocation(cwd) {
+export function getRuffInvocation(cwd?: string): string {
   if (execCommand('test -f pyproject.toml', { cwd }).success && isToolInstalled('uv', cwd)) {
     return 'uv run ruff';
   }
   return 'ruff';
 }
 
-/**
- * @param {string} checkId
- * @param {string} [cwd]
- * @returns {import('../security-orchestrator.js').CheckResult | null}
- */
-export function denyIfRuffMissing(checkId, cwd) {
+export function denyIfRuffMissing(checkId: string, cwd?: string): CheckResult | null {
   if (execCommand('test -f pyproject.toml', { cwd }).success && isToolInstalled('uv', cwd)) {
     return null;
   }
   return denyIfToolMissing('ruff', checkId, cwd);
 }
 
-/**
- * @param {string} tool
- * @param {string} checkId
- * @param {string} [cwd]
- * @returns {import('../security-orchestrator.js').CheckResult | null}
- */
-export function denyIfToolMissing(tool, checkId, cwd) {
+export function denyIfToolMissing(tool: string, checkId: string, cwd?: string): CheckResult | null {
   if (!isToolInstalled(tool, cwd)) {
     const hint = getToolInstallHint(tool);
     return formatResult(checkId, DECISION.DENY, `${tool} 未安装。请执行: ${hint}`, { installHint: hint });
@@ -72,13 +58,11 @@ export function denyIfToolMissing(tool, checkId, cwd) {
   return null;
 }
 
-/** @param {string} [cwd] */
-export function isPyrightAvailable(cwd) {
+export function isPyrightAvailable(cwd?: string): boolean {
   return isToolInstalled('pyright', cwd) || isToolInstalled('uv', cwd);
 }
 
-/** @param {string} checkId @param {string} [cwd] @returns {import('../security-orchestrator.js').CheckResult | null} */
-export function denyIfPyrightMissing(checkId, cwd) {
+export function denyIfPyrightMissing(checkId: string, cwd?: string): CheckResult | null {
   if (!isPyrightAvailable(cwd)) {
     const hint = `${getToolInstallHint('pyright')}；或 ${getToolInstallHint('uv')}`;
     return formatResult(checkId, DECISION.DENY, `pyright 未安装（需 pyright 或 uv）。请执行: ${hint}`, {
@@ -88,13 +72,7 @@ export function denyIfPyrightMissing(checkId, cwd) {
   return null;
 }
 
-/**
- * @param {unknown} error
- * @param {string} checkId
- * @param {string} tool
- * @returns {import('../security-orchestrator.js').CheckResult}
- */
-export function denyOnToolError(error, checkId, tool) {
+export function denyOnToolError(error: unknown, checkId: string, tool: string): CheckResult {
   const message = error instanceof Error ? error.message : String(error);
   return formatResult(checkId, DECISION.DENY, `${tool} 执行失败: ${message}`);
 }

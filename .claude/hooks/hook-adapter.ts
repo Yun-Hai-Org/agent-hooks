@@ -5,183 +5,145 @@
  */
 
 import { readStdin as readStdinBase } from './security-orchestrator.js';
+import type { HookInput, HookPlatform, HookToolInput } from './types.js';
 
-/** @typedef {'claude' | 'cursor' | 'kiro'} HookPlatform */
-
-/**
- * @typedef {object} HookToolInput
- * @property {string} [command]
- * @property {string} [file_path]
- * @property {string} [content]
- * @property {string} [new_string]
- */
-
-/**
- * @typedef {object} HookInput
- * @property {string} tool_name
- * @property {HookToolInput} tool_input
- * @property {string} session_id
- * @property {string} cwd
- */
-
-/** @returns {HookPlatform} */
-export function getPlatform() {
-  const p = (process.env.HOOK_PLATFORM || 'claude').toLowerCase();
+export function getPlatform(): HookPlatform {
+  const p = (process.env['HOOK_PLATFORM'] || 'claude').toLowerCase();
   if (p === 'cursor' || p === 'kiro') return p;
   return 'claude';
 }
 
-/** @param {Record<string, unknown>} data */
-function extractShellCommand(data) {
-  if (typeof data.command === 'string') return data.command;
-  const toolInput = data.tool_input || data.toolInput;
+function extractShellCommand(data: Record<string, unknown>): string {
+  if (typeof data['command'] === 'string') return data['command'];
+  const toolInput = data['tool_input'] || data['toolInput'];
   if (toolInput && typeof toolInput === 'object' && 'command' in toolInput) {
-    return String(/** @type {{ command?: string }} */ toolInput.command || '');
+    return String((toolInput as { command?: string })['command'] || '');
   }
   return '';
 }
 
-/** @param {string} [toolName] */
-export function isShellTool(toolName) {
+export function isShellTool(toolName?: string): boolean {
   return /^(bash|shell)$/i.test(toolName || '');
 }
 
-/** @param {{ tool_name?: string; tool_input?: { command?: string } }} data */
-export function isShellHookInput(data) {
+export function isShellHookInput(data: { tool_name?: string; tool_input?: { command?: string } }): boolean {
   if (isShellTool(data.tool_name)) return true;
   return Boolean(data.tool_input?.command);
 }
 
-/** @param {Record<string, unknown>} data @returns {HookInput} */
-export function normalizeInput(data) {
+export function normalizeInput(data: Record<string, unknown>): HookInput {
   const platform = getPlatform();
   if (platform === 'cursor') {
     const command = extractShellCommand(data);
-    const isBeforeShell = typeof data.command === 'string';
-    const toolInput = data.tool_input || data.toolInput;
+    const isBeforeShell = typeof data['command'] === 'string';
+    const toolInput = data['tool_input'] || data['toolInput'];
     const mergedCommand =
       command ||
       (toolInput && typeof toolInput === 'object' && 'command' in toolInput
-        ? String(/** @type {{ command?: string }} */ toolInput.command || '')
+        ? String((toolInput as { command?: string })['command'] || '')
         : '');
     return {
-      tool_name: String(data.tool_name || data.toolName || (isBeforeShell || command ? 'Shell' : '')),
+      tool_name: String(data['tool_name'] || data['toolName'] || (isBeforeShell || command ? 'Shell' : '')),
       tool_input: { command: mergedCommand },
-      session_id: String(data.session_id || data.conversation_id || ''),
-      cwd: String(data.cwd || (Array.isArray(data.workspace_roots) ? data.workspace_roots[0] : '') || process.cwd()),
+      session_id: String(data['session_id'] || data['conversation_id'] || ''),
+      cwd: String(
+        data['cwd'] || (Array.isArray(data['workspace_roots']) ? data['workspace_roots'][0] : '') || process.cwd(),
+      ),
     };
   }
   if (platform === 'kiro') {
-    const toolInput = data.tool_input || data.toolInput;
+    const toolInput = data['tool_input'] || data['toolInput'];
     return {
-      tool_name: String(data.tool_name || data.toolName || ''),
+      tool_name: String(data['tool_name'] || data['toolName'] || ''),
       tool_input:
         toolInput && typeof toolInput === 'object'
           ? {
-              command:
-                'command' in toolInput ? String(/** @type {{ command?: string }} */ toolInput.command || '') : '',
+              command: 'command' in toolInput ? String((toolInput as { command?: string })['command'] || '') : '',
               file_path:
-                'file_path' in toolInput ? String(/** @type {{ file_path?: string }} */ toolInput.file_path || '') : '',
+                'file_path' in toolInput ? String((toolInput as { file_path?: string })['file_path'] || '') : '',
             }
           : {},
-      session_id: String(data.session_id || data.sessionId || ''),
-      cwd: String(data.cwd || process.cwd()),
+      session_id: String(data['session_id'] || data['sessionId'] || ''),
+      cwd: String(data['cwd'] || process.cwd()),
     };
   }
-  const toolInput = data.tool_input;
+  const toolInput = data['tool_input'];
   return {
-    tool_name: String(data.tool_name || ''),
+    tool_name: String(data['tool_name'] || ''),
     tool_input:
       toolInput && typeof toolInput === 'object'
         ? {
-            command: 'command' in toolInput ? String(/** @type {{ command?: string }} */ toolInput.command || '') : '',
-            file_path:
-              'file_path' in toolInput ? String(/** @type {{ file_path?: string }} */ toolInput.file_path || '') : '',
+            command: 'command' in toolInput ? String((toolInput as { command?: string })['command'] || '') : '',
+            file_path: 'file_path' in toolInput ? String((toolInput as { file_path?: string })['file_path'] || '') : '',
           }
         : {},
-    session_id: String(data.session_id || ''),
-    cwd: String(data.cwd || process.cwd()),
+    session_id: String(data['session_id'] || ''),
+    cwd: String(data['cwd'] || process.cwd()),
   };
 }
 
-/** @returns {Promise<HookInput>} */
-export async function readHookInput() {
+export async function readHookInput(): Promise<HookInput> {
   const raw = await readStdinBase();
   return normalizeInput(raw);
 }
 
-/** @param {string} [toolName] */
-export function isFileEditTool(toolName) {
+export function isFileEditTool(toolName?: string): boolean {
   return /^(edit|write)$/i.test(toolName || '');
 }
 
-/** @param {Record<string, unknown>} data */
-export function normalizeFileEditInput(data) {
+function parseHookToolInput(rawInput: unknown): HookToolInput {
+  const tool_input: HookToolInput = {};
+  if (!rawInput || typeof rawInput !== 'object') return tool_input;
+  const obj = rawInput as Record<string, unknown>;
+  if ('command' in obj) tool_input.command = String(obj['command'] || '');
+  if ('file_path' in obj) tool_input.file_path = String(obj['file_path'] || '');
+  if ('content' in obj) tool_input.content = String(obj['content'] || '');
+  if ('new_string' in obj) tool_input.new_string = String(obj['new_string'] || '');
+  return tool_input;
+}
+
+export function normalizeFileEditInput(data: Record<string, unknown>): HookInput {
   const platform = getPlatform();
-  if (platform === 'cursor' && typeof data.file_path === 'string') {
-    const roots = data.workspace_roots;
+  if (platform === 'cursor' && typeof data['file_path'] === 'string') {
+    const roots = data['workspace_roots'];
     return {
       tool_name: 'Write',
-      tool_input: { file_path: data.file_path },
+      tool_input: { file_path: data['file_path'] },
       session_id:
-        typeof data.session_id === 'string'
-          ? data.session_id
-          : typeof data.conversation_id === 'string'
-            ? data.conversation_id
+        typeof data['session_id'] === 'string'
+          ? data['session_id']
+          : typeof data['conversation_id'] === 'string'
+            ? data['conversation_id']
             : '',
       cwd:
-        typeof data.cwd === 'string'
-          ? data.cwd
+        typeof data['cwd'] === 'string'
+          ? data['cwd']
           : Array.isArray(roots) && typeof roots[0] === 'string'
             ? roots[0]
             : process.cwd(),
     };
   }
-  const rawInput = data.tool_input || data.toolInput;
-  /** @type {HookToolInput} */
-  const tool_input =
-    rawInput && typeof rawInput === 'object'
-      ? {
-          command:
-            'command' in rawInput ? String(/** @type {{ command?: string }} */ rawInput.command || '') : undefined,
-          file_path:
-            'file_path' in rawInput
-              ? String(/** @type {{ file_path?: string }} */ rawInput.file_path || '')
-              : undefined,
-          content:
-            'content' in rawInput ? String(/** @type {{ content?: string }} */ rawInput.content || '') : undefined,
-          new_string:
-            'new_string' in rawInput
-              ? String(/** @type {{ new_string?: string }} */ rawInput.new_string || '')
-              : undefined,
-        }
-      : {};
+  const rawInput = data['tool_input'] || data['toolInput'];
+  const tool_input = parseHookToolInput(rawInput);
   return {
-    tool_name: String(data.tool_name || data.toolName || ''),
+    tool_name: String(data['tool_name'] || data['toolName'] || ''),
     tool_input,
     session_id:
-      typeof data.session_id === 'string'
-        ? data.session_id
-        : typeof data.conversation_id === 'string'
-          ? data.conversation_id
+      typeof data['session_id'] === 'string'
+        ? data['session_id']
+        : typeof data['conversation_id'] === 'string'
+          ? data['conversation_id']
           : '',
-    cwd: typeof data.cwd === 'string' ? data.cwd : process.cwd(),
+    cwd: typeof data['cwd'] === 'string' ? data['cwd'] : process.cwd(),
   };
 }
 
-/**
- *
- */
-export async function readFileEditInput() {
+export async function readFileEditInput(): Promise<HookInput> {
   const raw = await readStdinBase();
   return normalizeFileEditInput(raw);
 }
 
-/**
- * @param {string} decision
- * @param {string} reason
- */
-export function formatDenyOutput(decision, reason) {
+export function formatDenyOutput(decision: string, reason: string): string {
   const platform = getPlatform();
   if (platform === 'cursor') {
     if (decision === 'allow') {
@@ -209,19 +171,11 @@ export function formatDenyOutput(decision, reason) {
   });
 }
 
-/**
- *
- */
-export function formatAllowOutput() {
+export function formatAllowOutput(): string {
   return formatDenyOutput('allow', '');
 }
 
-/**
- * Stop / stop hook：质量门失败时阻止结束并驱动 Agent 继续修复
- * @param {string} reason
- * @param {string} [_hookEvent]
- */
-export function formatStopContinueOutput(reason, _hookEvent = 'Stop') {
+export function formatStopContinueOutput(reason: string, _hookEvent = 'Stop'): string {
   const platform = getPlatform();
   if (platform === 'cursor') {
     return JSON.stringify({ followup_message: reason });
@@ -229,12 +183,7 @@ export function formatStopContinueOutput(reason, _hookEvent = 'Stop') {
   return JSON.stringify({ decision: 'block', reason });
 }
 
-/**
- * Stop / stop hook：提交成功时的上下文反馈（Claude additionalContext）
- * @param {string} message
- * @param {string} [hookEvent]
- */
-export function formatStopSuccessOutput(message, hookEvent = 'Stop') {
+export function formatStopSuccessOutput(message: string, hookEvent = 'Stop'): string {
   const platform = getPlatform();
   if (platform === 'cursor') {
     return '{}';

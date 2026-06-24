@@ -11,12 +11,14 @@ import { readStdin, log, safeMain } from './security-orchestrator.js';
 
 const HOOK_NAME = 'user-prompt-filter';
 
-/**
- * Scan prompt text for sensitive content patterns.
- * @param {string} prompt - User input text to scan
- * @returns {{ blocked: boolean, pattern: { id: string, level: string, reason: string } | null }}
- */
-export function scanPrompt(prompt) {
+interface ContentPattern {
+  id: string;
+  level: string;
+  reason: string;
+  regex: RegExp;
+}
+
+export function scanPrompt(prompt: string): { blocked: boolean; pattern: ContentPattern | null } {
   if (!prompt || typeof prompt !== 'string') return { blocked: false, pattern: null };
   for (const p of CONTENT_PATTERNS) {
     if (p.regex.test(prompt)) {
@@ -28,12 +30,12 @@ export function scanPrompt(prompt) {
 
 async function main() {
   const data = await readStdin();
-  const tool_input = data.tool_input as { user_prompt?: string } | undefined;
-  const session_id = String(data.session_id || '');
-  const cwd = String(data.cwd || process.cwd());
+  const tool_input = data['tool_input'] as { user_prompt?: string } | undefined;
+  const session_id = String(data['session_id'] || '');
+  const cwd = String(data['cwd'] || process.cwd());
 
   // Only process UserPromptSubmit events
-  if (data?.tool_name !== 'UserPromptSubmit') {
+  if (data?.['tool_name'] !== 'UserPromptSubmit') {
     return console.log('{}');
   }
 

@@ -21,11 +21,7 @@ import { setPendingGateFailure, clearPendingGateFailure } from './gate-pending.j
 
 const HOOK_NAME = 'merge-gate';
 
-/**
- * @param {string} repoCwd
- * @param {string} sourceBranch
- */
-async function runFullOnSourceBranch(repoCwd, sourceBranch) {
+async function runFullOnSourceBranch(repoCwd: string, sourceBranch: string) {
   const worktreeDir = mkdtempSync(join(tmpdir(), 'merge-gate-'));
   try {
     const addResult = execCommand(`git worktree add "${worktreeDir}" "${sourceBranch}"`, {

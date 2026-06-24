@@ -24,16 +24,12 @@ export {
 
 const HOOK_NAME = 'notification-hook';
 
-/**
- * @typedef {object} NotificationHookInput
- * @property {{ message?: string }} [tool_input]
- * @property {string} [session_id]
- */
+interface NotificationHookInput {
+  tool_input?: { message?: string };
+  session_id?: string;
+}
 
-/**
- * @param {NotificationHookInput} data
- */
-export async function handleNotification(data) {
+export async function handleNotification(data: NotificationHookInput) {
   const message = data?.tool_input?.message || '';
   const session_id = data?.session_id || '';
   return dispatchSecurityNotification({ message, session_id }, HOOK_NAME);

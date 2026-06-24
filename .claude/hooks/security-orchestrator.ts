@@ -30,7 +30,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 export const HOOKS_DIR = __dirname;
 export const TESTS_DIR = join(__dirname, '__tests__');
-export const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
+export const LOG_DIR = join(process.env['HOME'] || '', '.claude', 'hooks-logs');
 
 export function log(hookName: string, data: Record<string, unknown>): void {
   try {
@@ -264,7 +264,7 @@ export function isGitIgnored(filePath: string, cwd = process.cwd()): boolean {
       stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
     if (bare === 'true' && existsSync(join(cwd, '.gitignore'))) {
-      env.GIT_WORK_TREE = cwd;
+      env['GIT_WORK_TREE'] = cwd;
     }
   } catch {
     // fall through with default env

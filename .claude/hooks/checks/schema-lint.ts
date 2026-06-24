@@ -6,12 +6,7 @@ import { classifyFiles, listTrackedFiles } from './file-patterns.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
 import type { CheckResult } from '../types.js';
 
-/**
- * @param {string} filePath
- * @param {string} [cwd]
- * @returns {string|null}
- */
-export function findSchemaFile(filePath, cwd) {
+export function findSchemaFile(filePath: string, cwd?: string): string | null {
   const absPath = filePath.startsWith('/') ? filePath : join(cwd || process.cwd(), filePath);
   const dir = dirname(absPath);
   const ext = extname(absPath);
@@ -52,13 +47,12 @@ export function findSchemaFile(filePath, cwd) {
   return null;
 }
 
-/**
- * @param {string} filePath
- * @param {string|null} schemaPath
- * @param {'json'|'yaml'} format
- * @param {string} [cwd]
- */
-export async function runCheckJsonschema(filePath, schemaPath, format, cwd) {
+export async function runCheckJsonschema(
+  filePath: string,
+  schemaPath: string | null,
+  format: 'json' | 'yaml',
+  cwd?: string,
+) {
   if (!schemaPath) {
     return { success: true, output: '', skipped: true };
   }
@@ -80,22 +74,16 @@ export async function runCheckJsonschema(filePath, schemaPath, format, cwd) {
   };
 }
 
-/**
- * @param {string[]} jsonFiles
- * @param {string[]} yamlFiles
- * @param {string} idPrefix
- * @param {string} [cwd]
- */
-async function runSchemaChecks(jsonFiles, yamlFiles, idPrefix, cwd) {
+async function runSchemaChecks(jsonFiles: string[], yamlFiles: string[], idPrefix: string, cwd?: string) {
   const results: CheckResult[] = [];
 
   if (jsonFiles.length === 0 && yamlFiles.length === 0) {
     return formatResult(`${idPrefix}-schema`, DECISION.SKIP, '无 JSON/YAML 文件，跳过 schema 检查');
   }
 
-  const schemaTargets = [
-    ...jsonFiles.map((f) => ({ file: f, format: /** @type {'json'} */ 'json' })),
-    ...yamlFiles.map((f) => ({ file: f, format: /** @type {'yaml'} */ 'yaml' })),
+  const schemaTargets: Array<{ file: string; format: 'json' | 'yaml' }> = [
+    ...jsonFiles.map((f) => ({ file: f, format: 'json' as const })),
+    ...yamlFiles.map((f) => ({ file: f, format: 'yaml' as const })),
   ];
 
   const filesWithSchema = schemaTargets
@@ -181,15 +169,13 @@ async function runSchemaChecks(jsonFiles, yamlFiles, idPrefix, cwd) {
   return formatResult(`${idPrefix}-schema`, DECISION.ALLOW, 'JSON/YAML schema 与语法检查通过');
 }
 
-/** @param {string} [cwd] */
-export async function runSchemaLintStaged(cwd) {
+export async function runSchemaLintStaged(cwd?: string) {
   const staged = getStagedFiles(cwd);
   const { json, yaml } = classifyFiles(staged, cwd);
   return runSchemaChecks(json, yaml, 'schema-staged', cwd);
 }
 
-/** @param {string} [cwd] */
-export async function runSchemaLintFull(cwd) {
+export async function runSchemaLintFull(cwd?: string) {
   const json = listTrackedFiles((f) => f.endsWith('.json') && !f.endsWith('.schema.json'), cwd);
   const yaml = listTrackedFiles((f) => /\.(yaml|yml)$/i.test(f), cwd);
   return runSchemaChecks(json, yaml, 'schema-full', cwd);

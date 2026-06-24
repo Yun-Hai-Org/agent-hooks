@@ -10,8 +10,7 @@ function filterExistingStagedFiles(files: string[], cwd?: string): string[] {
   return files.filter((f) => existsSync(join(root, f)));
 }
 
-/** @param {string} [cwd] */
-export async function runFormatStaged(cwd) {
+export async function runFormatStaged(cwd?: string) {
   const stagedFiles = filterExistingStagedFiles(getStagedFiles(cwd), cwd);
   const jsFiles = stagedFiles.filter(
     (f) =>

@@ -23,7 +23,7 @@ export async function runCoverage(cwd?: string, options: { threshold?: number } 
       });
     }
     const match = (result.stdout + result.stderr).match(/(\d+(?:\.\d+)?)\s*%/);
-    const pct = match ? parseFloat(match[1]) : 100;
+    const pct = match?.[1] ? parseFloat(match[1]) : 100;
     if (pct < threshold) {
       return formatResult('coverage', DECISION.DENY, `覆盖率 ${pct}% 低于阈值 ${threshold}%`);
     }

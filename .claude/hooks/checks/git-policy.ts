@@ -1,5 +1,6 @@
 import { execCommand, formatResult, DECISION } from '../security-orchestrator.js';
 import { readFileSync } from 'fs';
+import type { CheckResult } from '../types.js';
 
 const COMMIT_MSG_PATTERN = /^(feat|fix|refactor|docs|test|chore|style|perf):\s+\S/;
 
@@ -15,8 +16,21 @@ const SENSITIVE_PATTERNS = [
   /credentials\.json$/,
 ];
 
-/** @param {string} cmd */
-export function extractCommitMessage(cmd) {
+type WorktreeAction = 'stop' | 'push' | 'merge';
+
+const ACTION_STEPS: Record<WorktreeAction, string> = {
+  stop: '4. 再结束本轮',
+  push: '4. 再执行 git push',
+  merge: '4. 再执行 git merge',
+};
+
+const ACTION_LABELS: Record<WorktreeAction, string> = {
+  stop: '结束本轮',
+  push: 'git push',
+  merge: 'git merge',
+};
+
+export function extractCommitMessage(cmd: string): string | null {
   if (!cmd || typeof cmd !== 'string') return null;
 
   const normalized = cmd.replace(/\\"/g, '"').replace(/\\'/g, "'");
@@ -25,61 +39,53 @@ export function extractCommitMessage(cmd) {
   const rest = normalized.slice(commitMatch.index);
 
   const quotedDouble = rest.match(/\s-m\s+"((?:[^"\\]|\\.)*)"/);
-  if (quotedDouble) {
+  if (quotedDouble?.[1]) {
     const inner = quotedDouble[1].replace(/\\"/g, '"').trim();
     const heredocInner = inner.match(/(?:\$\(\s*)?cat\s+<<-?\s*['"]?(\w+)['"]?\s*\n([\s\S]*?)\n\1(?:\s*\))?/);
-    if (heredocInner) return heredocInner[2].trim();
+    if (heredocInner?.[2]) return heredocInner[2].trim();
     return inner;
   }
 
   const quotedSingle = rest.match(/\s-m\s+'([^']*)'/);
-  if (quotedSingle) return quotedSingle[1].trim();
+  if (quotedSingle?.[1]) return quotedSingle[1].trim();
 
   const heredoc = rest.match(/\$\(\s*cat\s+<<-?\s*['"]?(\w+)['"]?\s*\n([\s\S]*?)\n\1\s*\)/);
-  if (heredoc) return heredoc[2].trim();
+  if (heredoc?.[2]) return heredoc[2].trim();
 
   const unquoted = rest.match(/\s-m\s+(\S+)/);
-  if (unquoted) return unquoted[1].replace(/^["']|["']$/g, '').trim();
+  if (unquoted?.[1]) return unquoted[1].replace(/^["']|["']$/g, '').trim();
 
   return null;
 }
 
-/** @param {string} [cwd] @returns {string[]} */
-export function getStagedFiles(cwd) {
+export function getStagedFiles(cwd?: string): string[] {
   const result = execCommand('git diff --cached --name-only', { cwd });
   if (!result.success) return [];
   return result.stdout.trim().split('\n').filter(Boolean);
 }
 
-/** @param {string} [cwd] */
-export function hasUncommittedChanges(cwd) {
+export function hasUncommittedChanges(cwd?: string): boolean {
   const result = execCommand('git status --porcelain', { cwd });
   if (!result.success) return false;
   return result.stdout.trim().length > 0;
 }
 
-/** @param {string} [cwd] */
-export function countUncommittedFiles(cwd) {
+export function countUncommittedFiles(cwd?: string): number {
   const result = execCommand('git status --porcelain', { cwd });
   if (!result.success) return 0;
   return result.stdout.trim().split('\n').filter(Boolean).length;
 }
 
-/**
- * @param {string} cwd
- * @param {'stop' | 'push' | 'merge'} action
- * @param {{ prefix?: string }} [options]
- */
-export function buildUncommittedWorktreeDenyReason(cwd: string, action: string, options: { prefix?: string } = {}) {
+export function buildUncommittedWorktreeDenyReason(
+  cwd: string,
+  action: WorktreeAction,
+  options: { prefix?: string } = {},
+): string {
   const prefix = options.prefix ?? '';
   const branchResult = execCommand('git rev-parse --abbrev-ref HEAD', { cwd });
   const branch = branchResult.success ? branchResult.stdout.trim() : 'unknown';
   const fileCount = countUncommittedFiles(cwd);
-  const actionSteps = {
-    stop: '4. 再结束本轮',
-    push: '4. 再执行 git push',
-    merge: '4. 再执行 git merge',
-  };
+  const actionStep = ACTION_STEPS[action];
 
   if (branch === 'main' || branch === 'master') {
     return [
@@ -91,11 +97,11 @@ export function buildUncommittedWorktreeDenyReason(cwd: string, action: string, 
       '1. git checkout -b feat/your-feature',
       '2. git add 相关文件（auto-stage 会自动暂存）',
       '3. git commit -m "类型: 描述"（需通过 pre-commit 质量门）',
-      actionSteps[action],
+      actionStep,
     ].join('\n');
   }
 
-  const actionLabel = { stop: '结束本轮', push: 'git push', merge: 'git merge' }[action];
+  const actionLabel = ACTION_LABELS[action];
 
   return [
     `${prefix}工作区有 ${fileCount} 个未提交变更，请先 git commit 再${actionLabel}。`,
@@ -106,12 +112,11 @@ export function buildUncommittedWorktreeDenyReason(cwd: string, action: string, 
     '1. git status 确认变更',
     '2. git add 相关文件（auto-stage 已暂存则跳过）',
     '3. git commit -m "类型: 描述"（feat/fix/docs/test/chore…，需通过 pre-commit 质量门）',
-    actionSteps[action],
+    actionStep,
   ].join('\n');
 }
 
-/** @param {string} [cwd] */
-export function checkBranch(cwd) {
+export function checkBranch(cwd?: string): CheckResult {
   const result = execCommand('git rev-parse --abbrev-ref HEAD', { cwd });
   const branch = result.success ? result.stdout.trim() : null;
   if (!branch) return formatResult('branch-check', DECISION.WARN, '无法获取当前分支名');
@@ -121,8 +126,7 @@ export function checkBranch(cwd) {
   return formatResult('branch-check', DECISION.ALLOW, `当前分支: ${branch}`);
 }
 
-/** @param {string} cmd */
-export function checkCommitMessage(cmd) {
+export function checkCommitMessage(cmd: string): CheckResult {
   const message = extractCommitMessage(cmd);
   if (!message) {
     return formatResult('commit-msg', DECISION.DENY, '无法提取 commit message，请使用 -m "类型: 描述" 格式');
@@ -130,10 +134,7 @@ export function checkCommitMessage(cmd) {
   return validateCommitMessageText(message);
 }
 
-/**
- * @param {string} msgFilePath
- */
-export function checkCommitMessageFromFile(msgFilePath) {
+export function checkCommitMessageFromFile(msgFilePath: string): CheckResult {
   try {
     const raw = readFileSync(msgFilePath, 'utf8');
     const message = raw
@@ -151,16 +152,14 @@ export function checkCommitMessageFromFile(msgFilePath) {
   }
 }
 
-/** @param {string} message */
-function validateCommitMessageText(message) {
+function validateCommitMessageText(message: string): CheckResult {
   if (!COMMIT_MSG_PATTERN.test(message)) {
     return formatResult('commit-msg', DECISION.DENY, `Commit message 格式错误: "${message}" — 必须匹配 "类型: 描述"`);
   }
   return formatResult('commit-msg', DECISION.ALLOW, `Commit message 格式正确: "${message}"`);
 }
 
-/** @param {string} [cwd] */
-export function checkSensitiveStagedFiles(cwd) {
+export function checkSensitiveStagedFiles(cwd?: string): CheckResult {
   const stagedFiles = getStagedFiles(cwd);
   const matched = stagedFiles.filter((f) => SENSITIVE_PATTERNS.some((p) => p.test(f)));
   if (matched.length > 0) {
@@ -171,23 +170,19 @@ export function checkSensitiveStagedFiles(cwd) {
   return formatResult('sensitive-files', DECISION.ALLOW, '暂存区无敏感文件');
 }
 
-/** @param {string} cmd */
-export function extractMergeTarget(cmd) {
+export function extractMergeTarget(cmd: string): string | null {
   const m = cmd.match(/\bgit\s+merge\b(?:\s+--[^\s]+)*\s+([^\s-][^\s]*)/);
-  return m ? m[1] : null;
+  return m?.[1] ?? null;
 }
 
-/** @param {string} cmd */
-export function isGitPushCommand(cmd) {
+export function isGitPushCommand(cmd: string): boolean {
   return /\bgit\s+push\b/.test(cmd);
 }
 
-/** @param {string} cmd */
-export function isGitCommitCommand(cmd) {
+export function isGitCommitCommand(cmd: string): boolean {
   return /\bgit\s+commit\b/.test(cmd);
 }
 
-/** @param {string} cmd */
-export function isGitMergeCommand(cmd) {
+export function isGitMergeCommand(cmd: string): boolean {
   return /\bgit\s+merge\b/.test(cmd);
 }

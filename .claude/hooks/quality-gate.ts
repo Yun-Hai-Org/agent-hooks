@@ -32,7 +32,7 @@ import { runSchemaLintStaged, runSchemaLintFull } from './checks/schema-lint.js'
 import { runK8sLintStaged, runK8sLintFull } from './checks/k8s-lint.js';
 import { runOpenApiContractStaged, runOpenApiContractFull } from './checks/openapi-contract.js';
 
-import type { QualityGateParseOptions, QualityGateProfile, CheckResult } from './types.js';
+import type { QualityGateParseOptions, QualityGateProfile, CheckResult, QualityGateResult } from './types.js';
 
 export function parseArgs(argv: string[]): QualityGateParseOptions {
   const options: QualityGateParseOptions = { profile: 'full', cwd: process.cwd(), json: false };
@@ -53,10 +53,12 @@ export function parseArgs(argv: string[]): QualityGateParseOptions {
   return options;
 }
 
-/**
- * @param {{ profile: QualityProfile; cwd: string; commitCmd?: string; commitMsgFile?: string }} options
- */
-export async function runQualityGate(options) {
+export async function runQualityGate(
+  options: Pick<QualityGateParseOptions, 'profile' | 'cwd'> & {
+    commitCmd?: string;
+    commitMsgFile?: string;
+  },
+): Promise<QualityGateResult> {
   const { profile, cwd, commitCmd, commitMsgFile } = options;
 
   if (profile === 'commit') {
@@ -187,11 +189,11 @@ export function summarizeCheckDetails(details: Record<string, unknown> | undefin
   if (!details || typeof details !== 'object') return undefined;
 
   const parts: string[] = [];
-  if (typeof details.output === 'string' && details.output.trim()) {
-    parts.push(details.output.trim());
+  if (typeof details['output'] === 'string' && details['output'].trim()) {
+    parts.push(details['output'].trim());
   }
-  if (Array.isArray(details.failures)) {
-    for (const failure of details.failures) {
+  if (Array.isArray(details['failures'])) {
+    for (const failure of details['failures']) {
       if (!failure || typeof failure !== 'object') continue;
       const f = /** @type {{ tool?: string; stdout?: string; stderr?: string }} */ failure;
       const text = [f.stderr, f.stdout]
@@ -201,14 +203,14 @@ export function summarizeCheckDetails(details: Record<string, unknown> | undefin
       parts.push(text ? `${f.tool ?? 'tool'}:\n${text}` : `${f.tool ?? 'tool'}: failed`);
     }
   }
-  if (Array.isArray(details.findings) && details.findings.length > 0) {
-    parts.push(JSON.stringify(details.findings));
+  if (Array.isArray(details['findings']) && details['findings'].length > 0) {
+    parts.push(JSON.stringify(details['findings']));
   }
-  if (Array.isArray(details.matched) && details.matched.length > 0) {
-    parts.push(`matched: ${details.matched.join(', ')}`);
+  if (Array.isArray(details['matched']) && details['matched'].length > 0) {
+    parts.push(`matched: ${details['matched'].join(', ')}`);
   }
-  if (typeof details.installHint === 'string' && details.installHint.trim()) {
-    parts.push(`安装: ${details.installHint.trim()}`);
+  if (typeof details['installHint'] === 'string' && details['installHint'].trim()) {
+    parts.push(`安装: ${details['installHint'].trim()}`);
   }
 
   const text = parts.join('\n---\n').trim();
@@ -239,14 +241,15 @@ export function logGateResult(
     ...extra,
   };
   if (!gateResult.passed && gateResult.decision?.reason) {
-    payload.reason = gateResult.decision.reason.slice(0, 500);
+    payload['reason'] = gateResult.decision.reason.slice(0, 500);
   }
   log(hookName, payload);
 }
 
-/** @param {{ checkId: string; decision: string; message: string; details?: Record<string, unknown> }} r */
-export function formatCheckSummaryLine(r) {
-  const icon = { allow: '✅', deny: '❌', skip: '⏭️', warn: '⚠️' }[r.decision] || '📋';
+const DECISION_ICONS: Record<string, string> = { allow: '✅', deny: '❌', skip: '⏭️', warn: '⚠️' };
+
+export function formatCheckSummaryLine(r: CheckResult) {
+  const icon = DECISION_ICONS[r.decision] || '📋';
   let line = `${icon} [${r.checkId}] ${r.message}`;
   if (r.decision === DECISION.DENY || r.decision === DECISION.WARN) {
     const details = summarizeCheckDetails(r.details);
@@ -262,8 +265,7 @@ export function formatCheckSummaryLine(r) {
   return line;
 }
 
-/** @param {any[]} results */
-export function summarizeResults(results) {
+export function summarizeResults(results: CheckResult[]) {
   return results.map(formatCheckSummaryLine).join('\n');
 }
 

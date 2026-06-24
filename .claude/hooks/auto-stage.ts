@@ -10,8 +10,7 @@ import { execSync } from 'child_process';
 import { LOG_DIR } from './security-orchestrator.js';
 import { readFileEditInput, isFileEditTool } from './hook-adapter.js';
 
-/** @param {Record<string, unknown>} data */
-function log(data) {
+function log(data: Record<string, unknown>) {
   try {
     if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
     const file = join(LOG_DIR, `${new Date().toISOString().slice(0, 10)}.jsonl`);
@@ -19,8 +18,7 @@ function log(data) {
   } catch {}
 }
 
-/** @param {string} filePath */
-function isInGitRepo(filePath) {
+function isInGitRepo(filePath: string) {
   try {
     const dir = dirname(filePath);
     execSync('git rev-parse --git-dir', { cwd: dir, stdio: 'pipe' });
@@ -30,8 +28,7 @@ function isInGitRepo(filePath) {
   }
 }
 
-/** @param {string} filePath */
-function stageFile(filePath) {
+function stageFile(filePath: string) {
   try {
     const dir = dirname(filePath);
     execSync(`git add "${filePath}"`, { cwd: dir, stdio: 'pipe' });
@@ -64,14 +61,14 @@ async function main() {
       return console.log('{}');
     }
 
-    if (process.env.CLAUDE_HOOK_PREVIOUS_DENIED === 'true') {
+    if (process.env['CLAUDE_HOOK_PREVIOUS_DENIED'] === 'true') {
       log({ level: 'SKIP', reason: 'previous hook denied', file: absPath, session_id });
       return console.log('{}');
     }
 
     const result = stageFile(absPath);
     if (result.success) {
-      process.env.CLAUDE_HOOK_AUTO_STAGED = 'true';
+      process.env['CLAUDE_HOOK_AUTO_STAGED'] = 'true';
       log({ level: 'STAGED', file: absPath, tool: tool_name, session_id });
     } else {
       log({ level: 'ERROR', file: absPath, error: result.error, session_id });

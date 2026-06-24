@@ -302,11 +302,12 @@ const ALLOW_PATTERNS = [
   /\bgit\s+checkout\s+(main|master)\b/, // 切换到主分支本身不阻止
 ];
 
-const LEVELS = /** @type {{ [key: string]: number }} */ { critical: 1, high: 2, strict: 3 };
-const EMOJIS = /** @type {{ [key: string]: string }} */ { critical: '🚨', high: '⛔', strict: '⚠️' };
+type PatternLevel = 'critical' | 'high' | 'strict';
 
-/** @param {Record<string, unknown>} data */
-function log(data) {
+const LEVELS: Record<PatternLevel, number> = { critical: 1, high: 2, strict: 3 };
+const EMOJIS: Record<PatternLevel, string> = { critical: '🚨', high: '⛔', strict: '⚠️' };
+
+function log(data: Record<string, unknown>) {
   try {
     if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
     const file = join(LOG_DIR, `${new Date().toISOString().slice(0, 10)}.jsonl`);
@@ -317,22 +318,20 @@ function log(data) {
   } catch {}
 }
 
-/** @param {string} cmd */
-function isAllowedCommand(cmd) {
+function isAllowedCommand(cmd: string) {
   if (!cmd) return false;
   return ALLOW_PATTERNS.some((pattern) => pattern.test(cmd));
 }
 
-/** @param {string} cmd @param {string} [safetyLevel] */
-function checkCommand(cmd, safetyLevel = SAFETY_LEVEL) {
+function checkCommand(cmd: string, safetyLevel: string = SAFETY_LEVEL) {
   // 先检查是否为允许的命令
   if (isAllowedCommand(cmd)) {
     return { blocked: false, pattern: null, allowed: true };
   }
 
-  const threshold = LEVELS[safetyLevel] || 2;
+  const threshold = (LEVELS[safetyLevel as PatternLevel] ?? LEVELS.high) as number;
   for (const p of PATTERNS) {
-    if (LEVELS[p.level] <= threshold && p.regex.test(cmd)) {
+    if ((LEVELS[p.level as PatternLevel] ?? LEVELS.high) <= threshold && p.regex.test(cmd)) {
       return { blocked: true, pattern: p, allowed: false };
     }
   }
@@ -362,7 +361,7 @@ async function main() {
           console.log(formatAllowOutput());
           return;
         }
-        const reason = `${EMOJIS[p.level]} [${p.id}] ${p.reason}`;
+        const reason = `${EMOJIS[p.level as PatternLevel]} [${p.id}] ${p.reason}`;
         log({
           level: 'BLOCKED',
           id: p.id,

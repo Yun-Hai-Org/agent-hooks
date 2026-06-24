@@ -15,8 +15,7 @@ function fulfilledToolResults(results: PromiseSettledResult<TypecheckToolResult>
     .map((r) => r.value);
 }
 
-/** @param {{ tool?: string; stdout?: string; stderr?: string; success?: boolean }} result */
-function formatTypecheckToolOutput(result) {
+function formatTypecheckToolOutput(result: TypecheckToolResult) {
   const text = [result.stderr, result.stdout]
     .filter((s) => typeof s === 'string' && s.trim())
     .join('\n')
@@ -24,8 +23,7 @@ function formatTypecheckToolOutput(result) {
   return text || `${result.tool ?? 'tool'}: failed (exit non-zero)`;
 }
 
-/** @param {string} [cwd] */
-export async function runStagedTypecheck(cwd) {
+export async function runStagedTypecheck(cwd?: string) {
   const stagedFiles = getStagedFiles(cwd);
   const stagedPyFiles = stagedFiles.filter((f) => f.endsWith('.py'));
   const stagedJsTsFiles = stagedFiles.filter((f) => /\.(js|ts|jsx|tsx|mjs|cjs)$/i.test(f));
@@ -91,8 +89,7 @@ export async function runStagedTypecheck(cwd) {
   }
 }
 
-/** @param {string} [cwd] */
-export async function runFullTypecheck(cwd) {
+export async function runFullTypecheck(cwd?: string) {
   const hasPyproject = execCommand('test -f pyproject.toml', { cwd }).success;
   const hasTsconfig = execCommand('test -f tsconfig.json', { cwd }).success;
 

@@ -1,22 +1,20 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
+import type { CheckResult } from '../types.js';
 
 const TRIVY_EXTRA_SKIP_DIRS = ['_bmad', '_bmad-output', 'node_modules', '.venv', '.claude/worktrees'];
 const TRIVY_TIMEOUT_MS = 300000;
 
-/** @param {string} [cwd] */
-function getGitleaksConfigArg(cwd) {
+function getGitleaksConfigArg(cwd?: string): string {
   return execCommand('test -f .gitleaks.toml', { cwd }).success ? ' --config .gitleaks.toml' : '';
 }
 
-/** @param {string[]} ignoredDirs */
-function buildTrivySkipArgs(ignoredDirs) {
+function buildTrivySkipArgs(ignoredDirs: string[]): string {
   const dirs = [...new Set([...ignoredDirs, ...TRIVY_EXTRA_SKIP_DIRS])];
   return dirs.map((d) => `--skip-dirs "${d}"`).join(' ');
 }
 
-/** @param {string} [cwd] */
-export function getGitIgnoredDirs(cwd) {
+export function getGitIgnoredDirs(cwd?: string): string[] {
   const result = execCommand('git ls-files --others --ignored --exclude-standard --directory | head -20', {
     cwd,
     timeout: 5000,
@@ -25,16 +23,23 @@ export function getGitIgnoredDirs(cwd) {
   return result.stdout
     .trim()
     .split('\n')
-    .map((/** @type {string} */ d) => d.replace(/\/$/, ''));
+    .map((d) => d.replace(/\/$/, ''));
 }
 
-/** @param {string} [cwd] */
-export async function runSemgrep(cwd) {
+interface SemgrepResult {
+  extra?: { severity?: string };
+}
+
+interface TrivyVulnerability {
+  Severity?: string;
+}
+
+export async function runSemgrep(cwd?: string): Promise<CheckResult> {
   const missing = denyIfToolMissing('semgrep', 'semgrep', cwd);
   if (missing) return missing;
   try {
     const ignoredDirs = getGitIgnoredDirs(cwd);
-    const excludeFlags = ignoredDirs.map((/** @type {string} */ d) => `--exclude "${d}"`).join(' ');
+    const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
     const semgrepCmd = `semgrep --config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten --severity ERROR,WARNING,INFO --json ${excludeFlags} .`;
     const result = await withTimeout(
       execCommandAsync(semgrepCmd, { cwd, timeout: 60000 }),
@@ -43,10 +48,8 @@ export async function runSemgrep(cwd) {
     );
     if (!result.success && result.stdout) {
       try {
-        const json = JSON.parse(result.stdout);
-        const errors =
-          json.results?.filter((/** @type {{ extra?: { severity?: string } }} */ r) => r.extra?.severity === 'ERROR') ||
-          [];
+        const json = JSON.parse(result.stdout) as { results?: SemgrepResult[] };
+        const errors = json.results?.filter((r) => r.extra?.severity === 'ERROR') || [];
         if (errors.length > 0) {
           return formatResult('semgrep', DECISION.DENY, `Semgrep 发现 ${errors.length} 个 ERROR 级别问题`, {
             count: errors.length,
@@ -64,8 +67,7 @@ export async function runSemgrep(cwd) {
   }
 }
 
-/** @param {string} [cwd] */
-export async function runKnip(cwd) {
+export async function runKnip(cwd?: string): Promise<CheckResult> {
   const missing = denyIfToolMissing('bun', 'knip', cwd);
   if (missing) return missing;
   try {
@@ -76,7 +78,10 @@ export async function runKnip(cwd) {
     );
     if (!result.success) {
       try {
-        const json = JSON.parse(result.stdout);
+        const json = JSON.parse(result.stdout) as {
+          files?: Record<string, unknown>;
+          dependencies?: Record<string, unknown>;
+        };
         const unusedFiles = json.files ? Object.keys(json.files).length : 0;
         const unusedDeps = json.dependencies ? Object.keys(json.dependencies).length : 0;
         if (unusedFiles > 0 || unusedDeps > 0) {
@@ -102,8 +107,7 @@ export async function runKnip(cwd) {
   }
 }
 
-/** @param {string} [cwd] */
-export async function runTrivy(cwd) {
+export async function runTrivy(cwd?: string): Promise<CheckResult> {
   const missing = denyIfToolMissing('trivy', 'trivy', cwd);
   if (missing) return missing;
   try {
@@ -117,14 +121,11 @@ export async function runTrivy(cwd) {
     );
     if (result.stdout) {
       try {
-        const json = JSON.parse(result.stdout);
-        const vulns =
-          json.Results?.flatMap(
-            (/** @type {{ Vulnerabilities?: Array<{ Severity?: string }> }} */ r) => r.Vulnerabilities || [],
-          ) || [];
-        const criticals = vulns.filter((/** @type {{ Severity?: string }} */ v) => v.Severity === 'CRITICAL');
-        const highs = vulns.filter((/** @type {{ Severity?: string }} */ v) => v.Severity === 'HIGH');
-        const mediums = vulns.filter((/** @type {{ Severity?: string }} */ v) => v.Severity === 'MEDIUM');
+        const json = JSON.parse(result.stdout) as { Results?: Array<{ Vulnerabilities?: TrivyVulnerability[] }> };
+        const vulns = json.Results?.flatMap((r) => r.Vulnerabilities || []) || [];
+        const criticals = vulns.filter((v) => v.Severity === 'CRITICAL');
+        const highs = vulns.filter((v) => v.Severity === 'HIGH');
+        const mediums = vulns.filter((v) => v.Severity === 'MEDIUM');
         if (criticals.length > 0 || highs.length > 0 || mediums.length > 0) {
           return formatResult(
             'trivy',
@@ -141,8 +142,7 @@ export async function runTrivy(cwd) {
   }
 }
 
-/** @param {string} [cwd] */
-export async function runGitleaksStaged(cwd) {
+export async function runGitleaksStaged(cwd?: string): Promise<CheckResult> {
   const missing = denyIfToolMissing('gitleaks', 'gitleaks-staged', cwd);
   if (missing) return missing;
   const configArg = getGitleaksConfigArg(cwd);
@@ -163,8 +163,7 @@ export async function runGitleaksStaged(cwd) {
   }
 }
 
-/** @param {string} [cwd] */
-export async function runGitleaks(cwd) {
+export async function runGitleaks(cwd?: string): Promise<CheckResult> {
   const missing = denyIfToolMissing('gitleaks', 'gitleaks', cwd);
   if (missing) return missing;
   const configArg = getGitleaksConfigArg(cwd);

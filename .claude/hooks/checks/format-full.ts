@@ -2,8 +2,7 @@ import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } fr
 import { denyIfToolMissing, denyOnToolError, denyIfRuffMissing, getRuffInvocation } from './tools.js';
 import type { CheckResult } from '../types.js';
 
-/** @param {string} [cwd] */
-export async function runFormatFull(cwd) {
+export async function runFormatFull(cwd?: string) {
   const results: CheckResult[] = [];
   const hasPyproject = execCommand('test -f pyproject.toml', { cwd }).success;
 

@@ -2,8 +2,7 @@ import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } fr
 import { denyIfToolMissing, denyOnToolError, denyIfRuffMissing, getRuffInvocation } from './tools.js';
 import type { CheckResult } from '../types.js';
 
-/** @param {string} [cwd] */
-export async function runLintFull(cwd) {
+export async function runLintFull(cwd?: string) {
   const results: CheckResult[] = [];
   const hasEslintConfig =
     execCommand('test -f eslint.config.ts', { cwd }).success ||

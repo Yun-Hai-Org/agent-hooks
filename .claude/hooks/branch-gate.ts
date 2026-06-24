@@ -36,8 +36,7 @@ const FILE_WRITE_PATTERNS = [
   { pattern: /\bprintf\b.*>/, name: 'printf 重定向' },
 ];
 
-/** @param {Record<string, unknown>} data */
-function log(data) {
+function log(data: Record<string, unknown>) {
   try {
     if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
     const file = join(LOG_DIR, `${new Date().toISOString().slice(0, 10)}.jsonl`);
@@ -45,8 +44,7 @@ function log(data) {
   } catch {}
 }
 
-/** @param {string} cwd */
-function getCurrentBranch(cwd) {
+function getCurrentBranch(cwd: string) {
   try {
     return execSync('git branch --show-current', { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
   } catch {
@@ -54,8 +52,7 @@ function getCurrentBranch(cwd) {
   }
 }
 
-/** @param {string} cwd */
-function isInsideWorktree(cwd) {
+function isInsideWorktree(cwd: string) {
   try {
     const gitPath = join(cwd, '.git');
     if (!existsSync(gitPath)) return false;
@@ -65,18 +62,15 @@ function isInsideWorktree(cwd) {
   }
 }
 
-/** @param {string} command */
-function isSafeCommand(command) {
+function isSafeCommand(command: string) {
   return SAFE_COMMAND_PATTERNS.some((pattern) => pattern.test(command));
 }
 
-/** @param {string} filePath */
-function isAllowedPathOnMain(filePath) {
+function isAllowedPathOnMain(filePath: string) {
   return ALLOWED_PATHS_ON_MAIN.some((allowed) => filePath.startsWith(allowed));
 }
 
-/** @param {string} command */
-function isFileWriteCommand(command) {
+function isFileWriteCommand(command: string) {
   if (!command) return false;
   const commandWithoutDevNull = command.replace(/\d*\s*>\s*\/dev\/null/g, '');
   const commandWithoutEmails = commandWithoutDevNull.replace(/<[^>\s]+@[^>\s]+>/g, '');
@@ -86,8 +80,7 @@ function isFileWriteCommand(command) {
   return FILE_WRITE_PATTERNS.some(({ pattern }) => pattern.test(commandWithoutEmails));
 }
 
-/** @param {string} command */
-function getWritePatternName(command) {
+function getWritePatternName(command: string) {
   if (!command) return null;
   const commandWithoutDevNull = command.replace(/\d*\s*>\s*\/dev\/null/g, '');
   const commandWithoutEmails = commandWithoutDevNull.replace(/<[^>\s]+@[^>\s]+>/g, '');
@@ -97,8 +90,7 @@ function getWritePatternName(command) {
   return null;
 }
 
-/** @param {string} toolName */
-function normalizeToolName(toolName) {
+function normalizeToolName(toolName: string) {
   if (isShellTool(toolName)) return 'Bash';
   if (/^write$/i.test(toolName)) return 'Write';
   if (/^edit$/i.test(toolName)) return 'Edit';
@@ -107,7 +99,7 @@ function normalizeToolName(toolName) {
 
 async function readBranchGateInput() {
   const raw = await readStdin();
-  if (getPlatform() === 'cursor' && typeof raw.file_path === 'string' && !raw.tool_name && !raw.toolName) {
+  if (getPlatform() === 'cursor' && typeof raw['file_path'] === 'string' && !raw['tool_name'] && !raw['toolName']) {
     const data = normalizeFileEditInput(raw);
     return { ...data, tool_name: normalizeToolName(data.tool_name) };
   }
@@ -115,13 +107,12 @@ async function readBranchGateInput() {
   return { ...data, tool_name: normalizeToolName(data.tool_name) };
 }
 
-/** @param {string} reason @param {string} [session_id] */
-function deny(reason, session_id) {
+function deny(reason: string, session_id?: string) {
   notifySecurityEventAsync({
     hook: 'branch-gate',
     severity: 'high',
     reason,
-    session_id,
+    ...(session_id !== undefined ? { session_id } : {}),
   });
   return formatDenyOutput('deny', reason);
 }

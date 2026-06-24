@@ -10,31 +10,24 @@ const K8S_RESOURCE_FILENAME =
 const OPENAPI_FILENAME = /^(openapi|swagger)\.(ya?ml|json)$/i;
 const OPENAPI_DIR = /(^|\/)(openapi|api-docs)\//i;
 
-/** @param {string} filePath */
-export function isOpenApiSpecExcludedPath(filePath) {
+export function isOpenApiSpecExcludedPath(filePath: string): boolean {
   if (filePath.startsWith('_bmad-output/') || filePath.startsWith('_bmad/')) return true;
   if (/\.github\/workflows\//i.test(filePath)) return true;
   return false;
 }
 
-/** @param {string} filePath */
-export function isOpenApiSpecCandidatePath(filePath) {
+export function isOpenApiSpecCandidatePath(filePath: string): boolean {
   if (isOpenApiSpecExcludedPath(filePath)) return false;
   if (OPENAPI_FILENAME.test(basename(filePath))) return true;
   if (OPENAPI_DIR.test(filePath) && /\.(ya?ml|json)$/i.test(filePath)) return true;
   return false;
 }
 
-/** @param {string} content */
-export function looksLikeOpenApiSpecContent(content) {
+export function looksLikeOpenApiSpecContent(content: string): boolean {
   return /openapi:\s*['"]?3/i.test(content);
 }
 
-/**
- * @param {string} filePath
- * @param {string} [cwd]
- */
-export function isOpenApiSpecPath(filePath, cwd) {
+export function isOpenApiSpecPath(filePath: string, cwd?: string): boolean {
   if (!isOpenApiSpecCandidatePath(filePath)) return false;
   if (OPENAPI_FILENAME.test(basename(filePath)) || OPENAPI_DIR.test(filePath)) return true;
   if (!cwd) return false;
@@ -46,15 +39,13 @@ export function isOpenApiSpecPath(filePath, cwd) {
   }
 }
 
-/** @param {string} filePath */
-export function isDockerfilePath(filePath) {
+export function isDockerfilePath(filePath: string): boolean {
   const filename = basename(filePath).toLowerCase();
   const ext = extname(filePath).toLowerCase();
   return ext === '.dockerfile' || filename === 'dockerfile' || filename === 'containerfile';
 }
 
-/** @param {string} filePath */
-export function isDockerComposePath(filePath) {
+export function isDockerComposePath(filePath: string): boolean {
   const filename = basename(filePath).toLowerCase();
   if (filename.includes('override')) return false;
   if (/^docker-compose\..+\.ya?ml$/.test(filename)) return true;
@@ -66,8 +57,7 @@ export function isDockerComposePath(filePath) {
   );
 }
 
-/** @param {string} filePath */
-export function isK8sManifestExcludedPath(filePath) {
+export function isK8sManifestExcludedPath(filePath: string): boolean {
   if (isDockerComposePath(filePath)) return true;
   if (/docker-compose/i.test(filePath)) return true;
   if (/\.github\/workflows\//i.test(filePath)) return true;
@@ -75,24 +65,18 @@ export function isK8sManifestExcludedPath(filePath) {
   return false;
 }
 
-/** @param {string} filePath */
-export function isK8sManifestCandidatePath(filePath) {
+export function isK8sManifestCandidatePath(filePath: string): boolean {
   if (!/\.(yaml|yml)$/i.test(filePath)) return false;
   if (isK8sManifestExcludedPath(filePath)) return false;
   if (K8S_DIR_PREFIX.test(filePath) || K8S_HELM_TEMPLATES.test(filePath)) return true;
   return K8S_RESOURCE_FILENAME.test(basename(filePath));
 }
 
-/** @param {string} content */
-export function looksLikeK8sManifestContent(content) {
+export function looksLikeK8sManifestContent(content: string): boolean {
   return /^apiVersion:\s*\S+/m.test(content) && /^kind:\s*\S+/m.test(content);
 }
 
-/**
- * @param {string} filePath
- * @param {string} [cwd]
- */
-export function isK8sManifestPath(filePath, cwd) {
+export function isK8sManifestPath(filePath: string, cwd?: string): boolean {
   if (!isK8sManifestCandidatePath(filePath)) return false;
   if (K8S_DIR_PREFIX.test(filePath) || K8S_HELM_TEMPLATES.test(filePath)) return true;
   if (K8S_RESOURCE_FILENAME.test(basename(filePath))) return true;
@@ -105,11 +89,7 @@ export function isK8sManifestPath(filePath, cwd) {
   }
 }
 
-/**
- * @param {string[]} files
- * @param {string} [cwd]
- */
-export function classifyFiles(files, cwd) {
+export function classifyFiles(files: string[], cwd?: string) {
   const md = files.filter((f) => /\.(md|mdx)$/i.test(f));
   const shell = files.filter((f) => /\.(sh|bash|zsh)$/i.test(f));
   const docker = files.filter((f) => isDockerfilePath(f));
@@ -123,18 +103,13 @@ export function classifyFiles(files, cwd) {
   return { md, shell, docker, compose, k8s, toml, sql, css, json, yaml };
 }
 
-/**
- * @param {(file: string) => boolean} predicate
- * @param {string} [cwd]
- */
-export function listTrackedFiles(predicate, cwd) {
+export function listTrackedFiles(predicate: (file: string) => boolean, cwd?: string): string[] {
   const result = execCommand('git ls-files', { cwd });
   if (!result.success) return [];
   return result.stdout.trim().split('\n').filter(Boolean).filter(predicate);
 }
 
-/** @param {string} [cwd] */
-export function hasStylelintConfig(cwd) {
+export function hasStylelintConfig(cwd?: string): boolean {
   return (
     execCommand('test -f .stylelintrc.json', { cwd }).success ||
     execCommand('test -f .stylelintrc.js', { cwd }).success ||

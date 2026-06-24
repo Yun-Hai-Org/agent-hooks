@@ -10,8 +10,7 @@ function filterExistingStagedFiles(files: string[], cwd?: string): string[] {
   return files.filter((f) => existsSync(join(root, f)));
 }
 
-/** @param {string} [cwd] */
-export async function runLintStaged(cwd) {
+export async function runLintStaged(cwd?: string) {
   const stagedFiles = filterExistingStagedFiles(getStagedFiles(cwd), cwd);
   const jsFiles = stagedFiles.filter((f) => /\.(js|ts|jsx|tsx|mjs|cjs)$/i.test(f) && !f.includes('__tests__'));
   const pyFiles = stagedFiles.filter((f) => f.endsWith('.py'));

@@ -21,7 +21,7 @@ import { spawnSync } from 'child_process';
 
 const HOOK_NAME = 'resolve-hook-path';
 const PROJECT_HOOKS_DIR = '.claude/hooks';
-const GLOBAL_HOOKS_DIR = join(process.env.HOME || '', '.claude', 'hooks');
+const GLOBAL_HOOKS_DIR = join(process.env['HOME'] || '', '.claude', 'hooks');
 
 // ─── 路径解析 ───────────────────────────────────────────────────────────────
 
