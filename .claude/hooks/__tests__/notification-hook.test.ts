@@ -308,9 +308,20 @@ describe('notification-hook', () => {
     });
 
     it('超时应返回失败', async () => {
-      // 使用一个不可能响应的 URL
-      const result = await sendWebhook('http://192.0.2.1:12345/test', { test: true }, 100);
-      expect(result.success).toBe(false);
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted.', 'AbortError'));
+          });
+        });
+      try {
+        const result = await sendWebhook('http://example.com/test', { test: true }, 50);
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('超时');
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
     });
   });
 
