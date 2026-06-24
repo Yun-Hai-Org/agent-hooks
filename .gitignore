@@ -1,5 +1,6 @@
 GitHub/
 node_modules/
+.tools/
 .claude/worktrees/
 .claude/settings.backup.*.json
 _tsc-output.txt
