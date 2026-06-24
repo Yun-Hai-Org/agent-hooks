@@ -38,6 +38,15 @@ describe('gate-cache', () => {
     expect(hasFreshFullPass(repoDir, tree)).toBe(true);
   });
 
+  it('超过 TTL 后判定为过期', () => {
+    const tree = getHeadTreeSha(repoDir);
+    expect(tree).toBeTruthy();
+    if (!tree) return;
+
+    recordFullPass(repoDir, tree);
+    expect(hasFreshFullPass(repoDir, tree, -1)).toBe(false);
+  });
+
   it('树变化后不命中', () => {
     const tree = getHeadTreeSha(repoDir);
     expect(tree).toBeTruthy();

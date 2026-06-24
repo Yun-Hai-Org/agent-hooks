@@ -4,7 +4,8 @@ import { join } from 'path';
 import { execCommand, LOG_DIR } from './security-orchestrator.js';
 
 const CACHE_FILE = join(LOG_DIR, 'gate-full-pass-cache.json');
-const DEFAULT_TTL_MS = 60 * 60 * 1000;
+// 缩短至 15 分钟：缩小"树未变但安全态势已变"（如新披露 CVE）窗口
+const DEFAULT_TTL_MS = 15 * 60 * 1000;
 
 interface FullPassEntry {
   tree: string;
