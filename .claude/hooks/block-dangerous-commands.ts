@@ -88,6 +88,34 @@ const PATTERNS = [
     regex: /\b(curl|wget)\b.+\|\s*(ba)?sh\b/,
     reason: 'piping URL to shell (RCE risk)',
   },
+  // 10a. base64 解码后管道执行
+  {
+    level: 'high',
+    id: 'base64-pipe-sh',
+    regex: /\bbase64\b[^\n]*(-d|--decode)[^\n]*\|\s*(ba)?sh\b/,
+    reason: 'base64 解码后管道执行（混淆 RCE 风险）',
+  },
+  // 10b. eval 执行命令替换/反引号
+  {
+    level: 'high',
+    id: 'eval-exec',
+    regex: /\beval\b[^\n]*(\$\(|\x60)/,
+    reason: 'eval 执行命令替换（RCE 风险）',
+  },
+  // 10c. sh -c "$(...)" / bash -c `...` 内联远程执行
+  {
+    level: 'high',
+    id: 'sh-c-subshell',
+    regex: /\b(ba)?sh\s+-c\s+["']?(\$\(|\x60)/,
+    reason: 'sh -c 内联执行命令替换（RCE 风险）',
+  },
+  // 10d. 下载后执行（curl -o file && sh file）
+  {
+    level: 'high',
+    id: 'download-exec',
+    regex: /\b(curl|wget)\b[^\n]*\s-o\s[^\n]*(&&|;|\|)[^\n]*\b(ba)?sh\s+\S/,
+    reason: '下载文件后执行（RCE 风险）',
+  },
   // 11. git push --force main/master
   {
     level: 'high',
@@ -111,6 +139,13 @@ const PATTERNS = [
   },
   // 14. chmod 777
   { level: 'high', id: 'chmod-777', regex: /\bchmod\b.+\b777\b/, reason: 'chmod 777 is a security risk' },
+  // 14a. chmod setuid/setgid（+s 或 4xxx/6xxx 模式）
+  {
+    level: 'high',
+    id: 'chmod-setuid',
+    regex: /\bchmod\b[^\n]*(\+s\b|[ugo]\+s|\b[4567][0-7]{3}\b)/,
+    reason: 'chmod setuid/setgid 提权风险',
+  },
   // 15. cat .env
   {
     level: 'high',
@@ -219,6 +254,13 @@ const PATTERNS = [
     id: 'hook-bypass-path',
     regex: /\bgit\b.*-c\s+core\.hooksPath=/,
     reason: '禁止通过 core.hooksPath 绕过 hook',
+  },
+  // 32a. git config core.hooksPath（持久化绕过 hook）
+  {
+    level: 'strict',
+    id: 'hook-bypass-config',
+    regex: /\bgit\s+config\b[^\n]*core\.hooksPath/,
+    reason: '禁止通过 git config core.hooksPath 绕过 hook',
   },
   // 33. git commit --no-verify
   {
