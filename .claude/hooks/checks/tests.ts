@@ -1,4 +1,5 @@
 import { join } from 'path';
+import { parseCoveragePercent } from './coverage.js';
 import type { CheckResult } from '../types.js';
 import {
   execCommand,
@@ -202,7 +203,7 @@ export async function runFullProjectTests(cwd?: string) {
   return failure ?? formatResult('full-tests', DECISION.ALLOW, '所有全量测试通过');
 }
 
-export async function runHookUnitTests(cwd?: string) {
+export async function runHookUnitTests(cwd?: string, options: { coverageThreshold?: number } = {}) {
   const missing = denyIfToolMissing('bun', 'hook-unit-tests', cwd);
   if (missing) return missing;
 
@@ -215,16 +216,32 @@ export async function runHookUnitTests(cwd?: string) {
     return formatResult('hook-unit-tests', DECISION.DENY, '无 Hook 常规单测文件');
   }
   try {
-    const cmd = `bun test ${files.map((f) => `"./${f}"`).join(' ')}`;
+    const coverageFlag = options.coverageThreshold !== undefined ? ' --coverage --dots' : '';
+    const cmd = `bun test ${files.map((f) => `"./${f}"`).join(' ')}${coverageFlag}`;
     const result = await withTimeout(
       execCommandAsync(cmd, { cwd, timeout: 300000 }),
       300000,
       'Hook 常规单测超时 (300s)',
     );
+    const output = result.stdout + result.stderr;
     if (!result.success) {
       return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 常规单测失败', {
-        output: (result.stderr || result.stdout).slice(0, 500),
+        output: output.slice(0, 500),
       });
+    }
+    if (options.coverageThreshold !== undefined) {
+      const pct = parseCoveragePercent(output);
+      if (pct === null || pct < options.coverageThreshold) {
+        return formatResult(
+          'hook-unit-tests',
+          DECISION.DENY,
+          pct === null
+            ? `Hook 单测通过但无法解析覆盖率（要求 >= ${String(options.coverageThreshold)}%）`
+            : `Hook 单测通过但覆盖率 ${String(pct)}% 低于 ${String(options.coverageThreshold)}%`,
+          { output: output.slice(0, 500) },
+        );
+      }
+      return formatResult('hook-unit-tests', DECISION.ALLOW, `Hook 常规单测通过，覆盖率 ${String(pct)}% 达标`);
     }
     return formatResult('hook-unit-tests', DECISION.ALLOW, 'Hook 常规单测通过');
   } catch (e) {

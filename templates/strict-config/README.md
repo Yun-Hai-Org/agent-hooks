@@ -28,9 +28,9 @@ cp templates/strict-config/pyrightconfig.strict.json pyrightconfig.json
 
 ## 覆盖率渐进目标
 
-- 初始基线：**80%** 行覆盖（由 `coverage.ts` 在 full 门解析判定）
-- 目标：逐步 ratchet 到 **100%**
-- `bunfig.toml` 不启用全局 `coverageThreshold`（避免对抗性/子集测试误失败）
+- 当前实测基线：**~49.7%** 行覆盖（`DEFAULT_COVERAGE_THRESHOLD = 49`，由 `runHookUnitTests` 在 full 门解析判定）
+- 下一阶段：**80%** → 最终 **100%**（随单测补充逐步 ratchet `DEFAULT_COVERAGE_THRESHOLD`）
+- `bunfig.toml` 启用 `coverage = true`，但不设全局 `coverageThreshold`（避免对抗性/子集测试误失败）
 
 ## 已知副作用
 

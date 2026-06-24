@@ -1,3 +1,4 @@
 [test]
-# 覆盖率阈值由 coverage.ts 在 full 门运行时解析判定（避免影响对抗性/子集测试 exit code）
-coverage = false
+# 启用覆盖率收集；阈值由 runHookUnitTests(coverageThreshold) 在 full 门判定（不设 coverageThreshold 以免子集测试误失败）
+coverage = true
+coverageSkipTestFiles = true

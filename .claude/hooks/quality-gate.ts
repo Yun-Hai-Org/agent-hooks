@@ -33,11 +33,11 @@ import { runLintFull } from './checks/lint-full.js';
 import { runLintStaged } from './checks/lint-staged.js';
 import { runFormatFull } from './checks/format-full.js';
 import { runFormatStaged } from './checks/format-staged.js';
-import { runCoverage } from './checks/coverage.js';
 import { runCodeReview } from './checks/code-review.js';
 import { runExtendedLintStaged, runExtendedLintFull } from './checks/extended-lint.js';
 import { runSchemaLintStaged, runSchemaLintFull } from './checks/schema-lint.js';
 import { runK8sLintStaged, runK8sLintFull } from './checks/k8s-lint.js';
+import { DEFAULT_COVERAGE_THRESHOLD } from './checks/coverage.js';
 import { runOpenApiContractStaged, runOpenApiContractFull } from './checks/openapi-contract.js';
 
 import type { QualityGateParseOptions, CheckResult, QualityGateResult } from './types.js';
@@ -143,11 +143,13 @@ export async function runQualityGate(
     return { passed: finalDecision.decision !== DECISION.DENY, results, decision: finalDecision };
   }
 
+  const hookUnit = await runHookUnitTests(cwd, { coverageThreshold: DEFAULT_COVERAGE_THRESHOLD });
+  const coverageResult = formatResult('coverage', DECISION.SKIP, '覆盖率已并入 hook-unit-tests（--coverage）');
+
   const [
     typeResult,
     lintResult,
     fullTests,
-    hookUnit,
     hookAdv,
     depAudit,
     pyDepAudit,
@@ -156,7 +158,6 @@ export async function runQualityGate(
     knip,
     trivy,
     formatResult_,
-    coverageResult,
     reviewResult,
     extendedLint,
     schemaLint,
@@ -166,7 +167,6 @@ export async function runQualityGate(
     runFullTypecheck(cwd),
     runLintFull(cwd),
     runFullProjectTests(cwd),
-    runHookUnitTests(cwd),
     runHookAdversarialTests(cwd),
     runDepAudit(cwd, { staged: false }),
     runPyDepAudit(cwd),
@@ -175,7 +175,6 @@ export async function runQualityGate(
     runKnip(cwd),
     runTrivy(cwd),
     runFormatFull(cwd),
-    Promise.resolve(runCoverage(cwd)),
     Promise.resolve(runCodeReview(cwd)),
     runExtendedLintFull(cwd),
     runSchemaLintFull(cwd),
