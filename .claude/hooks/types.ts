@@ -27,6 +27,7 @@ export interface CheckResult {
   message: string;
   timestamp?: string;
   details?: Record<string, unknown>;
+  durationMs?: number;
 }
 
 export interface DecideResult {
@@ -75,10 +76,23 @@ export interface QualityGateDecision {
   reason?: string;
 }
 
+export interface GateTimingEntry {
+  checkId: string;
+  ms: number;
+}
+
+export interface GateTiming {
+  maxMs: number;
+  avgMs: number;
+  slowest: GateTimingEntry | null;
+  perCheck: GateTimingEntry[];
+}
+
 export interface QualityGateResult {
   passed: boolean;
   results: CheckResult[];
   decision: QualityGateDecision;
+  timing: GateTiming;
 }
 
 export interface ExecErrorLike {

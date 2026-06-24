@@ -7,9 +7,12 @@ import {
   formatChecksForLog,
   summarizeCheckDetails,
   formatCheckSummaryLine,
+  computeTiming,
+  formatTimingSummary,
 } from '../quality-gate.js';
 import { DECISION, formatResult } from '../security-orchestrator.js';
 import { checkCommitMessage } from '../checks/git-policy.js';
+import type { CheckResult } from '../types.js';
 
 describe('quality-gate', () => {
   describe('parseArgs', () => {
@@ -71,6 +74,49 @@ describe('quality-gate', () => {
       const pyproject = readFileSync(join(import.meta.dir, '..', '..', '..', 'pyproject.toml'), 'utf-8');
       expect(pyproject).not.toContain('ANN101');
       expect(pyproject).not.toContain('ANN102');
+    });
+  });
+
+  describe('timing', () => {
+    const withMs = (checkId: string, decision: string, durationMs: number): CheckResult => ({
+      checkId,
+      decision: decision as CheckResult['decision'],
+      message: '',
+      durationMs,
+    });
+
+    it('computeTiming 应聚合 max/avg 并排除 SKIP 与无耗时项', () => {
+      const results: CheckResult[] = [
+        withMs('a', DECISION.ALLOW, 10),
+        withMs('b', DECISION.DENY, 30),
+        withMs('c', DECISION.SKIP, 999),
+        formatResult('d', DECISION.ALLOW),
+      ];
+      const t = computeTiming(results);
+      expect(t.maxMs).toBe(30);
+      expect(t.avgMs).toBe(20);
+      expect(t.slowest?.checkId).toBe('b');
+      expect(t.perCheck.length).toBe(2);
+    });
+
+    it('computeTiming 空集应返回 0 与 null', () => {
+      const t = computeTiming([]);
+      expect(t.maxMs).toBe(0);
+      expect(t.avgMs).toBe(0);
+      expect(t.slowest).toBeNull();
+      expect(t.perCheck.length).toBe(0);
+    });
+
+    it('formatTimingSummary 应含最高/平均与最慢 checkId', () => {
+      const t = computeTiming([withMs('slow-check', DECISION.ALLOW, 42)]);
+      const line = formatTimingSummary(t);
+      expect(line).toContain('最高');
+      expect(line).toContain('平均');
+      expect(line).toContain('slow-check');
+    });
+
+    it('formatTimingSummary 无样本时应有提示', () => {
+      expect(formatTimingSummary(computeTiming([]))).toContain('无可统计');
     });
   });
 

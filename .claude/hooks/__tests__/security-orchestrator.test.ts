@@ -12,6 +12,7 @@ import {
   getCurrentBranch,
   safeMain,
   readStdin,
+  timeCheck,
 } from '../security-orchestrator.js';
 
 describe('security-orchestrator', () => {
@@ -21,6 +22,19 @@ describe('security-orchestrator', () => {
     expect(r.decision).toBe('deny');
     expect(r.message).toBe('测试拒绝');
     expect(r.timestamp).toBeDefined();
+  });
+
+  it('timeCheck 应为 Promise 结果回填 durationMs', async () => {
+    const r = await timeCheck(Promise.resolve(formatResult('x', 'allow', 'ok')));
+    expect(r.checkId).toBe('x');
+    expect(typeof r.durationMs).toBe('number');
+    expect(r.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('timeCheck 应支持同步值并回填 durationMs', async () => {
+    const r = await timeCheck(formatResult('y', 'skip', ''));
+    expect(r.checkId).toBe('y');
+    expect(typeof r.durationMs).toBe('number');
   });
 
   it('decide - 任一 deny 应该返回 deny', () => {

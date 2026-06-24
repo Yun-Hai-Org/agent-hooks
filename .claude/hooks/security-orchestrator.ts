@@ -189,6 +189,12 @@ export function decide(results: CheckResult[]): DecideResult {
   };
 }
 
+export async function timeCheck<T extends CheckResult>(check: Promise<T> | T): Promise<T> {
+  const start = performance.now();
+  const result = await check;
+  return { ...result, durationMs: Math.round(performance.now() - start) };
+}
+
 export function formatHookOutput(decision: string, reason: string): string {
   if (decision === DECISION.ALLOW) return '{}';
   return JSON.stringify({

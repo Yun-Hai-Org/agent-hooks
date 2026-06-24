@@ -4,7 +4,7 @@
  * profiles: commit | full
  */
 
-import { decide, formatResult, log, DECISION } from './security-orchestrator.js';
+import { decide, formatResult, log, timeCheck, DECISION } from './security-orchestrator.js';
 import {
   checkBranch,
   checkCommitMessage,
@@ -40,7 +40,7 @@ import { runK8sLintStaged, runK8sLintFull } from './checks/k8s-lint.js';
 import { DEFAULT_COVERAGE_THRESHOLD } from './checks/coverage.js';
 import { runOpenApiContractStaged, runOpenApiContractFull } from './checks/openapi-contract.js';
 
-import type { QualityGateParseOptions, CheckResult, QualityGateResult } from './types.js';
+import type { QualityGateParseOptions, CheckResult, QualityGateResult, GateTiming, GateTimingEntry } from './types.js';
 
 interface CheckFailureDetail {
   tool?: string;
@@ -71,6 +71,27 @@ export function parseArgs(argv: string[]): QualityGateParseOptions {
   return options;
 }
 
+export function computeTiming(results: CheckResult[]): GateTiming {
+  const perCheck: GateTimingEntry[] = [];
+  for (const r of results) {
+    if (typeof r.durationMs === 'number' && r.decision !== DECISION.SKIP) {
+      perCheck.push({ checkId: r.checkId, ms: r.durationMs });
+    }
+  }
+  let maxMs = 0;
+  let sum = 0;
+  let slowest: GateTimingEntry | null = null;
+  for (const entry of perCheck) {
+    sum += entry.ms;
+    if (slowest === null || entry.ms > maxMs) {
+      maxMs = entry.ms;
+      slowest = entry;
+    }
+  }
+  const avgMs = perCheck.length > 0 ? Math.round(sum / perCheck.length) : 0;
+  return { maxMs, avgMs, slowest, perCheck };
+}
+
 export async function runQualityGate(
   options: Pick<QualityGateParseOptions, 'profile' | 'cwd'> & {
     commitCmd?: string;
@@ -91,7 +112,7 @@ export async function runQualityGate(
     ];
     const syncDecision = decide(syncResults);
     if (syncDecision.decision === DECISION.DENY) {
-      return { passed: false, results: syncResults, decision: syncDecision };
+      return { passed: false, results: syncResults, decision: syncDecision, timing: computeTiming(syncResults) };
     }
 
     const [
@@ -109,19 +130,19 @@ export async function runQualityGate(
       k8sLint,
       openApiContract,
     ] = await Promise.all([
-      runDepAudit(cwd, { staged: true }),
-      runStagedTypecheck(cwd),
-      runRelatedTests(cwd),
-      runLintStaged(cwd),
-      runFormatStaged(cwd),
-      runGitleaksStaged(cwd),
-      runSemgrepStaged(cwd),
-      Promise.resolve(runCodeReview(cwd, { staged: true })),
-      runHookAdversarialIfStaged(cwd),
-      runExtendedLintStaged(cwd),
-      runSchemaLintStaged(cwd),
-      runK8sLintStaged(cwd),
-      runOpenApiContractStaged(cwd),
+      timeCheck(runDepAudit(cwd, { staged: true })),
+      timeCheck(runStagedTypecheck(cwd)),
+      timeCheck(runRelatedTests(cwd)),
+      timeCheck(runLintStaged(cwd)),
+      timeCheck(runFormatStaged(cwd)),
+      timeCheck(runGitleaksStaged(cwd)),
+      timeCheck(runSemgrepStaged(cwd)),
+      timeCheck(runCodeReview(cwd, { staged: true })),
+      timeCheck(runHookAdversarialIfStaged(cwd)),
+      timeCheck(runExtendedLintStaged(cwd)),
+      timeCheck(runSchemaLintStaged(cwd)),
+      timeCheck(runK8sLintStaged(cwd)),
+      timeCheck(runOpenApiContractStaged(cwd)),
     ]);
     const results = [
       ...syncResults,
@@ -140,10 +161,15 @@ export async function runQualityGate(
       openApiContract,
     ];
     const finalDecision = decide(results);
-    return { passed: finalDecision.decision !== DECISION.DENY, results, decision: finalDecision };
+    return {
+      passed: finalDecision.decision !== DECISION.DENY,
+      results,
+      decision: finalDecision,
+      timing: computeTiming(results),
+    };
   }
 
-  const hookUnit = await runHookUnitTests(cwd, { coverageThreshold: DEFAULT_COVERAGE_THRESHOLD });
+  const hookUnit = await timeCheck(runHookUnitTests(cwd, { coverageThreshold: DEFAULT_COVERAGE_THRESHOLD }));
   const coverageResult = formatResult('coverage', DECISION.SKIP, '覆盖率已并入 hook-unit-tests（--coverage）');
 
   const [
@@ -164,22 +190,22 @@ export async function runQualityGate(
     k8sLint,
     openApiContract,
   ] = await Promise.all([
-    runFullTypecheck(cwd),
-    runLintFull(cwd),
-    runFullProjectTests(cwd),
-    runHookAdversarialTests(cwd),
-    runDepAudit(cwd, { staged: false }),
-    runPyDepAudit(cwd),
-    runGitleaks(cwd),
-    runSemgrep(cwd),
-    runKnip(cwd),
-    runTrivy(cwd),
-    runFormatFull(cwd),
-    Promise.resolve(runCodeReview(cwd)),
-    runExtendedLintFull(cwd),
-    runSchemaLintFull(cwd),
-    runK8sLintFull(cwd),
-    runOpenApiContractFull(cwd),
+    timeCheck(runFullTypecheck(cwd)),
+    timeCheck(runLintFull(cwd)),
+    timeCheck(runFullProjectTests(cwd)),
+    timeCheck(runHookAdversarialTests(cwd)),
+    timeCheck(runDepAudit(cwd, { staged: false })),
+    timeCheck(runPyDepAudit(cwd)),
+    timeCheck(runGitleaks(cwd)),
+    timeCheck(runSemgrep(cwd)),
+    timeCheck(runKnip(cwd)),
+    timeCheck(runTrivy(cwd)),
+    timeCheck(runFormatFull(cwd)),
+    timeCheck(runCodeReview(cwd)),
+    timeCheck(runExtendedLintFull(cwd)),
+    timeCheck(runSchemaLintFull(cwd)),
+    timeCheck(runK8sLintFull(cwd)),
+    timeCheck(runOpenApiContractFull(cwd)),
   ]);
 
   const results = [
@@ -203,7 +229,12 @@ export async function runQualityGate(
     openApiContract,
   ];
   const finalDecision = decide(results);
-  return { passed: finalDecision.decision !== DECISION.DENY, results, decision: finalDecision };
+  return {
+    passed: finalDecision.decision !== DECISION.DENY,
+    results,
+    decision: finalDecision,
+    timing: computeTiming(results),
+  };
 }
 
 export const CHECK_DETAILS_LOG_MAX = 2000;
@@ -254,12 +285,13 @@ export function formatChecksForLog(results: CheckResult[]) {
 
 export function logGateResult(
   hookName: string,
-  gateResult: { passed: boolean; results: CheckResult[]; decision?: { reason?: string } },
+  gateResult: { passed: boolean; results: CheckResult[]; decision?: { reason?: string }; timing?: GateTiming },
   extra: Record<string, unknown> = {},
 ): void {
   const payload: Record<string, unknown> = {
     level: gateResult.passed ? 'PASSED' : 'BLOCKED',
     checks: formatChecksForLog(gateResult.results),
+    ...(gateResult.timing ? { timing: gateResult.timing } : {}),
     ...extra,
   };
   if (!gateResult.passed && gateResult.decision?.reason) {
@@ -291,6 +323,14 @@ export function summarizeResults(results: CheckResult[]) {
   return results.map(formatCheckSummaryLine).join('\n');
 }
 
+export function formatTimingSummary(timing: GateTiming): string {
+  if (timing.perCheck.length === 0) return '⏱️ 无可统计的检查耗时';
+  const slowest = timing.slowest ? `${timing.slowest.checkId} ${String(timing.slowest.ms)}ms` : 'N/A';
+  return [
+    `⏱️ 检查耗时: 最高 ${String(timing.maxMs)}ms (${slowest}) | 平均 ${String(timing.avgMs)}ms | 计入 ${String(timing.perCheck.length)} 项`,
+  ].join('\n');
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const gateResult = await runQualityGate(options);
@@ -301,12 +341,14 @@ async function main() {
     cwd: options.cwd,
     ...(gateResult.passed ? {} : { reason: gateResult.decision.reason?.slice(0, 500) }),
     checks: formatChecksForLog(gateResult.results),
+    timing: gateResult.timing,
   });
 
   if (options.json) {
     console.log(JSON.stringify(gateResult, null, 2));
   } else {
     console.log(summarizeResults(gateResult.results));
+    console.log(formatTimingSummary(gateResult.timing));
   }
 
   process.exit(gateResult.passed ? 0 : 1);
