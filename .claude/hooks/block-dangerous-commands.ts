@@ -190,6 +190,13 @@ const PATTERNS = [
     regex: /\bdocker\s+volume\s+(rm|prune)/,
     reason: 'docker volume deletion loses data',
   },
+  // 19a. podman volume rm
+  {
+    level: 'high',
+    id: 'podman-vol-rm',
+    regex: /\bpodman\s+volume\s+(rm|prune)/,
+    reason: 'podman volume deletion loses data',
+  },
   // 20. rm ssh keys
   {
     level: 'high',
@@ -224,6 +231,13 @@ const PATTERNS = [
     id: 'docker-exec-env',
     regex: /\bdocker\s+exec\b.*\b(env|printenv)\b/,
     reason: 'docker exec printing environment variables',
+  },
+  // 24a. podman exec print env
+  {
+    level: 'high',
+    id: 'podman-exec-env',
+    regex: /\bpodman\s+exec\b.*\b(env|printenv)\b/,
+    reason: 'podman exec printing environment variables',
   },
 
   // ==================== STRICT - 工具限制 ====================
@@ -342,6 +356,13 @@ const PATTERNS = [
     id: 'docker-prune',
     regex: /\bdocker\s+(system|image)\s+prune/,
     reason: 'docker prune removes images',
+  },
+  // 38a. podman prune
+  {
+    level: 'strict',
+    id: 'podman-prune',
+    regex: /\bpodman\s+(system|image)\s+prune/,
+    reason: 'podman prune removes images',
   },
   // 39. crontab -r
   { level: 'strict', id: 'crontab-r', regex: /\bcrontab\s+-r/, reason: 'removes all cron jobs' },

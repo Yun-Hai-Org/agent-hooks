@@ -181,6 +181,26 @@ describe('block-dangerous-commands', () => {
     expect(r.blocked).toBe(false);
   });
 
+  it('应该阻止 podman volume rm', () => {
+    const r = checkCommand('podman volume rm myvol');
+    expect(r.blocked).toBe(true);
+  });
+
+  it('应该阻止 podman exec 打印环境变量', () => {
+    const r = checkCommand('podman exec mycontainer env');
+    expect(r.blocked).toBe(true);
+  });
+
+  it('应该阻止 podman system prune', () => {
+    const r = checkCommand('podman system prune -f');
+    expect(r.blocked).toBe(true);
+  });
+
+  it('应该允许 podman ps', () => {
+    const r = checkCommand('podman ps');
+    expect(r.blocked).toBe(false);
+  });
+
   // Hook 绕过防护
   it('应该阻止 git -c core.hooksPath 绕过', () => {
     const r = checkCommand('git -c core.hooksPath=/dev/null commit -m "msg"');

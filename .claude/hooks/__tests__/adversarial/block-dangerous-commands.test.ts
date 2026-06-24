@@ -12,6 +12,9 @@ describe('block-dangerous-commands 对抗性：混淆/RCE/绕过', () => {
     { name: 'git config core.hooksPath 绕过', cmd: 'git config core.hooksPath /dev/null' },
     { name: 'chmod +s 提权', cmd: 'chmod +s /usr/bin/foo' },
     { name: 'chmod 4755 setuid', cmd: 'chmod 4755 /usr/bin/foo' },
+    { name: 'podman volume rm', cmd: 'podman volume rm myvol' },
+    { name: 'podman exec env', cmd: 'podman exec mycontainer env' },
+    { name: 'podman system prune', cmd: 'podman system prune -f' },
   ];
 
   for (const { name, cmd } of blockedCases) {
@@ -27,6 +30,7 @@ describe('block-dangerous-commands 对抗性：混淆/RCE/绕过', () => {
     { name: '普通 chmod 644', cmd: 'chmod 644 file.txt' },
     { name: '普通 chmod 755', cmd: 'chmod 755 script.sh' },
     { name: '普通 bun 测试', cmd: 'bun test ./x.test.ts' },
+    { name: 'podman ps', cmd: 'podman ps' },
   ];
 
   for (const { name, cmd } of allowedCases) {

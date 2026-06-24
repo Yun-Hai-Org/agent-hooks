@@ -284,12 +284,17 @@ export async function runHookAdversarialTests(cwd?: string) {
   if (!execCommand(`test -d "${ADVERSARIAL_DIR}"`, { cwd }).success) {
     return formatResult('hook-adversarial', DECISION.DENY, '对抗性测试目录不存在');
   }
+  const list = execCommand('find .claude/hooks/__tests__/adversarial -maxdepth 1 -name "*.test.ts"', {
+    cwd,
+    timeout: 5000,
+  });
+  const files = list.success ? list.stdout.trim().split('\n').filter(Boolean) : [];
+  if (files.length === 0) {
+    return formatResult('hook-adversarial', DECISION.DENY, '无对抗性测试文件');
+  }
   try {
-    const result = await withTimeout(
-      execCommandAsync(`bun test "./.claude/hooks/__tests__/adversarial"`, { cwd, timeout: 60000 }),
-      60000,
-      '对抗性测试超时 (60s)',
-    );
+    const cmd = `bun test ${files.map((f) => `"./${f}"`).join(' ')}`;
+    const result = await withTimeout(execCommandAsync(cmd, { cwd, timeout: 60000 }), 60000, '对抗性测试超时 (60s)');
     if (!result.success) {
       return formatResult('hook-adversarial', DECISION.DENY, 'Hook 对抗性测试失败', {
         output: (result.stderr || result.stdout).slice(0, 500),
