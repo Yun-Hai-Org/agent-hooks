@@ -67,6 +67,7 @@ describe('quality-gate', () => {
       expect(source).toContain('runExtendedLintFull(cwd)');
       expect(source).toContain('runSchemaLintFull(cwd)');
       expect(source).toContain('runK8sLintFull(cwd)');
+      expect(source).toContain('runK8sKindSmokeFull(cwd)');
       expect(source).toContain('runOpenApiContractFull(cwd)');
     });
 

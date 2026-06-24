@@ -38,6 +38,7 @@ import { runCodeReview } from './checks/code-review.js';
 import { runExtendedLintStaged, runExtendedLintFull } from './checks/extended-lint.js';
 import { runSchemaLintStaged, runSchemaLintFull } from './checks/schema-lint.js';
 import { runK8sLintStaged, runK8sLintFull } from './checks/k8s-lint.js';
+import { runK8sKindSmokeFull } from './checks/k8s-kind-smoke.js';
 import { DEFAULT_COVERAGE_THRESHOLD } from './checks/coverage.js';
 import { runOpenApiContractStaged, runOpenApiContractFull } from './checks/openapi-contract.js';
 
@@ -192,6 +193,7 @@ export async function runQualityGate(
     extendedLint,
     schemaLint,
     k8sLint,
+    k8sKindSmoke,
     openApiContract,
     lockfileFreshness,
   ] = await Promise.all([
@@ -210,6 +212,7 @@ export async function runQualityGate(
     timeCheck(runExtendedLintFull(cwd)),
     timeCheck(runSchemaLintFull(cwd)),
     timeCheck(runK8sLintFull(cwd)),
+    timeCheck(runK8sKindSmokeFull(cwd)),
     timeCheck(runOpenApiContractFull(cwd)),
     timeCheck(runLockfileFreshness(cwd)),
   ]);
@@ -232,6 +235,7 @@ export async function runQualityGate(
     extendedLint,
     schemaLint,
     k8sLint,
+    k8sKindSmoke,
     openApiContract,
     lockfileFreshness,
   ];
