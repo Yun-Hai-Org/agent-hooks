@@ -29,14 +29,14 @@ interface NotificationHookInput {
   session_id?: string;
 }
 
-export async function handleNotification(data: NotificationHookInput) {
-  const message = data.tool_input?.message ?? '';
-  const session_id = data.session_id ?? '';
+export async function handleNotification(data: NotificationHookInput | null | undefined) {
+  const message = data?.tool_input?.message ?? '';
+  const session_id = data?.session_id ?? '';
   return dispatchSecurityNotification({ message, session_id }, HOOK_NAME);
 }
 
 async function main() {
-  const data = await readStdin();
+  const data = (await readStdin()) as NotificationHookInput;
   await handleNotification(data);
   console.log('{}');
 }

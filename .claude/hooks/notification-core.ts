@@ -42,7 +42,8 @@ const SEVERITY_EMOJI: Record<NotificationSeverity, string> = {
   info: 'ℹ️',
 };
 
-export function mapSeverityEmoji(severity: string): string {
+export function mapSeverityEmoji(severity: string | null | undefined): string {
+  if (!severity) return '⚠️';
   const key = severity.toLowerCase() as NotificationSeverity;
   return key in SEVERITY_EMOJI ? SEVERITY_EMOJI[key] : '⚠️';
 }

@@ -97,6 +97,8 @@ const TOOLS: { name: string; binary: string; versionCmd?: string }[] = [
   // 安全扫描
   { name: 'semgrep', binary: 'semgrep', versionCmd: 'semgrep --version' },
   { name: 'trivy', binary: 'trivy', versionCmd: 'trivy --version' },
+  { name: 'osv-scanner', binary: 'osv-scanner', versionCmd: 'osv-scanner --version' },
+  { name: 'pip-audit', binary: 'pip-audit', versionCmd: 'pip-audit --version' },
   // 死代码检测
   { name: 'knip', binary: 'knip', versionCmd: 'knip --version' },
   // 包管理器

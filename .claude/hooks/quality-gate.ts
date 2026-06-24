@@ -20,7 +20,15 @@ import {
   runHookAdversarialTests,
   runHookAdversarialIfStaged,
 } from './checks/tests.js';
-import { runSemgrep, runKnip, runTrivy, runGitleaks, runGitleaksStaged } from './checks/security-scan.js';
+import {
+  runSemgrep,
+  runSemgrepStaged,
+  runKnip,
+  runTrivy,
+  runGitleaks,
+  runGitleaksStaged,
+} from './checks/security-scan.js';
+import { runPyDepAudit } from './checks/py-dep-audit.js';
 import { runLintFull } from './checks/lint-full.js';
 import { runLintStaged } from './checks/lint-staged.js';
 import { runFormatFull } from './checks/format-full.js';
@@ -93,6 +101,7 @@ export async function runQualityGate(
       lintStaged,
       formatStaged,
       gitleaksStaged,
+      semgrepStaged,
       codeReview,
       hookAdv,
       extendedLint,
@@ -106,6 +115,7 @@ export async function runQualityGate(
       runLintStaged(cwd),
       runFormatStaged(cwd),
       runGitleaksStaged(cwd),
+      runSemgrepStaged(cwd),
       Promise.resolve(runCodeReview(cwd, { staged: true })),
       runHookAdversarialIfStaged(cwd),
       runExtendedLintStaged(cwd),
@@ -121,6 +131,7 @@ export async function runQualityGate(
       lintStaged,
       formatStaged,
       gitleaksStaged,
+      semgrepStaged,
       codeReview,
       hookAdv,
       extendedLint,
@@ -139,6 +150,7 @@ export async function runQualityGate(
     hookUnit,
     hookAdv,
     depAudit,
+    pyDepAudit,
     gitleaks,
     semgrep,
     knip,
@@ -157,6 +169,7 @@ export async function runQualityGate(
     runHookUnitTests(cwd),
     runHookAdversarialTests(cwd),
     runDepAudit(cwd, { staged: false }),
+    runPyDepAudit(cwd),
     runGitleaks(cwd),
     runSemgrep(cwd),
     runKnip(cwd),
@@ -177,6 +190,7 @@ export async function runQualityGate(
     hookUnit,
     hookAdv,
     depAudit,
+    pyDepAudit,
     gitleaks,
     semgrep,
     knip,

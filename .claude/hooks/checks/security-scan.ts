@@ -1,5 +1,6 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
+import { getStagedFiles } from './git-policy.js';
 import type { CheckResult } from '../types.js';
 
 const TRIVY_EXTRA_SKIP_DIRS = ['_bmad', '_bmad-output', 'node_modules', '.venv', '.claude/worktrees'];
@@ -34,6 +35,60 @@ interface TrivyVulnerability {
   Severity?: string;
 }
 
+const CODE_FILE_PATTERN =
+  /\.(js|ts|jsx|tsx|mjs|cjs|py|go|java|rb|php|rs|swift|kt|scala|cs|cpp|c|h|yaml|yml|json|toml|sh|bash|zsh)$/i;
+
+function evaluateSemgrepOutput(stdout: string, checkId: string): CheckResult | null {
+  try {
+    const json = JSON.parse(stdout) as { results?: SemgrepResult[] };
+    const blocking =
+      json.results?.filter((r) => r.extra?.severity === 'ERROR' || r.extra?.severity === 'WARNING') ?? [];
+    if (blocking.length === 0) return null;
+    const errors = blocking.filter((r) => r.extra?.severity === 'ERROR');
+    const warnings = blocking.filter((r) => r.extra?.severity === 'WARNING');
+    return formatResult(
+      checkId,
+      DECISION.DENY,
+      `Semgrep 发现 ${String(errors.length)} ERROR, ${String(warnings.length)} WARNING`,
+      { count: blocking.length, errors: errors.length, warnings: warnings.length },
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function runSemgrepStaged(cwd?: string): Promise<CheckResult> {
+  const stagedFiles = getStagedFiles(cwd).filter((f) => CODE_FILE_PATTERN.test(f));
+  if (stagedFiles.length === 0) {
+    return formatResult('semgrep-staged', DECISION.SKIP, '暂存区无代码文件，跳过 semgrep');
+  }
+
+  const missing = denyIfToolMissing('semgrep', 'semgrep-staged', cwd);
+  if (missing) return missing;
+
+  const files = stagedFiles.map((f) => `"${f}"`).join(' ');
+  const semgrepCmd = `semgrep --config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten --severity ERROR,WARNING,INFO --json ${files}`;
+
+  try {
+    const result = await withTimeout(
+      execCommandAsync(semgrepCmd, { cwd, timeout: 60000 }),
+      60000,
+      'semgrep staged 超时 (60s)',
+    );
+    if (!result.success && result.stdout) {
+      const deny = evaluateSemgrepOutput(result.stdout, 'semgrep-staged');
+      if (deny) return deny;
+    }
+    return formatResult(
+      'semgrep-staged',
+      DECISION.ALLOW,
+      result.success ? 'Semgrep 暂存文件扫描通过' : 'Semgrep 暂存扫描完成（无 ERROR/WARNING）',
+    );
+  } catch (e) {
+    return denyOnToolError(e, 'semgrep-staged', 'semgrep');
+  }
+}
+
 export async function runSemgrep(cwd?: string): Promise<CheckResult> {
   const missing = denyIfToolMissing('semgrep', 'semgrep', cwd);
   if (missing) return missing;
@@ -47,21 +102,8 @@ export async function runSemgrep(cwd?: string): Promise<CheckResult> {
       'semgrep 超时 (60s)',
     );
     if (!result.success && result.stdout) {
-      try {
-        const json = JSON.parse(result.stdout) as { results?: SemgrepResult[] };
-        const blocking =
-          json.results?.filter((r) => r.extra?.severity === 'ERROR' || r.extra?.severity === 'WARNING') ?? [];
-        if (blocking.length > 0) {
-          const errors = blocking.filter((r) => r.extra?.severity === 'ERROR');
-          const warnings = blocking.filter((r) => r.extra?.severity === 'WARNING');
-          return formatResult(
-            'semgrep',
-            DECISION.DENY,
-            `Semgrep 发现 ${String(errors.length)} ERROR, ${String(warnings.length)} WARNING`,
-            { count: blocking.length, errors: errors.length, warnings: warnings.length },
-          );
-        }
-      } catch {}
+      const deny = evaluateSemgrepOutput(result.stdout, 'semgrep');
+      if (deny) return deny;
     }
     return formatResult(
       'semgrep',
