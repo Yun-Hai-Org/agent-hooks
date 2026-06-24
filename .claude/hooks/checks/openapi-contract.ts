@@ -7,21 +7,12 @@ import type { CheckResult } from '../types.js';
 const OASDIFF_STAGED_TIMEOUT_MS = 30000;
 const OASDIFF_FULL_TIMEOUT_MS = 60000;
 
-/**
- * @param {string} filePath
- * @param {string} [cwd]
- */
-export function hasOpenApiBaseline(filePath, cwd) {
+export function hasOpenApiBaseline(filePath: string, cwd?: string): boolean {
   const result = execCommand(`git cat-file -e "HEAD:${filePath}"`, { cwd, timeout: 5000 });
   return result.success;
 }
 
-/**
- * @param {string} filePath
- * @param {string} idPrefix
- * @param {string} [cwd]
- */
-async function runOasdiffBreaking(filePath, idPrefix, cwd) {
+async function runOasdiffBreaking(filePath: string, idPrefix: string, cwd?: string) {
   if (!hasOpenApiBaseline(filePath, cwd)) {
     return formatResult(`${idPrefix}-oasdiff`, DECISION.SKIP, `无 HEAD 基线，跳过 breaking 检测: ${filePath}`);
   }
@@ -31,7 +22,7 @@ async function runOasdiffBreaking(filePath, idPrefix, cwd) {
     const result = await withTimeout(
       execCommandAsync(cmd, { cwd, timeout: OASDIFF_STAGED_TIMEOUT_MS }),
       OASDIFF_STAGED_TIMEOUT_MS,
-      `oasdiff 超时 (${OASDIFF_STAGED_TIMEOUT_MS / 1000}s): ${filePath}`,
+      `oasdiff 超时 (${String(OASDIFF_STAGED_TIMEOUT_MS / 1000)}s): ${filePath}`,
     );
     const output = [result.stderr, result.stdout].filter(Boolean).join('\n').trim();
     if (!result.success) {
@@ -45,13 +36,7 @@ async function runOasdiffBreaking(filePath, idPrefix, cwd) {
   }
 }
 
-/**
- * @param {string[]} files
- * @param {string} idPrefix
- * @param {string} [cwd]
- * @param {number} [timeoutMs]
- */
-async function runOpenApiChecks(files, idPrefix, cwd, timeoutMs = OASDIFF_FULL_TIMEOUT_MS) {
+async function runOpenApiChecks(files: string[], idPrefix: string, cwd?: string, timeoutMs = OASDIFF_FULL_TIMEOUT_MS) {
   const missing = denyIfToolMissing('oasdiff', `${idPrefix}-oasdiff`, cwd);
   if (missing) return missing;
 
@@ -67,7 +52,7 @@ async function runOpenApiChecks(files, idPrefix, cwd, timeoutMs = OASDIFF_FULL_T
       const result = await withTimeout(
         execCommandAsync(cmd, { cwd, timeout: timeoutMs }),
         timeoutMs,
-        `oasdiff 超时 (${timeoutMs / 1000}s): ${file}`,
+        `oasdiff 超时 (${String(timeoutMs / 1000)}s): ${file}`,
       );
       const output = [result.stderr, result.stdout].filter(Boolean).join('\n').trim();
       results.push(
@@ -90,11 +75,10 @@ async function runOpenApiChecks(files, idPrefix, cwd, timeoutMs = OASDIFF_FULL_T
     return formatResult(idPrefix, DECISION.SKIP, 'OpenAPI spec 无 HEAD 基线，跳过 breaking 检测');
   }
 
-  return formatResult(idPrefix, DECISION.ALLOW, `OpenAPI 契约检查通过（${checked.length} 个 spec）`);
+  return formatResult(idPrefix, DECISION.ALLOW, `OpenAPI 契约检查通过（${String(checked.length)} 个 spec）`);
 }
 
-/** @param {string} [cwd] */
-export async function runOpenApiContractStaged(cwd) {
+export async function runOpenApiContractStaged(cwd?: string) {
   const staged = getStagedFiles(cwd);
   const openApiFiles = staged.filter((f) => isOpenApiSpecPath(f, cwd));
   if (openApiFiles.length === 0) {
@@ -117,11 +101,10 @@ export async function runOpenApiContractStaged(cwd) {
     return formatResult('openapi-staged', DECISION.SKIP, '暂存 OpenAPI spec 无 HEAD 基线，跳过 breaking 检测');
   }
 
-  return formatResult('openapi-staged', DECISION.ALLOW, `OpenAPI 契约检查通过（${checked.length} 个 spec）`);
+  return formatResult('openapi-staged', DECISION.ALLOW, `OpenAPI 契约检查通过（${String(checked.length)} 个 spec）`);
 }
 
-/** @param {string} [cwd] */
-export async function runOpenApiContractFull(cwd) {
+export async function runOpenApiContractFull(cwd?: string) {
   const openApiFiles = listTrackedFiles((f) => {
     if (f.startsWith('_bmad-output/') || f.startsWith('_bmad/')) return false;
     if (/\.github\/workflows\//i.test(f)) return false;

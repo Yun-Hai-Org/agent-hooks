@@ -3,10 +3,11 @@
  * Native pre-push hook runner
  */
 
-import { execCommand } from '../security-orchestrator.js';
+import { execCommand, log } from '../security-orchestrator.js';
 import { hasUncommittedChanges, buildUncommittedWorktreeDenyReason } from '../checks/git-policy.js';
 import { runQualityGate, logGateResult } from '../quality-gate.js';
 import { setPendingGateFailure } from '../gate-pending.js';
+import { getHeadTreeSha, hasFreshFullPass, recordFullPass } from '../gate-cache.js';
 
 const HOOK_NAME = 'native-pre-push';
 
@@ -27,6 +28,12 @@ async function main() {
     process.exit(1);
   }
 
+  const headTree = getHeadTreeSha(cwd);
+  if (headTree && hasFreshFullPass(cwd, headTree)) {
+    log(HOOK_NAME, { level: 'SKIP', reason: 'full 门已在相同提交树通过，跳过重复扫描', tree: headTree, cwd });
+    process.exit(0);
+  }
+
   const gateResult = await runQualityGate({ profile: 'full', cwd });
   logGateResult(HOOK_NAME, gateResult, { profile: 'full', cwd });
 
@@ -36,11 +43,15 @@ async function main() {
       command: 'git push',
       cwd,
     });
-    console.error(gateResult.decision.reason || 'pre-push quality gate failed');
+    console.error(gateResult.decision.reason ?? 'pre-push quality gate failed');
     process.exit(1);
+  }
+
+  if (headTree) {
+    recordFullPass(cwd, headTree);
   }
 
   process.exit(0);
 }
 
-main();
+void main();

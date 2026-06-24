@@ -2,8 +2,7 @@ import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } fr
 import { denyIfToolMissing, denyOnToolError, denyIfRuffMissing, getRuffInvocation } from './tools.js';
 import type { CheckResult } from '../types.js';
 
-/** @param {string} [cwd] */
-export async function runLintFull(cwd) {
+export async function runLintFull(cwd?: string) {
   const results: CheckResult[] = [];
   const hasEslintConfig =
     execCommand('test -f eslint.config.ts', { cwd }).success ||
@@ -64,5 +63,5 @@ export async function runLintFull(cwd) {
     return formatResult('lint-full', DECISION.SKIP, '未找到 lint 配置，跳过');
   }
   const failure = results.find((r) => r.decision === DECISION.DENY);
-  return failure || formatResult('lint-full', DECISION.ALLOW, '全量 lint 通过');
+  return failure ?? formatResult('lint-full', DECISION.ALLOW, '全量 lint 通过');
 }

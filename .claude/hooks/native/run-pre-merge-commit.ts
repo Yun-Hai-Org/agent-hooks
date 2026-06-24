@@ -6,6 +6,7 @@
 import { execCommand } from '../security-orchestrator.js';
 import { runQualityGate, logGateResult } from '../quality-gate.js';
 import { setPendingGateFailure } from '../gate-pending.js';
+import { getIndexTreeSha, recordFullPass } from '../gate-cache.js';
 
 const HOOK_NAME = 'native-pre-merge-commit';
 
@@ -29,11 +30,16 @@ async function main() {
       command: 'git merge',
       cwd,
     });
-    console.error(gateResult.decision.reason || 'pre-merge-commit quality gate failed');
+    console.error(gateResult.decision.reason ?? 'pre-merge-commit quality gate failed');
     process.exit(1);
+  }
+
+  const indexTree = getIndexTreeSha(cwd);
+  if (indexTree) {
+    recordFullPass(cwd, indexTree);
   }
 
   process.exit(0);
 }
 
-main();
+void main();

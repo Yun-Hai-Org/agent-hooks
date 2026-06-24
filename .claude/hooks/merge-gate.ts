@@ -21,11 +21,7 @@ import { setPendingGateFailure, clearPendingGateFailure } from './gate-pending.j
 
 const HOOK_NAME = 'merge-gate';
 
-/**
- * @param {string} repoCwd
- * @param {string} sourceBranch
- */
-async function runFullOnSourceBranch(repoCwd, sourceBranch) {
+async function runFullOnSourceBranch(repoCwd: string, sourceBranch: string) {
   const worktreeDir = mkdtempSync(join(tmpdir(), 'merge-gate-'));
   try {
     const addResult = execCommand(`git worktree add "${worktreeDir}" "${sourceBranch}"`, {
@@ -62,7 +58,7 @@ async function main() {
       return;
     }
 
-    const cmd = tool_input?.command || '';
+    const cmd = tool_input.command ?? '';
     if (!isGitMergeCommand(cmd)) {
       console.log(formatAllowOutput());
       return;
@@ -72,7 +68,7 @@ async function main() {
     if (currentBranch !== 'main' && currentBranch !== 'master') {
       log(HOOK_NAME, {
         level: 'SKIP',
-        reason: `当前分支 ${currentBranch} 非 main/master`,
+        reason: `当前分支 ${currentBranch ?? 'unknown'} 非 main/master`,
         session_id,
         cwd: workingDir,
       });
@@ -126,7 +122,7 @@ async function main() {
 }
 
 if (import.meta.main) {
-  main();
+  void main();
 }
 
 export { extractMergeTarget, getCurrentBranch, runFullOnSourceBranch, main };

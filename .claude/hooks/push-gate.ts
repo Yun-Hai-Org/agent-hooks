@@ -27,7 +27,7 @@ async function main() {
       return;
     }
 
-    const cmd = tool_input?.command || '';
+    const cmd = tool_input.command ?? '';
     if (!isGitPushCommand(cmd)) {
       console.log(formatAllowOutput());
       return;
@@ -63,7 +63,7 @@ async function main() {
 }
 
 if (import.meta.main) {
-  main();
+  void main();
 }
 
 export { main };

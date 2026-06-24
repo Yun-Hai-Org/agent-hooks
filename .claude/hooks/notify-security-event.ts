@@ -23,16 +23,18 @@ export {
 
 const HOOK_NAME = 'notify-security-event';
 
-/**
- * @param {{ hook?: string; severity?: string; reason?: string; message?: string; session_id?: string }} input
- */
-export async function notifySecurityEvent(input) {
+interface SecurityEventInput {
+  hook?: string;
+  severity?: string;
+  reason?: string;
+  message?: string;
+  session_id?: string;
+}
+
+export async function notifySecurityEvent(input: SecurityEventInput) {
   return dispatchSecurityNotification(input, HOOK_NAME);
 }
 
-/**
- * @param {{ hook?: string; severity?: string; reason?: string; message?: string; session_id?: string }} input
- */
-export function notifySecurityEventAsync(input) {
-  notifySecurityEvent(input).catch(() => {});
+export function notifySecurityEventAsync(input: SecurityEventInput) {
+  void notifySecurityEvent(input).catch(() => undefined);
 }

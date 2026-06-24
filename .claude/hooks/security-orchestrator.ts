@@ -8,8 +8,8 @@ import { exec, execSync, type ExecOptions, type ExecSyncOptions } from 'child_pr
 import { existsSync, appendFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import type { CheckResult, DecideResult, ExecResult, ToolAvailability, ToolchainInfo } from './types.js';
-import { isExecErrorLike } from './types.js';
+import type { CheckResult, DecideResult, ExecResult, ToolAvailability, ToolchainInfo, Decision } from './types.js';
+import { isExecErrorLike, stringifyUnknown } from './types.js';
 
 export const DECISION = {
   ALLOW: 'allow',
@@ -30,7 +30,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 export const HOOKS_DIR = __dirname;
 export const TESTS_DIR = join(__dirname, '__tests__');
-export const LOG_DIR = join(process.env.HOME || '', '.claude', 'hooks-logs');
+export const LOG_DIR = join(process.env['HOME'] ?? '', '.claude', 'hooks-logs');
 
 export function log(hookName: string, data: Record<string, unknown>): void {
   try {
@@ -58,11 +58,11 @@ export function execCommand(command: string, options: ExecCommandOptions = {}): 
     if (isExecErrorLike(error)) {
       return {
         success: false,
-        stdout: error.stdout || '',
-        stderr: error.stderr || error.message || String(error),
+        stdout: error.stdout ?? '',
+        stderr: error.stderr ?? error.message ?? stringifyUnknown(error),
       };
     }
-    return { success: false, stdout: '', stderr: String(error) };
+    return { success: false, stdout: '', stderr: stringifyUnknown(error) };
   }
 }
 
@@ -70,7 +70,7 @@ type ExecCommandAsyncOptions = ExecOptions & { timeout?: number };
 
 export function execCommandAsync(command: string, options: ExecCommandAsyncOptions = {}): Promise<ExecResult> {
   return new Promise((resolve) => {
-    const timeout = options.timeout || 30000;
+    const timeout = options.timeout ?? 30000;
     let settled = false;
     const finish = (result: ExecResult) => {
       if (settled) return;
@@ -89,11 +89,11 @@ export function execCommandAsync(command: string, options: ExecCommandAsyncOptio
         if (error) {
           finish({
             success: false,
-            stdout: String(stdout || ''),
-            stderr: String(stderr || (error instanceof Error ? error.message : String(error))),
+            stdout: String(stdout),
+            stderr: String(stderr || (error instanceof Error ? error.message : stringifyUnknown(error))),
           });
         } else {
-          finish({ success: true, stdout: String(stdout || ''), stderr: String(stderr || '') });
+          finish({ success: true, stdout: String(stdout), stderr: String(stderr) });
         }
       },
     );
@@ -155,7 +155,7 @@ export async function safeMain(fn: () => Promise<void>): Promise<void> {
 
 export function formatResult(
   checkId: string,
-  decision: string,
+  decision: Decision,
   message: string,
   details: Record<string, unknown> = {},
 ): CheckResult {
@@ -210,7 +210,7 @@ export function checkToolAvailable(toolName: string, cwd?: string): ToolAvailabi
 }
 
 export function detectToolchain(cwd?: string): ToolchainInfo {
-  const dir = cwd || process.cwd();
+  const dir = cwd ?? process.cwd();
   const checks: ToolchainInfo = {
     js: null,
     python: null,
@@ -264,7 +264,7 @@ export function isGitIgnored(filePath: string, cwd = process.cwd()): boolean {
       stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
     if (bare === 'true' && existsSync(join(cwd, '.gitignore'))) {
-      env.GIT_WORK_TREE = cwd;
+      env['GIT_WORK_TREE'] = cwd;
     }
   } catch {
     // fall through with default env

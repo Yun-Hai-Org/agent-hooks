@@ -1,4 +1,5 @@
 import { join } from 'path';
+import { parseCoveragePercent } from './coverage.js';
 import type { CheckResult } from '../types.js';
 import {
   execCommand,
@@ -14,8 +15,7 @@ import { denyIfToolMissing, denyOnToolError, isToolInstalled } from './tools.js'
 
 const ADVERSARIAL_DIR = join(TESTS_DIR, 'adversarial');
 
-/** @param {string} [cwd] */
-export async function runRelatedTests(cwd) {
+export async function runRelatedTests(cwd?: string) {
   const stagedFiles = getStagedFiles(cwd);
   if (stagedFiles.length === 0) {
     return formatResult('related-tests', DECISION.SKIP, '无暂存文件，跳过关联测试');
@@ -26,7 +26,7 @@ export async function runRelatedTests(cwd) {
     return formatResult('related-tests', DECISION.SKIP, '暂存区无代码文件，跳过关联测试');
   }
 
-  const testPatterns = /** @type {Array<(f: string) => string>} */ [
+  const testPatterns: ((f: string) => string)[] = [
     (f) => f.replace(/\.py$/, '_test.py').replace(/\/src\//, '/tests/'),
     (f) => f.replace(/\.py$/, '_test.py'),
     (f) => f.replace(/\.(js|ts)$/, '.test.$1'),
@@ -119,8 +119,7 @@ export async function runRelatedTests(cwd) {
   }
 }
 
-/** @param {string} [cwd] */
-export async function runFullProjectTests(cwd) {
+export async function runFullProjectTests(cwd?: string) {
   const toolchain = detectToolchain(cwd);
   const results: CheckResult[] = [];
 
@@ -168,14 +167,14 @@ export async function runFullProjectTests(cwd) {
               .trim()
               .split('\n')
               .filter(Boolean)
-              .filter((/** @type {string} */ f) => !f.includes('.claude/hooks/__tests__'))
+              .filter((f) => !f.includes('.claude/hooks/__tests__'))
           : [];
         if (projectTestFiles.length === 0) {
           results.push(
             formatResult('full-test-js', DECISION.SKIP, '无项目级 JS 测试（hook 测试由 hook-unit-tests 覆盖）'),
           );
         } else {
-          const files = projectTestFiles.map((/** @type {string} */ f) => `./${f}`).join(' ');
+          const files = projectTestFiles.map((f) => `./${f}`).join(' ');
           const jsResult = await withTimeout(
             execCommandAsync(`bun test ${files}`, { cwd, timeout: 120000 }),
             120000,
@@ -201,33 +200,48 @@ export async function runFullProjectTests(cwd) {
     return formatResult('full-tests', DECISION.SKIP, '未找到测试配置');
   }
   const failure = results.find((r) => r.decision === DECISION.DENY);
-  return failure || formatResult('full-tests', DECISION.ALLOW, '所有全量测试通过');
+  return failure ?? formatResult('full-tests', DECISION.ALLOW, '所有全量测试通过');
 }
 
-/** @param {string} [cwd] */
-export async function runHookUnitTests(cwd) {
+export async function runHookUnitTests(cwd?: string, options: { coverageThreshold?: number } = {}) {
   const missing = denyIfToolMissing('bun', 'hook-unit-tests', cwd);
   if (missing) return missing;
 
   if (!execCommand(`test -d "${TESTS_DIR}"`, { cwd }).success) {
     return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 测试目录不存在');
   }
-  const list = execCommand(`find "${TESTS_DIR}" -maxdepth 1 -name '*.test.ts'`, { cwd, timeout: 5000 });
+  const list = execCommand('find .claude/hooks/__tests__ -maxdepth 1 -name "*.test.ts"', { cwd, timeout: 5000 });
   const files = list.success ? list.stdout.trim().split('\n').filter(Boolean) : [];
   if (files.length === 0) {
     return formatResult('hook-unit-tests', DECISION.DENY, '无 Hook 常规单测文件');
   }
   try {
-    const cmd = `bun test ${files.map((/** @type {string} */ f) => `"${f}"`).join(' ')}`;
+    const coverageFlag = options.coverageThreshold !== undefined ? ' --coverage --dots' : '';
+    const cmd = `bun test ${files.map((f) => `"./${f}"`).join(' ')}${coverageFlag}`;
     const result = await withTimeout(
       execCommandAsync(cmd, { cwd, timeout: 300000 }),
       300000,
       'Hook 常规单测超时 (300s)',
     );
+    const output = result.stdout + result.stderr;
     if (!result.success) {
       return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 常规单测失败', {
-        output: (result.stderr || result.stdout).slice(0, 500),
+        output: output.slice(0, 500),
       });
+    }
+    if (options.coverageThreshold !== undefined) {
+      const pct = parseCoveragePercent(output);
+      if (pct === null || pct < options.coverageThreshold) {
+        return formatResult(
+          'hook-unit-tests',
+          DECISION.DENY,
+          pct === null
+            ? `Hook 单测通过但无法解析覆盖率（要求 >= ${String(options.coverageThreshold)}%）`
+            : `Hook 单测通过但覆盖率 ${String(pct)}% 低于 ${String(options.coverageThreshold)}%`,
+          { output: output.slice(0, 500) },
+        );
+      }
+      return formatResult('hook-unit-tests', DECISION.ALLOW, `Hook 常规单测通过，覆盖率 ${String(pct)}% 达标`);
     }
     return formatResult('hook-unit-tests', DECISION.ALLOW, 'Hook 常规单测通过');
   } catch (e) {
@@ -235,18 +249,16 @@ export async function runHookUnitTests(cwd) {
   }
 }
 
-/** @param {string} [cwd] */
-export async function runHookAdversarialIfStaged(cwd) {
+export async function runHookAdversarialIfStaged(cwd?: string) {
   const stagedFiles = getStagedFiles(cwd);
-  const touchesHooks = stagedFiles.some((/** @type {string} */ f) => f.startsWith('.claude/hooks/'));
+  const touchesHooks = stagedFiles.some((f) => f.startsWith('.claude/hooks/'));
   if (!touchesHooks) {
     return formatResult('hook-adversarial', DECISION.SKIP, '暂存区未修改 hooks，跳过对抗性测试');
   }
   return runHookAdversarialTests(cwd);
 }
 
-/** @param {string} [cwd] */
-export async function runHookAdversarialTests(cwd) {
+export async function runHookAdversarialTests(cwd?: string) {
   const missing = denyIfToolMissing('bun', 'hook-adversarial', cwd);
   if (missing) return missing;
 
@@ -255,7 +267,7 @@ export async function runHookAdversarialTests(cwd) {
   }
   try {
     const result = await withTimeout(
-      execCommandAsync(`bun test "${ADVERSARIAL_DIR}"`, { cwd, timeout: 60000 }),
+      execCommandAsync(`bun test "./.claude/hooks/__tests__/adversarial"`, { cwd, timeout: 60000 }),
       60000,
       '对抗性测试超时 (60s)',
     );

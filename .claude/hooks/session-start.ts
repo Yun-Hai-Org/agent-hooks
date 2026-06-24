@@ -20,11 +20,7 @@ const HOOK_NAME = 'session-start';
 const GLOBAL_TIMEOUT_MS = 2000;
 const PER_TOOL_TIMEOUT_MS = 500;
 
-/**
- * 日志记录
- * @param {Record<string, unknown>} data
- */
-function log(data) {
+function log(data: Record<string, unknown>) {
   try {
     if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
     const file = join(LOG_DIR, `${new Date().toISOString().slice(0, 10)}.jsonl`);
@@ -32,13 +28,7 @@ function log(data) {
   } catch {}
 }
 
-/**
- * 获取工具版本
- * 优先提取包含版本号的行，回退到第一行
- * @param {string} command
- * @returns {string}
- */
-function getToolVersion(command) {
+function getToolVersion(command: string): string {
   try {
     const output = execSync(command, {
       encoding: 'utf-8',
@@ -46,26 +36,17 @@ function getToolVersion(command) {
       timeout: PER_TOOL_TIMEOUT_MS,
     });
     const lines = output.trim().split('\n');
-    // 优先找 "version: x.y.z" 格式的行（如 shellcheck）
     const versionLine = lines.find((l) => /^\s*version[:\s]/i.test(l));
     if (versionLine) {
       return versionLine.replace(/^\s*version[:\s]*/i, '').trim();
     }
-    // 回退到第一行
-    return lines[0];
+    return lines[0] ?? '';
   } catch {
     return '';
   }
 }
 
-/**
- * 检查单个工具可用性
- * @param {string} name - 工具名称
- * @param {string} binary - 可执行文件名
- * @param {string} [versionCmd] - 版本查询命令
- * @returns {{ name: string, available: boolean, version: string }}
- */
-function checkTool(name, binary, versionCmd) {
+function checkTool(name: string, binary: string, versionCmd?: string): ToolStatus {
   try {
     execSync(`which ${binary}`, { stdio: 'pipe', timeout: PER_TOOL_TIMEOUT_MS });
     const version = versionCmd ? getToolVersion(versionCmd) : '';
@@ -78,7 +59,7 @@ function checkTool(name, binary, versionCmd) {
 /**
  * 所有待检查工具列表
  */
-const TOOLS = [
+const TOOLS: { name: string; binary: string; versionCmd?: string }[] = [
   // 核心运行时（优先检测）
   { name: 'bun', binary: 'bun', versionCmd: 'bun --version' },
   { name: 'uv', binary: 'uv', versionCmd: 'uv --version' },
@@ -116,6 +97,8 @@ const TOOLS = [
   // 安全扫描
   { name: 'semgrep', binary: 'semgrep', versionCmd: 'semgrep --version' },
   { name: 'trivy', binary: 'trivy', versionCmd: 'trivy --version' },
+  { name: 'osv-scanner', binary: 'osv-scanner', versionCmd: 'osv-scanner --version' },
+  { name: 'pip-audit', binary: 'pip-audit', versionCmd: 'pip-audit --version' },
   // 死代码检测
   { name: 'knip', binary: 'knip', versionCmd: 'knip --version' },
   // 包管理器
@@ -125,7 +108,7 @@ const TOOLS = [
  * 顺序检查所有工具（带全局超时保护）
  * @returns {Promise<Array<{ name: string, available: boolean, version: string }>>}
  */
-async function checkAllTools() {
+function checkAllTools() {
   const results: ToolStatus[] = [];
   const startTime = Date.now();
 
@@ -135,7 +118,10 @@ async function checkAllTools() {
       log({ level: 'TIMEOUT', checked: results.length, total: TOOLS.length });
       // 剩余工具标记为超时
       for (let i = results.length; i < TOOLS.length; i++) {
-        results.push({ name: TOOLS[i].name, available: false, version: '' });
+        const tool = TOOLS[i];
+        if (tool) {
+          results.push({ name: tool.name, available: false, version: '' });
+        }
       }
       break;
     }
@@ -145,12 +131,7 @@ async function checkAllTools() {
   return results;
 }
 
-/**
- * 格式化单个工具状态
- * @param {{ name: string, available: boolean, version: string }} tool
- * @returns {string}
- */
-function formatToolStatus(tool) {
+function formatToolStatus(tool: ToolStatus) {
   if (tool.available) {
     const versionStr = tool.version ? ` (${tool.version})` : '';
     return `  🟢 ${tool.name} ✔${versionStr}`;
@@ -158,18 +139,13 @@ function formatToolStatus(tool) {
   return `  🔴 ${tool.name} ❌ (未安装)`;
 }
 
-/**
- * 生成健康检查报告
- * @param {Array<{ name: string, available: boolean, version: string }>} results
- * @returns {string}
- */
-function formatReport(results) {
+function formatReport(results: ToolStatus[]) {
   const available = results.filter((r) => r.available);
   const unavailable = results.filter((r) => !r.available);
   const total = results.length;
   const okCount = available.length;
 
-  const lines = [`ℹ️ [session-start] 工具健康检查 (${okCount}/${total} 可用)`, ''];
+  const lines = [`ℹ️ [session-start] 工具健康检查 (${String(okCount)}/${String(total)} 可用)`, ''];
 
   // 先显示可用工具
   for (const tool of available) {
@@ -188,19 +164,14 @@ function formatReport(results) {
   return lines.join('\n');
 }
 
-/**
- * 格式化 JSON 结果（供后续 hook 处理）
- * @param {Array<{ name: string, available: boolean, version: string }>} results
- * @returns {string}
- */
-function formatJsonResult(results) {
+function formatJsonResult(results: ToolStatus[]) {
   const summary = {
     total: results.length,
     available: results.filter((r) => r.available).length,
     unavailable: results.filter((r) => !r.available).length,
   };
 
-  const toolStatus = /** @type {Record<string, { available: boolean; version: string | null }>} */ {};
+  const toolStatus: Record<string, { available: boolean; version: string | null }> = {};
   for (const r of results) {
     toolStatus[r.name] = {
       available: r.available,
@@ -218,11 +189,11 @@ function formatJsonResult(results) {
   });
 }
 
-async function main() {
+function main() {
   const startTime = Date.now();
 
   try {
-    const results = await checkAllTools();
+    const results = checkAllTools();
     const elapsed = Date.now() - startTime;
 
     process.stderr.write(formatReport(results) + '\n');

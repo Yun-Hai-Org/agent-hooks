@@ -12,15 +12,15 @@ export function buildGateDenyReason(
   gateResult: GateResultLike,
   options: GateFixOptions = {},
 ): string {
-  const results = gateResult.results || [];
+  const results = gateResult.results ?? [];
   const denied = results.filter((r) => r.decision === 'deny');
   const summary =
     denied.length > 0 || results.length > 0
       ? summarizeResults(denied.length > 0 ? denied : results)
-      : gateResult.decision?.reason || '检查未通过';
+      : (gateResult.decision?.reason ?? '检查未通过');
   const loopHint =
     typeof options.loopCount === 'number' && options.loopCount > 0
-      ? `\n（第 ${options.loopCount + 1} 次修复重试）`
+      ? `\n（第 ${String(options.loopCount + 1)} 次修复重试）`
       : '';
 
   return [
@@ -42,15 +42,15 @@ export function buildGateRetryStopMessage(
   gateResult: GateResultLike,
   options: GateFixOptions = {},
 ): string {
-  const results = gateResult.results || [];
+  const results = gateResult.results ?? [];
   const denied = results.filter((r) => r.decision === 'deny');
   const summary =
     denied.length > 0 || results.length > 0
       ? summarizeResults(denied.length > 0 ? denied : results)
-      : gateResult.decision?.reason || '检查未通过';
+      : (gateResult.decision?.reason ?? '检查未通过');
   const loopHint =
     typeof options.loopCount === 'number' && options.loopCount > 0
-      ? `\n（第 ${options.loopCount + 1} 次自动重试）`
+      ? `\n（第 ${String(options.loopCount + 1)} 次自动重试）`
       : '';
   const mergeHint =
     options.pendingType === 'merge'

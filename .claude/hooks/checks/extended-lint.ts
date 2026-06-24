@@ -10,8 +10,7 @@ import {
 } from './file-patterns.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
 
-/** @type {Record<string, string>} */
-export const HADOLINT_SECURITY_RULES = Object.freeze({
+export const HADOLINT_SECURITY_RULES: Readonly<Record<string, string>> = Object.freeze({
   DL3006: 'HIGH',
   DL3023: 'HIGH',
   DL3025: 'HIGH',
@@ -41,8 +40,7 @@ export const HADOLINT_SECURITY_RULES = Object.freeze({
   DL4005: 'MEDIUM',
 });
 
-/** @param {string} hadolintSeverity @param {string} ruleId */
-export function getHadolintSeverity(hadolintSeverity, ruleId) {
+export function getHadolintSeverity(hadolintSeverity: string, ruleId: string): string {
   if (hadolintSeverity === 'error') return 'CRITICAL';
   const ruleSeverity = HADOLINT_SECURITY_RULES[ruleId];
   if (ruleSeverity) return ruleSeverity;
@@ -58,9 +56,13 @@ export function parseHadolintOutput(output: string): HadolintIssue[] {
   const lines = cleanOutput.split('\n').filter((l) => l.trim());
 
   for (const line of lines) {
-    const match = line.match(/^(.+?):(\d+)(?::\d+)?:?\s+(DL\d+)\s+(\w+):\s+(.+)$/);
-    if (match) {
-      const [, file, lineNum, ruleId, hadolintSev, message] = match;
+    const match = /^(.+?):(\d+)(?::\d+)?:?\s+(DL\d+)\s+(\w+):\s+(.+)$/.exec(line);
+    if (match?.[1] && match[2] && match[3] && match[4] && match[5]) {
+      const file = match[1];
+      const lineNum = match[2];
+      const ruleId = match[3];
+      const hadolintSev = match[4];
+      const message = match[5];
       results.push({
         file,
         line: parseInt(lineNum, 10),
@@ -74,40 +76,32 @@ export function parseHadolintOutput(output: string): HadolintIssue[] {
   return results;
 }
 
-/** @param {string} output */
-function formatHadolintDenyOutput(output) {
+function formatHadolintDenyOutput(output: string) {
   const issues = parseHadolintOutput(output);
   if (issues.length === 0) return output.slice(0, 500);
-  /** @type {Record<string, number>} */
-  const severityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2 };
+  const severityOrder: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2 };
   issues.sort((a, b) => (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3));
   return issues
     .slice(0, 15)
-    .map((i) => `[${i.severity}] ${i.ruleId}: ${i.file}:${i.line} — ${i.message}`)
+    .map((i) => `[${i.severity}] ${i.ruleId}: ${i.file}:${String(i.line)} — ${i.message}`)
     .join('\n');
 }
 
-/**
- * @param {Array<{ checkId: string; decision: string; message: string }>} results
- * @param {string} skipId
- * @param {string} allowId
- * @param {string} skipMsg
- * @param {string} allowMsg
- */
-function aggregateExtendedResults(results, skipId, allowId, skipMsg, allowMsg) {
+function aggregateExtendedResults(
+  results: CheckResult[],
+  skipId: string,
+  allowId: string,
+  skipMsg: string,
+  allowMsg: string,
+) {
   if (results.length === 0) {
     return formatResult(skipId, DECISION.SKIP, skipMsg);
   }
   const failure = results.find((r) => r.decision === DECISION.DENY);
-  return failure || formatResult(allowId, DECISION.ALLOW, allowMsg);
+  return failure ?? formatResult(allowId, DECISION.ALLOW, allowMsg);
 }
 
-/**
- * @param {ReturnType<classifyFiles>} classified
- * @param {string} idPrefix
- * @param {string} [cwd]
- */
-async function runExtendedChecks(classified, idPrefix, cwd) {
+async function runExtendedChecks(classified: ReturnType<typeof classifyFiles>, idPrefix: string, cwd?: string) {
   const results: CheckResult[] = [];
   const stagedPrefix = idPrefix === 'extended-staged' ? 'lint-staged' : 'lint';
   const formatPrefix = idPrefix === 'extended-staged' ? 'format-staged' : 'format';
@@ -311,8 +305,7 @@ async function runExtendedChecks(classified, idPrefix, cwd) {
   );
 }
 
-/** @param {string} [cwd] */
-export async function runExtendedLintStaged(cwd) {
+export async function runExtendedLintStaged(cwd?: string) {
   const staged = getStagedFiles(cwd);
   const classified = classifyFiles(staged, cwd);
   const hasTargets =
@@ -332,8 +325,7 @@ export async function runExtendedLintStaged(cwd) {
   return runExtendedChecks(classified, 'extended-staged', cwd);
 }
 
-/** @param {string} [cwd] */
-export async function runExtendedLintFull(cwd) {
+export async function runExtendedLintFull(cwd?: string) {
   const classified = classifyFiles(
     listTrackedFiles((f) => {
       if (f.startsWith('_bmad-output/') || f.startsWith('_bmad/') || f.startsWith('GitHub/')) return false;

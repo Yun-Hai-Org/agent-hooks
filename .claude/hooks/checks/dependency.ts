@@ -28,7 +28,7 @@ export async function runDepAudit(cwd?: string, options: { staged?: boolean } = 
     const hasCritical = /critical/i.test(output);
     const hasHigh = /high/i.test(output);
     const hasMedium = /medium/i.test(output);
-    const deny = hasCritical || hasHigh || (!staged && hasMedium);
+    const deny = hasCritical || hasHigh || hasMedium;
     if (deny) {
       return formatResult('dep-audit', DECISION.DENY, '依赖审计发现漏洞', { output: output.slice(0, 500) });
     }

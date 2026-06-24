@@ -7,7 +7,7 @@
 import { safeMain, DECISION } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
 import { isGitCommitCommand } from './checks/git-policy.js';
-import { runQualityGate, logGateResult } from './quality-gate.js';
+import { runQualityGate, logGateResult, summarizeResults } from './quality-gate.js';
 
 const HOOK_NAME = 'commit-gate';
 
@@ -24,18 +24,19 @@ async function main() {
       return;
     }
 
-    const cmd = tool_input?.command || '';
+    const cmd = tool_input.command ?? '';
     if (!isGitCommitCommand(cmd)) {
       console.log(formatAllowOutput());
       return;
     }
 
-    const gateResult = await runQualityGate({ profile: 'commit', cwd: cwd || process.cwd(), commitCmd: cmd });
+    const gateResult = await runQualityGate({ profile: 'commit', cwd, commitCmd: cmd });
 
-    logGateResult(HOOK_NAME, gateResult, { profile: 'commit', session_id, cwd: cwd || process.cwd() });
+    logGateResult(HOOK_NAME, gateResult, { profile: 'commit', session_id, cwd });
 
     if (!gateResult.passed) {
-      console.log(formatDenyOutput(DECISION.DENY, `🚫 提交门未通过:\n${gateResult.decision.reason}`));
+      const summary = summarizeResults(gateResult.results);
+      console.log(formatDenyOutput(DECISION.DENY, `🚫 提交门未通过:\n${summary}`));
       return;
     }
 
@@ -44,7 +45,7 @@ async function main() {
 }
 
 if (import.meta.main) {
-  main();
+  void main();
 }
 
 export { main };

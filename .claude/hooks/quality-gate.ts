@@ -20,26 +20,44 @@ import {
   runHookAdversarialTests,
   runHookAdversarialIfStaged,
 } from './checks/tests.js';
-import { runSemgrep, runKnip, runTrivy, runGitleaks, runGitleaksStaged } from './checks/security-scan.js';
+import {
+  runSemgrep,
+  runSemgrepStaged,
+  runKnip,
+  runTrivy,
+  runGitleaks,
+  runGitleaksStaged,
+} from './checks/security-scan.js';
+import { runPyDepAudit } from './checks/py-dep-audit.js';
 import { runLintFull } from './checks/lint-full.js';
 import { runLintStaged } from './checks/lint-staged.js';
 import { runFormatFull } from './checks/format-full.js';
 import { runFormatStaged } from './checks/format-staged.js';
-import { runCoverage } from './checks/coverage.js';
 import { runCodeReview } from './checks/code-review.js';
 import { runExtendedLintStaged, runExtendedLintFull } from './checks/extended-lint.js';
 import { runSchemaLintStaged, runSchemaLintFull } from './checks/schema-lint.js';
 import { runK8sLintStaged, runK8sLintFull } from './checks/k8s-lint.js';
+import { DEFAULT_COVERAGE_THRESHOLD } from './checks/coverage.js';
 import { runOpenApiContractStaged, runOpenApiContractFull } from './checks/openapi-contract.js';
 
-import type { QualityGateParseOptions, QualityGateProfile, CheckResult } from './types.js';
+import type { QualityGateParseOptions, CheckResult, QualityGateResult } from './types.js';
+
+interface CheckFailureDetail {
+  tool?: string;
+  stdout?: string;
+  stderr?: string;
+}
+
+function isCheckFailureDetail(value: unknown): value is CheckFailureDetail {
+  return typeof value === 'object' && value !== null;
+}
 
 export function parseArgs(argv: string[]): QualityGateParseOptions {
   const options: QualityGateParseOptions = { profile: 'full', cwd: process.cwd(), json: false };
   for (const arg of argv) {
     if (arg.startsWith('--profile=')) {
       const p = arg.slice('--profile='.length);
-      if (p === 'commit' || p === 'full') options.profile = p as QualityGateProfile;
+      if (p === 'commit' || p === 'full') options.profile = p;
     } else if (arg.startsWith('--cwd=')) {
       options.cwd = arg.slice('--cwd='.length);
     } else if (arg === '--json') {
@@ -53,10 +71,12 @@ export function parseArgs(argv: string[]): QualityGateParseOptions {
   return options;
 }
 
-/**
- * @param {{ profile: QualityProfile; cwd: string; commitCmd?: string; commitMsgFile?: string }} options
- */
-export async function runQualityGate(options) {
+export async function runQualityGate(
+  options: Pick<QualityGateParseOptions, 'profile' | 'cwd'> & {
+    commitCmd?: string;
+    commitMsgFile?: string;
+  },
+): Promise<QualityGateResult> {
   const { profile, cwd, commitCmd, commitMsgFile } = options;
 
   if (profile === 'commit') {
@@ -81,6 +101,7 @@ export async function runQualityGate(options) {
       lintStaged,
       formatStaged,
       gitleaksStaged,
+      semgrepStaged,
       codeReview,
       hookAdv,
       extendedLint,
@@ -94,7 +115,8 @@ export async function runQualityGate(options) {
       runLintStaged(cwd),
       runFormatStaged(cwd),
       runGitleaksStaged(cwd),
-      runCodeReview(cwd, { staged: true }),
+      runSemgrepStaged(cwd),
+      Promise.resolve(runCodeReview(cwd, { staged: true })),
       runHookAdversarialIfStaged(cwd),
       runExtendedLintStaged(cwd),
       runSchemaLintStaged(cwd),
@@ -109,6 +131,7 @@ export async function runQualityGate(options) {
       lintStaged,
       formatStaged,
       gitleaksStaged,
+      semgrepStaged,
       codeReview,
       hookAdv,
       extendedLint,
@@ -120,19 +143,21 @@ export async function runQualityGate(options) {
     return { passed: finalDecision.decision !== DECISION.DENY, results, decision: finalDecision };
   }
 
+  const hookUnit = await runHookUnitTests(cwd, { coverageThreshold: DEFAULT_COVERAGE_THRESHOLD });
+  const coverageResult = formatResult('coverage', DECISION.SKIP, '覆盖率已并入 hook-unit-tests（--coverage）');
+
   const [
     typeResult,
     lintResult,
     fullTests,
-    hookUnit,
     hookAdv,
     depAudit,
+    pyDepAudit,
     gitleaks,
     semgrep,
     knip,
     trivy,
     formatResult_,
-    coverageResult,
     reviewResult,
     extendedLint,
     schemaLint,
@@ -142,16 +167,15 @@ export async function runQualityGate(options) {
     runFullTypecheck(cwd),
     runLintFull(cwd),
     runFullProjectTests(cwd),
-    runHookUnitTests(cwd),
     runHookAdversarialTests(cwd),
     runDepAudit(cwd, { staged: false }),
+    runPyDepAudit(cwd),
     runGitleaks(cwd),
     runSemgrep(cwd),
     runKnip(cwd),
     runTrivy(cwd),
     runFormatFull(cwd),
-    runCoverage(cwd),
-    runCodeReview(cwd),
+    Promise.resolve(runCodeReview(cwd)),
     runExtendedLintFull(cwd),
     runSchemaLintFull(cwd),
     runK8sLintFull(cwd),
@@ -165,6 +189,7 @@ export async function runQualityGate(options) {
     hookUnit,
     hookAdv,
     depAudit,
+    pyDepAudit,
     gitleaks,
     semgrep,
     knip,
@@ -187,28 +212,27 @@ export function summarizeCheckDetails(details: Record<string, unknown> | undefin
   if (!details || typeof details !== 'object') return undefined;
 
   const parts: string[] = [];
-  if (typeof details.output === 'string' && details.output.trim()) {
-    parts.push(details.output.trim());
+  if (typeof details['output'] === 'string' && details['output'].trim()) {
+    parts.push(details['output'].trim());
   }
-  if (Array.isArray(details.failures)) {
-    for (const failure of details.failures) {
-      if (!failure || typeof failure !== 'object') continue;
-      const f = /** @type {{ tool?: string; stdout?: string; stderr?: string }} */ failure;
-      const text = [f.stderr, f.stdout]
+  if (Array.isArray(details['failures'])) {
+    for (const failure of details['failures']) {
+      if (!isCheckFailureDetail(failure)) continue;
+      const text = [failure.stderr, failure.stdout]
         .filter((s) => typeof s === 'string' && s.trim())
         .join('\n')
         .trim();
-      parts.push(text ? `${f.tool ?? 'tool'}:\n${text}` : `${f.tool ?? 'tool'}: failed`);
+      parts.push(text ? `${failure.tool ?? 'tool'}:\n${text}` : `${failure.tool ?? 'tool'}: failed`);
     }
   }
-  if (Array.isArray(details.findings) && details.findings.length > 0) {
-    parts.push(JSON.stringify(details.findings));
+  if (Array.isArray(details['findings']) && details['findings'].length > 0) {
+    parts.push(JSON.stringify(details['findings']));
   }
-  if (Array.isArray(details.matched) && details.matched.length > 0) {
-    parts.push(`matched: ${details.matched.join(', ')}`);
+  if (Array.isArray(details['matched']) && details['matched'].length > 0) {
+    parts.push(`matched: ${details['matched'].join(', ')}`);
   }
-  if (typeof details.installHint === 'string' && details.installHint.trim()) {
-    parts.push(`安装: ${details.installHint.trim()}`);
+  if (typeof details['installHint'] === 'string' && details['installHint'].trim()) {
+    parts.push(`安装: ${details['installHint'].trim()}`);
   }
 
   const text = parts.join('\n---\n').trim();
@@ -239,14 +263,15 @@ export function logGateResult(
     ...extra,
   };
   if (!gateResult.passed && gateResult.decision?.reason) {
-    payload.reason = gateResult.decision.reason.slice(0, 500);
+    payload['reason'] = gateResult.decision.reason.slice(0, 500);
   }
   log(hookName, payload);
 }
 
-/** @param {{ checkId: string; decision: string; message: string; details?: Record<string, unknown> }} r */
-export function formatCheckSummaryLine(r) {
-  const icon = { allow: '✅', deny: '❌', skip: '⏭️', warn: '⚠️' }[r.decision] || '📋';
+const DECISION_ICONS: Record<string, string> = { allow: '✅', deny: '❌', skip: '⏭️', warn: '⚠️' };
+
+export function formatCheckSummaryLine(r: CheckResult) {
+  const icon = DECISION_ICONS[r.decision] ?? '📋';
   let line = `${icon} [${r.checkId}] ${r.message}`;
   if (r.decision === DECISION.DENY || r.decision === DECISION.WARN) {
     const details = summarizeCheckDetails(r.details);
@@ -262,8 +287,7 @@ export function formatCheckSummaryLine(r) {
   return line;
 }
 
-/** @param {any[]} results */
-export function summarizeResults(results) {
+export function summarizeResults(results: CheckResult[]) {
   return results.map(formatCheckSummaryLine).join('\n');
 }
 
@@ -290,5 +314,5 @@ async function main() {
 
 const isDirectRun = import.meta.main;
 if (isDirectRun) {
-  main();
+  void main();
 }

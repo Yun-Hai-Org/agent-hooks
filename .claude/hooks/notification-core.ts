@@ -4,62 +4,57 @@
  */
 
 import { log } from './security-orchestrator.js';
-import type { NotificationChannel } from './types.js';
+import type { NotificationChannel, NotificationEvent } from './types.js';
 
 export const DEFAULT_COOLDOWN_MS = 5 * 60 * 1000;
 
-/**
- * @typedef {object} NotificationEvent
- * @property {string} hook
- * @property {string} severity
- * @property {string} reason
- */
+type NotificationSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
-/** @typedef {'critical' | 'high' | 'medium' | 'low' | 'info'} NotificationSeverity */
+interface DispatchInput {
+  hook?: string;
+  severity?: string;
+  reason?: string;
+  message?: string;
+  session_id?: string;
+}
 
-/** @type {Map<string, number>} */
-const lastSentMap = new Map();
+const lastSentMap = new Map<string, number>();
 
-/** @param {string} eventKey @param {number} [cooldownMs] */
-export function isCoolingDown(eventKey, cooldownMs = DEFAULT_COOLDOWN_MS) {
+export function isCoolingDown(eventKey: string, cooldownMs = DEFAULT_COOLDOWN_MS): boolean {
   const lastSent = lastSentMap.get(eventKey);
   if (lastSent === undefined) return false;
   return Date.now() - lastSent < cooldownMs;
 }
 
-/** @param {string} eventKey */
-export function recordSent(eventKey) {
+export function recordSent(eventKey: string): void {
   lastSentMap.set(eventKey, Date.now());
 }
 
-/**
- *
- */
-export function clearCooldownState() {
+export function clearCooldownState(): void {
   lastSentMap.clear();
 }
 
-/** @param {string} severity */
-export function mapSeverityEmoji(severity) {
-  /** @type {Record<string, string>} */
-  const map = {
-    critical: '🔴',
-    high: '🟠',
-    medium: '🟡',
-    low: '🔵',
-    info: 'ℹ️',
-  };
-  return map[severity?.toLowerCase()] || '⚠️';
+const SEVERITY_EMOJI: Record<NotificationSeverity, string> = {
+  critical: '🔴',
+  high: '🟠',
+  medium: '🟡',
+  low: '🔵',
+  info: 'ℹ️',
+};
+
+export function mapSeverityEmoji(severity: string | null | undefined): string {
+  if (!severity) return '⚠️';
+  const key = severity.toLowerCase() as NotificationSeverity;
+  return key in SEVERITY_EMOJI ? SEVERITY_EMOJI[key] : '⚠️';
 }
 
-/** @param {string} message */
-export function parseNotificationMessage(message) {
+export function parseNotificationMessage(message: string): NotificationEvent {
   if (!message || typeof message !== 'string') {
-    return { hook: 'unknown', severity: 'info', reason: message || '' };
+    return { hook: 'unknown', severity: 'info', reason: typeof message === 'string' ? message : '' };
   }
 
-  const hookMatch = message.match(/\[([a-z][a-z0-9-]*)\]/);
-  const hook = hookMatch ? hookMatch[1] : 'unknown';
+  const hookMatch = /\[([a-z][a-z0-9-]*)\]/.exec(message);
+  const hook = hookMatch?.[1] ?? 'unknown';
 
   let severity = 'info';
   if (/CRITICAL|致命/i.test(message)) severity = 'critical';
@@ -70,13 +65,11 @@ export function parseNotificationMessage(message) {
   return { hook, severity, reason: message };
 }
 
-/** @param {NotificationEvent} event */
-export function makeEventKey(event) {
+export function makeEventKey(event: NotificationEvent): string {
   return `${event.hook}:${event.severity}`;
 }
 
-/** @param {NotificationEvent} event @param {string} timestamp */
-export function formatWechatMessage(event, timestamp) {
+export function formatWechatMessage(event: NotificationEvent, timestamp: string): Record<string, unknown> {
   const emoji = mapSeverityEmoji(event.severity);
   return {
     msgtype: 'markdown',
@@ -93,18 +86,18 @@ export function formatWechatMessage(event, timestamp) {
   };
 }
 
-/** @param {NotificationEvent} event @param {string} timestamp */
-export function formatFeishuMessage(event, timestamp) {
+const FEISHU_COLOR: Record<NotificationSeverity, string> = {
+  critical: 'red',
+  high: 'orange',
+  medium: 'yellow',
+  low: 'blue',
+  info: 'grey',
+};
+
+export function formatFeishuMessage(event: NotificationEvent, timestamp: string): Record<string, unknown> {
   const emoji = mapSeverityEmoji(event.severity);
-  /** @type {Record<string, string>} */
-  const colorMap = {
-    critical: 'red',
-    high: 'orange',
-    medium: 'yellow',
-    low: 'blue',
-    info: 'grey',
-  };
-  const color = colorMap[event.severity] || 'grey';
+  const severityKey = event.severity.toLowerCase() as NotificationSeverity;
+  const color = severityKey in FEISHU_COLOR ? FEISHU_COLOR[severityKey] : 'grey';
 
   return {
     msg_type: 'interactive',
@@ -134,18 +127,18 @@ export function formatFeishuMessage(event, timestamp) {
   };
 }
 
-/** @param {NotificationEvent} event @param {string} timestamp */
-export function formatSlackMessage(event, timestamp) {
+const SLACK_COLOR: Record<NotificationSeverity, string> = {
+  critical: '#FF0000',
+  high: '#FF6600',
+  medium: '#FFCC00',
+  low: '#0066FF',
+  info: '#999999',
+};
+
+export function formatSlackMessage(event: NotificationEvent, timestamp: string): Record<string, unknown> {
   const emoji = mapSeverityEmoji(event.severity);
-  /** @type {Record<string, string>} */
-  const colorMap = {
-    critical: '#FF0000',
-    high: '#FF6600',
-    medium: '#FFCC00',
-    low: '#0066FF',
-    info: '#999999',
-  };
-  const color = colorMap[event.severity] || '#999999';
+  const severityKey = event.severity.toLowerCase() as NotificationSeverity;
+  const color = severityKey in SLACK_COLOR ? SLACK_COLOR[severityKey] : '#999999';
 
   return {
     attachments: [
@@ -181,14 +174,13 @@ export function formatSlackMessage(event, timestamp) {
   };
 }
 
-/** @param {string} url @param {Record<string, unknown>} body @param {number} [timeoutMs] */
 export async function sendWebhook(url: string, body: Record<string, unknown>, timeoutMs?: number) {
-  if (timeoutMs === undefined) {
-    timeoutMs = parseInt(process.env.NOTIFY_TIMEOUT_MS || '', 10) || 5000;
-  }
+  const resolvedTimeout = timeoutMs ?? (parseInt(process.env['NOTIFY_TIMEOUT_MS'] ?? '', 10) || 5000);
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, resolvedTimeout);
 
     const response = await fetch(url, {
       method: 'POST',
@@ -200,34 +192,31 @@ export async function sendWebhook(url: string, body: Record<string, unknown>, ti
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      return { success: false, status: response.status, error: `HTTP ${response.status}` };
+      return { success: false, status: response.status, error: `HTTP ${String(response.status)}` };
     }
     return { success: true, status: response.status };
   } catch (error: unknown) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return { success: false, error: `请求超时 (${timeoutMs}ms)` };
+      return { success: false, error: `请求超时 (${String(resolvedTimeout)}ms)` };
     }
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
-/**
- *
- */
-export function getConfiguredChannels() {
+export function getConfiguredChannels(): NotificationChannel[] {
   const channels: NotificationChannel[] = [];
 
-  const wechatUrl = process.env.NOTIFY_WEBHOOK_URL;
+  const wechatUrl = process.env['NOTIFY_WEBHOOK_URL'];
   if (wechatUrl) {
     channels.push({ name: '企业微信', url: wechatUrl, formatFn: formatWechatMessage });
   }
 
-  const feishuUrl = process.env.NOTIFY_FEISHU_URL;
+  const feishuUrl = process.env['NOTIFY_FEISHU_URL'];
   if (feishuUrl) {
     channels.push({ name: '飞书', url: feishuUrl, formatFn: formatFeishuMessage });
   }
 
-  const slackUrl = process.env.NOTIFY_SLACK_URL;
+  const slackUrl = process.env['NOTIFY_SLACK_URL'];
   if (slackUrl) {
     channels.push({ name: 'Slack', url: slackUrl, formatFn: formatSlackMessage });
   }
@@ -235,8 +224,7 @@ export function getConfiguredChannels() {
   return channels;
 }
 
-/** @param {NotificationEvent} event @param {string} timestamp */
-export async function notifyAllChannels(event, timestamp) {
+export async function notifyAllChannels(event: NotificationEvent, timestamp: string) {
   const channels = getConfiguredChannels();
   if (channels.length === 0) return [];
 
@@ -250,19 +238,16 @@ export async function notifyAllChannels(event, timestamp) {
 
   return results.map((r) => {
     if (r.status === 'fulfilled') return r.value;
-    return { channel: 'unknown', success: false, error: r.reason?.message || '发送失败' };
+    const reason = r.reason instanceof Error ? r.reason.message : '发送失败';
+    return { channel: 'unknown', success: false, error: reason };
   });
 }
 
-/**
- * @param {{ hook?: string; severity?: string; reason?: string; message?: string; session_id?: string }} input
- * @param {string} [logHookName]
- */
-export async function dispatchSecurityNotification(input, logHookName = 'notify-security-event') {
-  const message = input.message || input.reason || '';
+export async function dispatchSecurityNotification(input: DispatchInput, logHookName = 'notify-security-event') {
+  const message = input.message ?? input.reason ?? '';
   const event =
     input.hook && input.severity
-      ? { hook: input.hook, severity: input.severity, reason: message || input.reason || '' }
+      ? { hook: input.hook, severity: input.severity, reason: message || (input.reason ?? '') }
       : parseNotificationMessage(message);
 
   if (input.hook) event.hook = input.hook;
@@ -270,8 +255,8 @@ export async function dispatchSecurityNotification(input, logHookName = 'notify-
   if (input.reason && !event.reason) event.reason = input.reason;
 
   const eventKey = makeEventKey(event);
-  const cooldownMs = parseInt(process.env.NOTIFY_COOLDOWN_MS || '', 10) || DEFAULT_COOLDOWN_MS;
-  const session_id = input.session_id || '';
+  const cooldownMs = parseInt(process.env['NOTIFY_COOLDOWN_MS'] ?? '', 10) || DEFAULT_COOLDOWN_MS;
+  const session_id = input.session_id ?? '';
 
   if (isCoolingDown(eventKey, cooldownMs)) {
     log(logHookName, { level: 'SKIP', reason: '频控冷却期内', eventKey, session_id });

@@ -6,12 +6,11 @@ import { denyIfToolMissing, denyOnToolError, denyIfRuffMissing, getRuffInvocatio
 import type { CheckResult } from '../types.js';
 
 function filterExistingStagedFiles(files: string[], cwd?: string): string[] {
-  const root = cwd || process.cwd();
+  const root = cwd ?? process.cwd();
   return files.filter((f) => existsSync(join(root, f)));
 }
 
-/** @param {string} [cwd] */
-export async function runLintStaged(cwd) {
+export async function runLintStaged(cwd?: string) {
   const stagedFiles = filterExistingStagedFiles(getStagedFiles(cwd), cwd);
   const jsFiles = stagedFiles.filter((f) => /\.(js|ts|jsx|tsx|mjs|cjs)$/i.test(f) && !f.includes('__tests__'));
   const pyFiles = stagedFiles.filter((f) => f.endsWith('.py'));
@@ -78,5 +77,5 @@ export async function runLintStaged(cwd) {
     return formatResult('lint-staged', DECISION.SKIP, '暂存文件无需 lint 或未配置 lint');
   }
   const failure = results.find((r) => r.decision === DECISION.DENY);
-  return failure || formatResult('lint-staged', DECISION.ALLOW, '暂存区 lint 通过');
+  return failure ?? formatResult('lint-staged', DECISION.ALLOW, '暂存区 lint 通过');
 }

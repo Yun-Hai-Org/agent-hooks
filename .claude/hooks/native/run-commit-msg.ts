@@ -19,7 +19,7 @@ function getRepoRoot() {
   return result.stdout.trim();
 }
 
-async function main() {
+function main() {
   const msgFile = process.argv[2];
   if (!msgFile) {
     console.error(`[${HOOK_NAME}] 用法: run-commit-msg.js <commit-msg-file>`);
