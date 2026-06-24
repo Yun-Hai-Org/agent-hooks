@@ -2,8 +2,12 @@ import { execCommand, formatResult, DECISION, TESTS_DIR } from '../security-orch
 import { denyIfToolMissing } from './tools.js';
 import type { CheckResult } from '../types.js';
 
-/** 实测全量 hook 单测行覆盖约 51.8%（2026-06，已 ratchet）；持续 ratchet 至 80% → 100% */
-export const DEFAULT_COVERAGE_THRESHOLD = 51;
+/**
+ * 实测全量 hook 单测行覆盖约 52.7%（2026-06，已 ratchet 至实测下限 52）。
+ * 阈值只升不降；下一里程碑 60%，需对 lint-full/format-full/tests/typecheck/merge-gate
+ * 等子进程密集模块补针对性单测后再上调。
+ */
+export const DEFAULT_COVERAGE_THRESHOLD = 52;
 
 /** 业务代码（非 hook）测试的行覆盖率下限，仅在存在项目级测试时强制 */
 export const BUSINESS_COVERAGE_THRESHOLD = 50;
