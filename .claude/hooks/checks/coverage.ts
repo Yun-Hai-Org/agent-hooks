@@ -1,10 +1,10 @@
-import { execCommand, formatResult, DECISION } from '../security-orchestrator.js';
+import { execCommand, formatResult, DECISION, TESTS_DIR } from '../security-orchestrator.js';
 import { denyIfToolMissing } from './tools.js';
+import type { CheckResult } from '../types.js';
 
-const DEFAULT_THRESHOLD = 0;
+const DEFAULT_THRESHOLD = 80;
 
-/** @param {string} [cwd] @param {{ threshold?: number }} [options] */
-export function runCoverage(cwd?: string, options: { threshold?: number } = {}) {
+export function runCoverage(cwd?: string, options: { threshold?: number } = {}): CheckResult {
   const threshold = options.threshold ?? DEFAULT_THRESHOLD;
   const hasPackageJson = execCommand('test -f package.json', { cwd }).success;
 
@@ -15,20 +15,32 @@ export function runCoverage(cwd?: string, options: { threshold?: number } = {}) 
   const missing = denyIfToolMissing('bun', 'coverage', cwd);
   if (missing) return missing;
 
-  if (execCommand('grep -q coverage package.json', { cwd }).success) {
-    const result = execCommand('bun test --coverage 2>&1 | tail -5', { cwd, timeout: 120000 });
-    if (!result.success) {
-      return formatResult('coverage', DECISION.DENY, '覆盖率测试失败', {
-        output: (result.stderr || result.stdout).slice(0, 500),
-      });
-    }
-    const match = /(\d+(?:\.\d+)?)\s*%/.exec(result.stdout + result.stderr);
-    const pct = match?.[1] ? parseFloat(match[1]) : 100;
-    if (pct < threshold) {
-      return formatResult('coverage', DECISION.DENY, `覆盖率 ${String(pct)}% 低于阈值 ${String(threshold)}%`);
-    }
-    return formatResult('coverage', DECISION.ALLOW, `覆盖率 ${String(pct)}% 达标`);
+  if (!execCommand(`test -d "${TESTS_DIR}"`, { cwd }).success) {
+    return formatResult('coverage', DECISION.SKIP, '无 Hook 测试目录，跳过覆盖率');
   }
 
-  return formatResult('coverage', DECISION.SKIP, '未配置覆盖率脚本，跳过');
+  const testList = execCommand(`find "${TESTS_DIR}" -maxdepth 1 -name '*.test.ts'`, { cwd, timeout: 5000 });
+  const testFiles = testList.success ? testList.stdout.trim().split('\n').filter(Boolean) : [];
+  if (testFiles.length === 0) {
+    return formatResult('coverage', DECISION.SKIP, '无 Hook 单测文件，跳过覆盖率');
+  }
+
+  const files = testFiles.map((f) => `"${f}"`).join(' ');
+  const result = execCommand(`bun test ${files} --coverage 2>&1`, { cwd, timeout: 120000 });
+  const output = result.stdout + result.stderr;
+
+  if (!result.success) {
+    return formatResult('coverage', DECISION.DENY, '覆盖率测试失败', { output: output.slice(0, 500) });
+  }
+
+  const lineMatch = /All files[^\n]*\|\s*([\d.]+)/i.exec(output) ?? /(\d+(?:\.\d+)?)\s*%\s*\|/.exec(output);
+  const pct = lineMatch?.[1] ? parseFloat(lineMatch[1]) : threshold;
+
+  if (pct < threshold) {
+    return formatResult('coverage', DECISION.DENY, `覆盖率 ${String(pct)}% 低于阈值 ${String(threshold)}%`, {
+      output: output.slice(0, 500),
+    });
+  }
+
+  return formatResult('coverage', DECISION.ALLOW, `覆盖率 ${String(pct)}% 达标 (阈值 ${String(threshold)}%)`);
 }
