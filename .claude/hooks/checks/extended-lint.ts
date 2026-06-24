@@ -9,6 +9,7 @@ import {
   listTrackedFiles,
 } from './file-patterns.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
+import { denyIfContainerRuntimeMissing, getComposeConfigCmd, resolveContainerRuntime } from './container-runtime.js';
 
 export const HADOLINT_SECURITY_RULES: Readonly<Record<string, string>> = Object.freeze({
   DL3006: 'HIGH',
@@ -196,26 +197,38 @@ async function runExtendedChecks(classified: ReturnType<typeof classifyFiles>, i
   }
 
   if (classified.compose.length > 0) {
-    const missing = denyIfToolMissing('docker', `${stagedPrefix}-compose`, cwd);
+    const missing = denyIfContainerRuntimeMissing(`${stagedPrefix}-compose`, cwd);
     if (missing) return missing;
 
+    const runtime = resolveContainerRuntime(cwd);
+    if (!runtime) {
+      return formatResult(`${stagedPrefix}-compose`, DECISION.DENY, '容器运行时未安装（需 podman 或 docker）');
+    }
+
     for (const file of classified.compose) {
+      const composeCmd = getComposeConfigCmd(file, cwd);
+      if (!composeCmd) {
+        results.push(
+          formatResult(`${stagedPrefix}-compose`, DECISION.DENY, `无法构建 ${runtime.name} compose 命令: ${file}`),
+        );
+        continue;
+      }
       try {
         const composeResult = await withTimeout(
-          execCommandAsync(`docker compose -f "${file}" config --quiet`, { cwd, timeout: 30000 }),
+          execCommandAsync(composeCmd, { cwd, timeout: 30000 }),
           30000,
-          `docker compose 超时 (30s): ${file}`,
+          `${runtime.name} compose 超时 (30s): ${file}`,
         );
         const rawOutput = composeResult.stdout || composeResult.stderr;
         results.push(
           composeResult.success
-            ? formatResult(`${stagedPrefix}-compose`, DECISION.ALLOW, `docker compose 检查通过: ${file}`)
-            : formatResult(`${stagedPrefix}-compose`, DECISION.DENY, `docker compose 检查失败: ${file}`, {
+            ? formatResult(`${stagedPrefix}-compose`, DECISION.ALLOW, `${runtime.name} compose 检查通过: ${file}`)
+            : formatResult(`${stagedPrefix}-compose`, DECISION.DENY, `${runtime.name} compose 检查失败: ${file}`, {
                 output: rawOutput.slice(0, 500),
               }),
         );
       } catch (e) {
-        results.push(denyOnToolError(e, `${stagedPrefix}-compose`, 'docker compose'));
+        results.push(denyOnToolError(e, `${stagedPrefix}-compose`, `${runtime.name} compose`));
       }
     }
   }

@@ -157,11 +157,12 @@ describe('extended-lint', () => {
       expect(content).toContain('--dialect ansi');
     });
 
-    it('应包含 docker compose config 校验', () => {
+    it('应包含 container runtime compose config 校验', () => {
       const sourceFile = join(import.meta.dir, '..', 'checks', 'extended-lint.ts');
       const content = readFileSync(sourceFile, 'utf-8');
-      expect(content).toContain('docker compose -f');
-      expect(content).toContain('config --quiet');
+      expect(content).toContain('getComposeConfigCmd');
+      expect(content).toContain('denyIfContainerRuntimeMissing');
+      expect(content).toContain('resolveContainerRuntime');
     });
 
     it('shell 检查块内应先 shfmt 后 shellcheck', () => {
