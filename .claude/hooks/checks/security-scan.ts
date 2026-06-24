@@ -96,6 +96,9 @@ const SEMGREP_EXCLUDED_RULES = [
   'javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal',
 ];
 const SEMGREP_EXCLUDE_RULE_FLAGS = SEMGREP_EXCLUDED_RULES.map((r) => `--exclude-rule ${r}`).join(' ');
+const SEMGREP_STAGED_TIMEOUT_MS = 60000;
+// 全量扫描需遍历全仓库且与 trivy/全量测试等重负载并行，60s 在满载下不足，给 180s 余量。
+const SEMGREP_FULL_TIMEOUT_MS = 180000;
 
 export function evaluateSemgrepOutput(stdout: string, checkId: string): CheckResult | null {
   let json: { results?: SemgrepResult[] };
@@ -132,8 +135,8 @@ export async function runSemgrepStaged(cwd?: string): Promise<CheckResult> {
 
   try {
     const result = await withTimeout(
-      execCommandAsync(semgrepCmd, { cwd, timeout: 60000 }),
-      60000,
+      execCommandAsync(semgrepCmd, { cwd, timeout: SEMGREP_STAGED_TIMEOUT_MS }),
+      SEMGREP_STAGED_TIMEOUT_MS,
       'semgrep staged 超时 (60s)',
     );
     if (result.stdout) {
@@ -160,9 +163,9 @@ export async function runSemgrep(cwd?: string): Promise<CheckResult> {
     const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
     const semgrepCmd = `semgrep ${SEMGREP_CONFIGS} ${SEMGREP_SEVERITY} ${SEMGREP_EXCLUDE_RULE_FLAGS} --error --json --exclude __tests__ ${excludeFlags} .`;
     const result = await withTimeout(
-      execCommandAsync(semgrepCmd, { cwd, timeout: 60000 }),
-      60000,
-      'semgrep 超时 (60s)',
+      execCommandAsync(semgrepCmd, { cwd, timeout: SEMGREP_FULL_TIMEOUT_MS }),
+      SEMGREP_FULL_TIMEOUT_MS,
+      'semgrep 超时 (180s)',
     );
     if (result.stdout) {
       const deny = evaluateSemgrepOutput(result.stdout, 'semgrep');
