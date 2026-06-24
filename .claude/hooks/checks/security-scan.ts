@@ -35,6 +35,55 @@ interface TrivyVulnerability {
   Severity?: string;
 }
 
+interface TrivyLicense {
+  Severity?: string;
+  Name?: string;
+  PkgName?: string;
+}
+
+interface TrivyResultEntry {
+  Vulnerabilities?: TrivyVulnerability[];
+  Licenses?: TrivyLicense[];
+}
+
+function isBlockingSeverity(severity?: string): boolean {
+  return severity === 'CRITICAL' || severity === 'HIGH' || severity === 'MEDIUM';
+}
+
+export function evaluateTrivyJson(stdout: string): CheckResult {
+  let json: { Results?: TrivyResultEntry[] };
+  try {
+    json = JSON.parse(stdout) as { Results?: TrivyResultEntry[] };
+  } catch {
+    return formatResult('trivy', DECISION.DENY, 'Trivy 输出无法解析，按失败处理（fail-closed）', {
+      output: stdout.slice(0, 500),
+    });
+  }
+  const results = json.Results ?? [];
+  const vulns = results.flatMap((r) => r.Vulnerabilities ?? []);
+  const critical = vulns.filter((v) => v.Severity === 'CRITICAL').length;
+  const high = vulns.filter((v) => v.Severity === 'HIGH').length;
+  const medium = vulns.filter((v) => v.Severity === 'MEDIUM').length;
+  const licenses = results.flatMap((r) => r.Licenses ?? []).filter((l) => isBlockingSeverity(l.Severity));
+
+  if (critical + high + medium > 0 || licenses.length > 0) {
+    const parts: string[] = [];
+    if (critical + high + medium > 0) {
+      parts.push(`${String(critical)} CRITICAL, ${String(high)} HIGH, ${String(medium)} MEDIUM 漏洞`);
+    }
+    if (licenses.length > 0) {
+      parts.push(`${String(licenses.length)} 个不合规 license`);
+    }
+    return formatResult('trivy', DECISION.DENY, `Trivy 发现 ${parts.join('；')}`, {
+      critical,
+      high,
+      medium,
+      licenses: licenses.slice(0, 10).map((l) => `${l.PkgName ?? '?'}:${l.Name ?? '?'}(${l.Severity ?? '?'})`),
+    });
+  }
+  return formatResult('trivy', DECISION.ALLOW, 'Trivy 扫描通过');
+}
+
 const CODE_FILE_PATTERN =
   /\.(js|ts|jsx|tsx|mjs|cjs|py|go|java|rb|php|rs|swift|kt|scala|cs|cpp|c|h|yaml|yml|json|toml|sh|bash|zsh)$/i;
 
@@ -184,27 +233,7 @@ export async function runTrivy(cwd?: string): Promise<CheckResult> {
       `trivy 超时 (${String(TRIVY_TIMEOUT_MS / 1000)}s)`,
     );
     if (result.stdout) {
-      let json: { Results?: { Vulnerabilities?: TrivyVulnerability[] }[] };
-      try {
-        json = JSON.parse(result.stdout) as { Results?: { Vulnerabilities?: TrivyVulnerability[] }[] };
-      } catch {
-        return formatResult('trivy', DECISION.DENY, 'Trivy 输出无法解析，按失败处理（fail-closed）', {
-          output: result.stdout.slice(0, 500),
-        });
-      }
-      const vulns = json.Results?.flatMap((r) => r.Vulnerabilities ?? []) ?? [];
-      const criticals = vulns.filter((v) => v.Severity === 'CRITICAL');
-      const highs = vulns.filter((v) => v.Severity === 'HIGH');
-      const mediums = vulns.filter((v) => v.Severity === 'MEDIUM');
-      if (criticals.length > 0 || highs.length > 0 || mediums.length > 0) {
-        return formatResult(
-          'trivy',
-          DECISION.DENY,
-          `Trivy 发现 ${String(criticals.length)} CRITICAL, ${String(highs.length)} HIGH, ${String(mediums.length)} MEDIUM 漏洞`,
-          { critical: criticals.length, high: highs.length, medium: mediums.length },
-        );
-      }
-      return formatResult('trivy', DECISION.ALLOW, 'Trivy 扫描通过');
+      return evaluateTrivyJson(result.stdout);
     }
     if (!result.success) {
       return formatResult('trivy', DECISION.DENY, 'Trivy 执行失败且无输出，按失败处理（fail-closed）', {

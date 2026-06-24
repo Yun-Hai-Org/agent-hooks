@@ -29,6 +29,7 @@ import {
   runGitleaksStaged,
 } from './checks/security-scan.js';
 import { runPyDepAudit } from './checks/py-dep-audit.js';
+import { runLockfileFreshness } from './checks/lockfile.js';
 import { runLintFull } from './checks/lint-full.js';
 import { runLintStaged } from './checks/lint-staged.js';
 import { runFormatFull } from './checks/format-full.js';
@@ -129,6 +130,7 @@ export async function runQualityGate(
       schemaLint,
       k8sLint,
       openApiContract,
+      lockfileFreshness,
     ] = await Promise.all([
       timeCheck(runDepAudit(cwd, { staged: true })),
       timeCheck(runStagedTypecheck(cwd)),
@@ -143,6 +145,7 @@ export async function runQualityGate(
       timeCheck(runSchemaLintStaged(cwd)),
       timeCheck(runK8sLintStaged(cwd)),
       timeCheck(runOpenApiContractStaged(cwd)),
+      timeCheck(runLockfileFreshness(cwd, { staged: true })),
     ]);
     const results = [
       ...syncResults,
@@ -159,6 +162,7 @@ export async function runQualityGate(
       schemaLint,
       k8sLint,
       openApiContract,
+      lockfileFreshness,
     ];
     const finalDecision = decide(results);
     return {
@@ -189,6 +193,7 @@ export async function runQualityGate(
     schemaLint,
     k8sLint,
     openApiContract,
+    lockfileFreshness,
   ] = await Promise.all([
     timeCheck(runFullTypecheck(cwd)),
     timeCheck(runLintFull(cwd)),
@@ -206,6 +211,7 @@ export async function runQualityGate(
     timeCheck(runSchemaLintFull(cwd)),
     timeCheck(runK8sLintFull(cwd)),
     timeCheck(runOpenApiContractFull(cwd)),
+    timeCheck(runLockfileFreshness(cwd)),
   ]);
 
   const results = [
@@ -227,6 +233,7 @@ export async function runQualityGate(
     schemaLint,
     k8sLint,
     openApiContract,
+    lockfileFreshness,
   ];
   const finalDecision = decide(results);
   return {
