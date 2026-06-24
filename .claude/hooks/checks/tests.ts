@@ -237,11 +237,10 @@ export async function runHookUnitTests(cwd?: string, options: { coverageThreshol
     return formatResult('hook-unit-tests', DECISION.DENY, '无 Hook 常规单测文件');
   }
   try {
-    const coverageFlag = options.coverageThreshold !== undefined ? ' --coverage --dots' : '';
     let combinedOutput = '';
     for (let i = 0; i < files.length; i += HOOK_UNIT_TEST_BATCH_SIZE) {
       const batch = files.slice(i, i + HOOK_UNIT_TEST_BATCH_SIZE);
-      const cmd = `bun test ${batch.map((f) => `"./${f}"`).join(' ')}${coverageFlag}`;
+      const cmd = `bun test ${batch.map((f) => `"./${f}"`).join(' ')} --dots`;
       const result = await withTimeout(
         execCommandAsync(cmd, { cwd, timeout: 300000 }),
         300000,
@@ -255,6 +254,18 @@ export async function runHookUnitTests(cwd?: string, options: { coverageThreshol
       }
     }
     if (options.coverageThreshold !== undefined) {
+      const allFiles = files.map((f) => `"./${f}"`).join(' ');
+      const coverageResult = await withTimeout(
+        execCommandAsync(`bun test ${allFiles} --coverage --dots`, { cwd, timeout: 300000 }),
+        300000,
+        'Hook 覆盖率测试超时 (300s)',
+      );
+      combinedOutput += coverageResult.stdout + coverageResult.stderr;
+      if (!coverageResult.success) {
+        return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 覆盖率测试失败', {
+          output: combinedOutput.slice(0, 500),
+        });
+      }
       const pct = parseCoveragePercent(combinedOutput);
       if (pct === null || pct < options.coverageThreshold) {
         return formatResult(
