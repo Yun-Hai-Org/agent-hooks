@@ -24,6 +24,6 @@
     "noUncheckedSideEffectImports": true,
     "noEmit": true
   },
-  "include": [".claude/hooks/**/*.ts", "eslint.config.ts"],
+  "include": [".claude/hooks/**/*.ts", "eslint.config.ts", "types/**/*.d.ts"],
   "exclude": ["node_modules", ".claude/hooks/__tests__", ".claude/hooks/__tests__/fixtures"]
 }

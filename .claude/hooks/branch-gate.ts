@@ -7,7 +7,7 @@
 import { execSync } from 'child_process';
 import { existsSync, statSync, appendFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { LOG_DIR } from './security-orchestrator.js';
+import { LOG_DIR, readStdin } from './security-orchestrator.js';
 import {
   normalizeInput,
   normalizeFileEditInput,
@@ -16,7 +16,6 @@ import {
   isShellTool,
   getPlatform,
 } from './hook-adapter.js';
-import { readStdin } from './security-orchestrator.js';
 import { notifySecurityEventAsync } from './notify-security-event.js';
 
 const MAIN_BRANCHES = ['main', 'master'];
