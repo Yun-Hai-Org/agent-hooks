@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { resolveHookPath, PROJECT_HOOKS_DIR, GLOBAL_HOOKS_DIR } from '../resolve-hook-path.js';
+import { resolveHookPath, resolveBunExecutable, PROJECT_HOOKS_DIR, GLOBAL_HOOKS_DIR } from '../resolve-hook-path.js';
 import { HOOKS_DIR, TESTS_DIR, LOG_DIR } from '../security-orchestrator.js';
 import { PROJECT_ROOT } from './helpers.js';
 
@@ -82,6 +82,14 @@ describe('resolve-hook-path', () => {
       expect(result).not.toBeNull();
       expect(result.source).toBe('project');
       expect(existsSync(result.path)).toBe(true);
+    });
+  });
+
+  describe('resolveBunExecutable', () => {
+    it('优先使用当前 bun 解释器路径', () => {
+      const bun = resolveBunExecutable();
+      expect(bun).toBeTruthy();
+      expect(existsSync(bun)).toBe(true);
     });
   });
 
