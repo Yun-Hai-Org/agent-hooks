@@ -15,6 +15,7 @@ import {
   isAllowedPathOnMain,
   isFileWriteCommand,
   getWritePatternName,
+  GIT_INIT_REQUIRED_MESSAGE,
   allow,
   deny,
   main,
@@ -449,8 +450,21 @@ describe('branch-gate', () => {
     });
 
     it('isFileWriteCommand 不应该把 2>&1 误判为文件写入', () => {
-      // 2>&1 是 stderr 重定向到 stdout，不是写文件
       expect(isFileWriteCommand('git log 2>&1')).toBe(false);
+      expect(isFileWriteCommand('git worktree add .claude/worktrees/epic-2 feat/epic-2 2>&1')).toBe(false);
+    });
+
+    it('isFileWriteCommand 不应该把 stderr 重定向误判为文件写入（playwright 排查场景）', () => {
+      const cmds = [
+        'ls /tmp/project/_bmad/ 2>/dev/null',
+        'ls -la "/tmp/project/.playwright-mcp/" 2>/dev/null || echo "Directory not found"',
+        'cd "/tmp/project" && grep -rl "playwright" . 2>/dev/null',
+        'find /tmp/project -name "project-context.md" 2>/dev/null | head -5',
+      ];
+      for (const cmd of cmds) {
+        expect(isFileWriteCommand(cmd)).toBe(false);
+        expect(getWritePatternName(cmd)).toBe(null);
+      }
     });
 
     it('getWritePatternName 应该返回匹配的模式名称', () => {
@@ -471,8 +485,9 @@ describe('branch-gate', () => {
       expect(getWritePatternName('install -m 755 source target')).toBe('install 命令');
     });
 
-    it('getWritePatternName 不应该把 2>/dev/null 误判为文件写入', () => {
+    it('getWritePatternName 不应该把 2>/dev/null 或 2>&1 误判为文件写入', () => {
       expect(getWritePatternName('git checkout -b feat/epic-1 2>/dev/null')).toBe(null);
+      expect(getWritePatternName('git worktree add .claude/worktrees/epic-2 feat/epic-2 2>&1')).toBe(null);
     });
 
     it('isSafeCommand 应该允许 git checkout', () => {
@@ -592,10 +607,9 @@ describe('branch-gate', () => {
     });
 
     it('worktree 环境无 git 分支信息时 fail-open allow', async () => {
-      // 使用临时目录模拟 worktree（在 /tmp 中创建 .git 文件）
       const tempDir = '/tmp/test-worktree-branchgate';
       mkdirSync(tempDir, { recursive: true });
-      writeFileSync(join(tempDir, '.git'), 'gitdir: /tmp/test-worktree-branchgate/.git/worktrees/test\n');
+      execSync('git init -b feat/worktree-test', { cwd: tempDir, stdio: 'pipe' });
 
       const inputData = JSON.stringify({
         tool_name: 'Write',
@@ -616,7 +630,7 @@ describe('branch-gate', () => {
     it('worktree 环境无 git 分支信息时 fail-open allow Edit', async () => {
       const tempDir = '/tmp/test-worktree-edit-branchgate';
       mkdirSync(tempDir, { recursive: true });
-      writeFileSync(join(tempDir, '.git'), 'gitdir: /tmp/test-worktree-edit-branchgate/.git/worktrees/test\n');
+      execSync('git init -b feat/worktree-edit', { cwd: tempDir, stdio: 'pipe' });
 
       const inputData = JSON.stringify({
         tool_name: 'Edit',
@@ -637,7 +651,7 @@ describe('branch-gate', () => {
     it('应该在 worktree 环境中允许 Bash 写入命令', async () => {
       const tempDir = '/tmp/test-worktree-bash-branchgate';
       mkdirSync(tempDir, { recursive: true });
-      writeFileSync(join(tempDir, '.git'), 'gitdir: /tmp/test-worktree-bash-branchgate/.git/worktrees/test\n');
+      execSync('git init -b feat/worktree-bash', { cwd: tempDir, stdio: 'pipe' });
 
       const inputData = JSON.stringify({
         tool_name: 'Bash',
@@ -658,7 +672,7 @@ describe('branch-gate', () => {
     it('应该在 worktree 环境中允许非写入 Bash 命令', async () => {
       const tempDir = '/tmp/test-worktree-bash-ro-branchgate';
       mkdirSync(tempDir, { recursive: true });
-      writeFileSync(join(tempDir, '.git'), 'gitdir: /tmp/test-worktree-bash-ro-branchgate/.git/worktrees/test\n');
+      execSync('git init -b feat/worktree-bash-ro', { cwd: tempDir, stdio: 'pipe' });
 
       const inputData = JSON.stringify({
         tool_name: 'Bash',
@@ -697,7 +711,7 @@ describe('branch-gate', () => {
       }
     });
 
-    it('应该处理无法获取分支的情况', async () => {
+    it('非 Git 仓库应该拒绝并要求 git init', async () => {
       const tempDir = '/tmp/test-no-git-branchgate';
       mkdirSync(tempDir, { recursive: true });
 
@@ -711,9 +725,32 @@ describe('branch-gate', () => {
       process.stdin = Readable.from([inputData]);
       await main();
 
-      // 无法获取分支时应该允许
       expect(consoleOutput).toHaveLength(1);
-      expect(consoleOutput[0]).toBe('{}');
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.hookSpecificOutput?.permissionDecision).toBe('deny');
+      expect(output.hookSpecificOutput?.permissionDecisionReason).toBe(GIT_INIT_REQUIRED_MESSAGE);
+
+      rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it('非 Git 仓库的只读 Bash 命令也应该拒绝并要求 git init', async () => {
+      const tempDir = '/tmp/test-no-git-bash-branchgate';
+      mkdirSync(tempDir, { recursive: true });
+
+      const inputData = JSON.stringify({
+        tool_name: 'Bash',
+        tool_input: { command: 'ls -la .playwright-mcp/ 2>/dev/null' },
+        session_id: 'test-no-git-bash',
+        cwd: tempDir,
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.hookSpecificOutput?.permissionDecision).toBe('deny');
+      expect(output.hookSpecificOutput?.permissionDecisionReason).toBe(GIT_INIT_REQUIRED_MESSAGE);
 
       rmSync(tempDir, { recursive: true, force: true });
     });

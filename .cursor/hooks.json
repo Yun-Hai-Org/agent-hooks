@@ -3,47 +3,47 @@
   "hooks": {
     "sessionStart": [
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts session-start.ts"
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-start.ts"
       }
     ],
     "beforeShellExecution": [
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts block-dangerous-commands.ts"
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts block-dangerous-commands.ts"
       }
     ],
     "preToolUse": [
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts branch-gate.ts",
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts branch-gate.ts",
         "matcher": "Shell|Write"
       },
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts protect-secrets.ts",
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts protect-secrets.ts",
         "matcher": "Shell|Write"
       }
     ],
     "beforeReadFile": [
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts protect-secrets.ts"
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts protect-secrets.ts"
       }
     ],
     "afterFileEdit": [
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts auto-stage.ts"
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts auto-stage.ts"
       }
     ],
     "stop": [
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts auto-commit.ts",
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts auto-commit.ts",
         "loop_limit": 8
       },
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts gate-retry-stop.ts",
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts gate-retry-stop.ts",
         "loop_limit": 8
       }
     ],
     "beforeSubmitPrompt": [
       {
-        "command": "HOOK_PLATFORM=cursor bun .claude/hooks/resolve-hook-path.ts user-prompt-filter.ts"
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts user-prompt-filter.ts"
       }
     ]
   }

@@ -7,7 +7,7 @@
 import { execSync } from 'child_process';
 import { existsSync, statSync, appendFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { LOG_DIR, readStdin } from './security-orchestrator.js';
+import { LOG_DIR, readStdin, isGitRepo } from './security-orchestrator.js';
 import {
   normalizeInput,
   normalizeFileEditInput,
@@ -20,6 +20,8 @@ import { notifySecurityEventAsync } from './notify-security-event.js';
 
 const MAIN_BRANCHES = ['main', 'master'];
 const ALLOWED_PATHS_ON_MAIN = ['_bmad-output/'];
+const GIT_INIT_REQUIRED_MESSAGE =
+  '🔒 [branch-gate] 当前目录不是 Git 仓库。请先运行 git init 初始化仓库，再执行写入操作。';
 const SAFE_COMMAND_PATTERNS = [/^\s*git\s+(checkout|branch|stash|log|status|show|diff)\b/];
 const FILE_WRITE_PATTERNS = [
   { pattern: />\s*\S+/, name: '重定向写入 (>)' },
@@ -70,22 +72,27 @@ function isAllowedPathOnMain(filePath: string) {
   return ALLOWED_PATHS_ON_MAIN.some((allowed) => filePath.startsWith(allowed));
 }
 
+function stripShellRedirectsForWriteDetection(command: string): string {
+  return command
+    .replace(/\d*\s*>\s*\/dev\/(?:null|stdout|stderr)\b/g, '')
+    .replace(/\d*\s*>\s*&\s*\d+/g, '')
+    .replace(/<[^>\s]+@[^>\s]+>/g, '');
+}
+
 function isFileWriteCommand(command: string) {
   if (!command) return false;
-  const commandWithoutDevNull = command.replace(/\d*\s*>\s*\/dev\/null/g, '');
-  const commandWithoutEmails = commandWithoutDevNull.replace(/<[^>\s]+@[^>\s]+>/g, '');
-  if (!/>(?!&)|tee|sed\s+-i|\bcp\b|\bmv\b|\bdd\b|\binstall\b/.test(commandWithoutEmails)) {
+  const normalized = stripShellRedirectsForWriteDetection(command);
+  if (!/>(?!&)|tee|sed\s+-i|\bcp\b|\bmv\b|\bdd\b|\binstall\b/.test(normalized)) {
     return false;
   }
-  return FILE_WRITE_PATTERNS.some(({ pattern }) => pattern.test(commandWithoutEmails));
+  return FILE_WRITE_PATTERNS.some(({ pattern }) => pattern.test(normalized));
 }
 
 function getWritePatternName(command: string) {
   if (!command) return null;
-  const commandWithoutDevNull = command.replace(/\d*\s*>\s*\/dev\/null/g, '');
-  const commandWithoutEmails = commandWithoutDevNull.replace(/<[^>\s]+@[^>\s]+>/g, '');
+  const normalized = stripShellRedirectsForWriteDetection(command);
   for (const { pattern, name } of FILE_WRITE_PATTERNS) {
-    if (pattern.test(commandWithoutEmails)) return name;
+    if (pattern.test(normalized)) return name;
   }
   return null;
 }
@@ -138,9 +145,16 @@ async function main() {
     }
 
     const workingDir = cwd || process.cwd();
+
+    if (!isGitRepo(workingDir)) {
+      log({ level: 'BLOCKED', reason: 'not a git repo', tool: tool_name, session_id, cwd: workingDir });
+      console.log(deny(GIT_INIT_REQUIRED_MESSAGE, session_id));
+      return;
+    }
+
     const branch = getCurrentBranch(workingDir);
     if (!branch) {
-      log({ level: 'WARN', reason: 'cannot determine branch', tool: tool_name, session_id });
+      log({ level: 'WARN', reason: 'cannot determine branch', tool: tool_name, session_id, cwd: workingDir });
       console.log(allow());
       return;
     }
@@ -244,6 +258,8 @@ export {
   isAllowedPathOnMain,
   isFileWriteCommand,
   getWritePatternName,
+  stripShellRedirectsForWriteDetection,
+  GIT_INIT_REQUIRED_MESSAGE,
   allow,
   deny,
   main,
