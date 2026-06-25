@@ -12,6 +12,7 @@ import {
   getCurrentBranch,
   isInsideWorktree,
   isSafeCommand,
+  isGitBootstrapCommand,
   isAllowedPathOnMain,
   isFileWriteCommand,
   getWritePatternName,
@@ -751,6 +752,46 @@ describe('branch-gate', () => {
       const output = JSON.parse(consoleOutput[0]);
       expect(output.hookSpecificOutput?.permissionDecision).toBe('deny');
       expect(output.hookSpecificOutput?.permissionDecisionReason).toBe(GIT_INIT_REQUIRED_MESSAGE);
+
+      rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it('非 Git 仓库应该允许 git init 以便初始化仓库', async () => {
+      const tempDir = '/tmp/test-no-git-init-branchgate';
+      mkdirSync(tempDir, { recursive: true });
+
+      const inputData = JSON.stringify({
+        tool_name: 'Bash',
+        tool_input: { command: 'git init -b main' },
+        session_id: 'test-git-init',
+        cwd: tempDir,
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
+
+      rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it('非 Git 仓库应该允许 cd && git init', async () => {
+      const tempDir = '/tmp/test-no-git-cd-init-branchgate';
+      mkdirSync(tempDir, { recursive: true });
+
+      const inputData = JSON.stringify({
+        tool_name: 'Bash',
+        tool_input: { command: `cd ${tempDir} && git init -b main` },
+        session_id: 'test-cd-git-init',
+        cwd: tempDir,
+      });
+
+      process.stdin = Readable.from([inputData]);
+      await main();
+
+      expect(consoleOutput).toHaveLength(1);
+      expect(consoleOutput[0]).toBe('{}');
 
       rmSync(tempDir, { recursive: true, force: true });
     });

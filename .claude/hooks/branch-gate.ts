@@ -23,6 +23,12 @@ const ALLOWED_PATHS_ON_MAIN = ['_bmad-output/'];
 const GIT_INIT_REQUIRED_MESSAGE =
   '🔒 [branch-gate] 当前目录不是 Git 仓库。请先运行 git init 初始化仓库，再执行写入操作。';
 const SAFE_COMMAND_PATTERNS = [/^\s*git\s+(checkout|branch|stash|log|status|show|diff)\b/];
+const GIT_BOOTSTRAP_COMMAND_PATTERNS = [
+  /^\s*git\s+init(\s|$|-)/,
+  /^\s*git\s+clone(\s+\S+)/,
+  /^\s*cd\s+\S+\s+&&\s+git\s+init(\s|$|-)/,
+  /^\s*cd\s+\S+\s+&&\s+git\s+clone(\s+\S+)/,
+];
 const FILE_WRITE_PATTERNS = [
   { pattern: />\s*\S+/, name: '重定向写入 (>)' },
   { pattern: />>\s*\S+/, name: '追加写入 (>>)' },
@@ -66,6 +72,11 @@ function isInsideWorktree(cwd: string) {
 
 function isSafeCommand(command: string) {
   return SAFE_COMMAND_PATTERNS.some((pattern) => pattern.test(command));
+}
+
+function isGitBootstrapCommand(command: string) {
+  if (!command) return false;
+  return GIT_BOOTSTRAP_COMMAND_PATTERNS.some((pattern) => pattern.test(command.trim()));
 }
 
 function isAllowedPathOnMain(filePath: string) {
@@ -147,6 +158,20 @@ async function main() {
     const workingDir = cwd || process.cwd();
 
     if (!isGitRepo(workingDir)) {
+      if (tool_name === 'Bash') {
+        const command = 'command' in tool_input ? (tool_input.command ?? '') : '';
+        if (isGitBootstrapCommand(command)) {
+          log({
+            level: 'INFO',
+            reason: 'git bootstrap in non-git repo',
+            command: command.slice(0, 200),
+            session_id,
+            cwd: workingDir,
+          });
+          console.log(allow());
+          return;
+        }
+      }
       log({ level: 'BLOCKED', reason: 'not a git repo', tool: tool_name, session_id, cwd: workingDir });
       console.log(deny(GIT_INIT_REQUIRED_MESSAGE, session_id));
       return;
@@ -250,11 +275,13 @@ export {
   MAIN_BRANCHES,
   ALLOWED_PATHS_ON_MAIN,
   SAFE_COMMAND_PATTERNS,
+  GIT_BOOTSTRAP_COMMAND_PATTERNS,
   FILE_WRITE_PATTERNS,
   log,
   getCurrentBranch,
   isInsideWorktree,
   isSafeCommand,
+  isGitBootstrapCommand,
   isAllowedPathOnMain,
   isFileWriteCommand,
   getWritePatternName,
