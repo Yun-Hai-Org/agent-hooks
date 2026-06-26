@@ -23,15 +23,47 @@
 | git push       | pre-push         | full          | exit 1 + gate-pending |
 | git merge      | pre-merge-commit | full @ 合并树 | exit 1 abort merge    |
 
-安装：`./scripts/install-git-hooks.sh`（设置 `core.hooksPath=.githooks`）
+### 安装方式
 
-共享实现：`checks/*.js` + `quality-gate.js`
+| 模式       | 命令                                    | 作用域                                                      |
+| ---------- | --------------------------------------- | ----------------------------------------------------------- |
+| **全局**   | `./scripts/install-git-hooks-global.sh` | `git config --global core.hooksPath ~/.git-hooks`，所有仓库 |
+| **单仓库** | `./scripts/install-git-hooks.sh`        | local `core.hooksPath=.githooks`（软链模板），覆盖 global   |
+
+前置（一次性）：
+
+```bash
+./scripts/link-cursor-hooks-global.sh      # ~/.claude/hooks + ~/.cursor/bun
+./scripts/install-quality-tools-global.sh  # brew/uv 机器级 CLI
+```
+
+运行时通过 `git rev-parse --show-toplevel` 绑定各项目代码与配置（`pyproject.toml`、`eslint.config.*`、`.gitleaks.toml` 等），无需在每个仓库复制 hook 脚本。
+
+### 工具安装分层
+
+| 层级            | 说明                            | 其他项目是否重复安装  |
+| --------------- | ------------------------------- | --------------------- |
+| A. 机器全局 CLI | gitleaks、semgrep、trivy、uv 等 | 否                    |
+| B. 项目级依赖   | `bun install` / `uv sync`       | 是（有 JS/Python 时） |
+| C. 条件触发     | 无相关文件则 SKIP               | —                     |
+
+**工具未安装策略**：所需外部工具缺失一律 **deny**（ruff 可通过 `uv run ruff`）。
+
+### 排除特定仓库
+
+| 方式              | 操作                                                                                     |
+| ----------------- | ---------------------------------------------------------------------------------------- |
+| A. 单仓库 opt-out | `./scripts/disable-git-hooks-in-repo.sh`（`git config --local hooks.qualityGate false`） |
+| B. 全局排除列表   | 编辑 `~/.claude/hooks-exclude`（一行一个绝对路径，`/` 结尾为前缀匹配）                   |
+| C. 彻底禁用 hooks | `git config --local core.hooksPath .git/hooks`                                           |
+
+非 hooks 项目（无 `.claude/hooks/quality-gate.ts`）自动 **SKIP** hook-unit-tests / knip 等 hooks 专用检查。
+
+共享实现：`checks/*.ts` + `quality-gate.ts` + `~/.claude/hooks/native/*.ts`
 
 **commit profile 检查**：分支/msg/敏感文件/暂存 lint/format/测试/安全扫描等。
 
-**full profile 检查**：全仓库 lint/format/测试/semgrep/trivy/gitleaks/knip 等。
-
-**工具未安装策略**：所需外部工具缺失一律 **deny**（ruff 可通过 `uv run ruff`）。
+**full profile 检查**：全仓库 lint/format/测试/semgrep/trivy/gitleaks 等（knip 仅 hooks 项目）。
 
 ## C. Agent 防绕过（IDE only）
 

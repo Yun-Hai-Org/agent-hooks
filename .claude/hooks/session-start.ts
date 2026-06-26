@@ -250,11 +250,16 @@ function checkGitHooksPath() {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
-    if (hooksPath && hooksPath !== '.githooks') {
-      process.stderr.write(`⚠️ [session-start] core.hooksPath=${hooksPath}，建议运行 ./scripts/install-git-hooks.sh\n`);
+    const home = process.env['HOME'] ?? '';
+    const globalHooksPath = join(home, '.git-hooks');
+    const isValid = hooksPath === '.githooks' || hooksPath === globalHooksPath || hooksPath.endsWith('/.git-hooks');
+    if (hooksPath && !isValid) {
+      process.stderr.write(
+        `⚠️ [session-start] core.hooksPath=${hooksPath}，建议运行 ./scripts/install-git-hooks.sh 或 ./scripts/install-git-hooks-global.sh\n`,
+      );
       log({ level: 'WARN', reason: 'core.hooksPath mismatch', hooksPath });
     } else if (!hooksPath) {
-      process.stderr.write(`⚠️ [session-start] 未配置 core.hooksPath，请运行 ./scripts/install-git-hooks.sh\n`);
+      process.stderr.write(`⚠️ [session-start] 未配置 core.hooksPath，请运行 ./scripts/install-git-hooks-global.sh\n`);
       log({ level: 'WARN', reason: 'core.hooksPath not set' });
     }
   } catch {

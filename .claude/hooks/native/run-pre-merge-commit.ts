@@ -7,6 +7,7 @@ import { execCommand } from '../security-orchestrator.js';
 import { runQualityGate, logGateResult } from '../quality-gate.js';
 import { setPendingGateFailure } from '../gate-pending.js';
 import { getIndexTreeSha, recordFullPass } from '../gate-cache.js';
+import { exitIfQualityGateExcluded } from './native-common.js';
 
 const HOOK_NAME = 'native-pre-merge-commit';
 
@@ -21,6 +22,8 @@ function getRepoRoot() {
 
 async function main() {
   const cwd = getRepoRoot();
+  exitIfQualityGateExcluded(HOOK_NAME, cwd);
+
   const gateResult = await runQualityGate({ profile: 'full', cwd });
   logGateResult(HOOK_NAME, gateResult, { profile: 'full', cwd, hook: 'pre-merge-commit' });
 

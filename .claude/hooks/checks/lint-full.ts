@@ -1,5 +1,6 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { denyIfToolMissing, denyOnToolError, denyIfRuffMissing, getRuffInvocation } from './tools.js';
+import { isHooksProject } from './hooks-project.js';
 import type { CheckResult } from '../types.js';
 
 export async function runLintFull(cwd?: string) {
@@ -10,7 +11,7 @@ export async function runLintFull(cwd?: string) {
     execCommand('test -f .eslintrc.js', { cwd }).success;
   const hasPyproject = execCommand('test -f pyproject.toml', { cwd }).success;
 
-  if (hasEslintConfig) {
+  if (hasEslintConfig && isHooksProject(cwd)) {
     const missing = denyIfToolMissing('bun', 'lint-eslint', cwd);
     if (missing) return missing;
     try {

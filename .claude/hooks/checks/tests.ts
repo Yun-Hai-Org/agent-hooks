@@ -12,6 +12,7 @@ import {
 } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
 import { denyIfToolMissing, denyOnToolError, isToolInstalled } from './tools.js';
+import { isHooksProject } from './hooks-project.js';
 
 const ADVERSARIAL_DIR = join(TESTS_DIR, 'adversarial');
 
@@ -225,6 +226,10 @@ export async function runFullProjectTests(cwd?: string) {
 const HOOK_UNIT_TEST_BATCH_SIZE = 8;
 
 export async function runHookUnitTests(cwd?: string, options: { coverageThreshold?: number } = {}) {
+  if (!isHooksProject(cwd)) {
+    return formatResult('hook-unit-tests', DECISION.SKIP, '非 hooks 项目，跳过 Hook 单测');
+  }
+
   const missing = denyIfToolMissing('bun', 'hook-unit-tests', cwd);
   if (missing) return missing;
 
@@ -295,6 +300,10 @@ export async function runHookAdversarialIfStaged(cwd?: string) {
 }
 
 export async function runHookAdversarialTests(cwd?: string) {
+  if (!isHooksProject(cwd)) {
+    return formatResult('hook-adversarial', DECISION.SKIP, '非 hooks 项目，跳过对抗性测试');
+  }
+
   const missing = denyIfToolMissing('bun', 'hook-adversarial', cwd);
   if (missing) return missing;
 

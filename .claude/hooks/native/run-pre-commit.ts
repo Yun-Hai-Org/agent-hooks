@@ -7,6 +7,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { execCommand } from '../security-orchestrator.js';
 import { runQualityGate, logGateResult } from '../quality-gate.js';
+import { exitIfQualityGateExcluded } from './native-common.js';
 
 const HOOK_NAME = 'native-pre-commit';
 
@@ -21,6 +22,7 @@ function getRepoRoot() {
 
 async function main() {
   const cwd = getRepoRoot();
+  exitIfQualityGateExcluded(HOOK_NAME, cwd);
 
   if (existsSync(join(cwd, '.git', 'MERGE_HEAD'))) {
     process.exit(0);

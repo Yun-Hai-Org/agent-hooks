@@ -1,5 +1,6 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
+import { isHooksProject } from './hooks-project.js';
 import { getStagedFiles } from './git-policy.js';
 import type { CheckResult } from '../types.js';
 
@@ -189,6 +190,10 @@ export async function runSemgrep(cwd?: string): Promise<CheckResult> {
 }
 
 export async function runKnip(cwd?: string): Promise<CheckResult> {
+  if (!isHooksProject(cwd)) {
+    return formatResult('knip', DECISION.SKIP, '非 hooks 项目，跳过 knip');
+  }
+
   const missing = denyIfToolMissing('bun', 'knip', cwd);
   if (missing) return missing;
   try {

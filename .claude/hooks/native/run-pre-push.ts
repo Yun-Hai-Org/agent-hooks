@@ -8,6 +8,7 @@ import { hasUncommittedChanges, buildUncommittedWorktreeDenyReason } from '../ch
 import { runQualityGate, logGateResult } from '../quality-gate.js';
 import { setPendingGateFailure } from '../gate-pending.js';
 import { getHeadTreeSha, hasFreshFullPass, recordFullPass } from '../gate-cache.js';
+import { exitIfQualityGateExcluded } from './native-common.js';
 
 const HOOK_NAME = 'native-pre-push';
 
@@ -22,6 +23,7 @@ function getRepoRoot() {
 
 async function main() {
   const cwd = getRepoRoot();
+  exitIfQualityGateExcluded(HOOK_NAME, cwd);
 
   if (hasUncommittedChanges(cwd)) {
     console.error(buildUncommittedWorktreeDenyReason(cwd, 'push'));
