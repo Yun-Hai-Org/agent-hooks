@@ -9,6 +9,9 @@
     "beforeShellExecution": [
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts block-dangerous-commands.ts"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts branch-delete-gate.ts"
       }
     ],
     "preToolUse": [

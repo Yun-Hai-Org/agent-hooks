@@ -1,5 +1,5 @@
 import { execCommand, formatResult, DECISION } from '../security-orchestrator.js';
-import { readFileSync } from 'fs';
+import { readFileSync, realpathSync } from 'fs';
 import type { CheckResult } from '../types.js';
 
 const COMMIT_TYPES = [
@@ -221,4 +221,274 @@ export function isGitCommitCommand(cmd: string): boolean {
 
 export function isGitMergeCommand(cmd: string): boolean {
   return /\bgit\s+merge\b/.test(cmd);
+}
+
+const PROTECTED_BRANCHES = ['main', 'master'] as const;
+
+export function isProtectedBranch(branch: string): boolean {
+  const name = normalizeBranchRef(branch);
+  return PROTECTED_BRANCHES.includes(name as (typeof PROTECTED_BRANCHES)[number]);
+}
+
+export function isGitBranchDeleteCommand(cmd: string): boolean {
+  return /\bgit\s+branch\s+(-d|-D|--delete)\b/.test(cmd);
+}
+
+export function isGitRemoteBranchDeleteCommand(cmd: string): boolean {
+  if (!/\bgit\s+push\b/.test(cmd)) return false;
+  if (/--delete\b/.test(cmd)) return true;
+  return /(?:^|\s):(?:refs\/heads\/)?[^\s:]+(?=\s|$)/.test(cmd);
+}
+
+export function isGitWorktreeRemoveCommand(cmd: string): boolean {
+  return /\bgit\s+worktree\s+(remove|prune)\b/.test(cmd);
+}
+
+export function isGitWorktreePruneCommand(cmd: string): boolean {
+  return /\bgit\s+worktree\s+prune\b/.test(cmd);
+}
+
+export function isGitRefDeleteBypass(cmd: string): boolean {
+  return /\bgit\s+update-ref\s+-d\s+refs\/heads\//.test(cmd);
+}
+
+export function isGitBranchDeleteRelatedCommand(cmd: string): boolean {
+  return (
+    isGitBranchDeleteCommand(cmd) ||
+    isGitRemoteBranchDeleteCommand(cmd) ||
+    isGitWorktreeRemoveCommand(cmd) ||
+    isGitRefDeleteBypass(cmd)
+  );
+}
+
+function normalizeBranchRef(branch: string): string {
+  return branch.replace(/^refs\/heads\//, '').replace(/^origin\//, '');
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+export function extractBranchDeleteTargets(cmd: string): string[] {
+  const match = /\bgit\s+branch\s+(?:-d|-D|--delete)\s+(.+)/i.exec(cmd);
+  if (!match?.[1]) return [];
+  return match[1]
+    .trim()
+    .split(/\s+/)
+    .map(normalizeBranchRef)
+    .filter((token) => token.length > 0 && !token.startsWith('-'));
+}
+
+export function extractRemoteBranchDeleteTargets(cmd: string): string[] {
+  const targets: string[] = [];
+  for (const match of cmd.matchAll(/--delete(?:\s+\S+)?\s+(\S+)/g)) {
+    if (match[1]) targets.push(normalizeBranchRef(match[1]));
+  }
+  for (const match of cmd.matchAll(/(?:^|\s):(?:refs\/heads\/)?([^\s:]+)(?=\s|$)/g)) {
+    if (match[1]) targets.push(normalizeBranchRef(match[1]));
+  }
+  return [...new Set(targets)];
+}
+
+export function extractUpdateRefDeleteTargets(cmd: string): string[] {
+  const targets: string[] = [];
+  for (const match of cmd.matchAll(/\bgit\s+update-ref\s+-d\s+refs\/heads\/(\S+)/g)) {
+    if (match[1]) targets.push(normalizeBranchRef(match[1]));
+  }
+  return targets;
+}
+
+export function extractWorktreeRemovePaths(cmd: string): string[] {
+  const match = /\bgit\s+worktree\s+remove(?:\s+(?:--force|-f))?\s+(\S+)/.exec(cmd);
+  if (!match?.[1]) return [];
+  return [match[1].replace(/^["']|["']$/g, '')];
+}
+
+export function resolveBaseBranch(cwd?: string): 'main' | 'master' | null {
+  const main = execCommand('git rev-parse --verify main', { cwd });
+  if (main.success) return 'main';
+  const master = execCommand('git rev-parse --verify master', { cwd });
+  if (master.success) return 'master';
+  return null;
+}
+
+export function isBranchMergedInto(branch: string, base: string, cwd?: string): boolean {
+  const normalized = normalizeBranchRef(branch);
+  const candidates = [normalized, `origin/${normalized}`];
+  for (const candidate of candidates) {
+    const verify = execCommand(`git rev-parse --verify ${shellQuote(candidate)}`, { cwd });
+    if (!verify.success) continue;
+    const result = execCommand(`git merge-base --is-ancestor ${shellQuote(candidate)} ${shellQuote(base)}`, { cwd });
+    if (result.success) return true;
+  }
+  return false;
+}
+
+function normalizeWorktreePath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+function worktreePathsEqual(a: string, b: string): boolean {
+  return normalizeWorktreePath(a) === normalizeWorktreePath(b);
+}
+
+export function listWorktrees(repoCwd?: string): Map<string, string> {
+  const result = execCommand('git worktree list --porcelain', { cwd: repoCwd });
+  const map = new Map<string, string>();
+  if (!result.success) return map;
+
+  let currentPath: string | null = null;
+  for (const line of result.stdout.split('\n')) {
+    if (line.startsWith('worktree ')) {
+      currentPath = line.slice('worktree '.length).trim();
+      continue;
+    }
+    if (line.startsWith('branch ') && currentPath) {
+      const branch = normalizeBranchRef(line.slice('branch '.length).trim());
+      map.set(currentPath, branch);
+      currentPath = null;
+    }
+  }
+  return map;
+}
+
+export function getWorktreeBranch(worktreePath: string, repoCwd?: string): string | null {
+  for (const [path, branch] of listWorktrees(repoCwd)) {
+    if (worktreePathsEqual(path, worktreePath)) return branch;
+  }
+  const head = execCommand('git rev-parse --abbrev-ref HEAD', { cwd: worktreePath });
+  if (head.success) {
+    const branch = head.stdout.trim();
+    if (branch && branch !== 'HEAD') return branch;
+  }
+  return null;
+}
+
+export function buildProtectedBranchDeleteDenyReason(branch: string): string {
+  return [
+    `🔒 [branch-delete-gate] 禁止删除受保护分支 ${branch}（main/master）。`,
+    '',
+    '步骤：',
+    '1. 切换到 feature 分支继续开发',
+    '2. 禁止通过 AI 删除 main/master',
+  ].join('\n');
+}
+
+export function buildUnmergedBranchDeleteDenyReason(branch: string, base: string): string {
+  return [
+    `🔒 [branch-delete-gate] 禁止删除未合并分支 ${branch}（尚未 merge 进 ${base}）。`,
+    '',
+    '步骤：',
+    `1. git checkout ${base} && git merge ${branch}（或开 PR 合并）`,
+    `2. 确认 git branch --merged ${base} 包含 ${branch}`,
+    `3. 再执行 git branch -d ${branch}`,
+  ].join('\n');
+}
+
+export function buildDirtyWorktreeDeleteDenyReason(worktreePath: string, branch: string): string {
+  return [
+    `🔒 [branch-delete-gate] 禁止删除含未提交变更的 worktree: ${worktreePath}`,
+    '',
+    `关联分支: ${branch}`,
+    '',
+    '步骤：',
+    '1. 进入 worktree 目录执行 git status 确认变更',
+    '2. git add / git commit（需通过 pre-commit 质量门）',
+    '3. merge 进 main/master 后再 git worktree remove',
+  ].join('\n');
+}
+
+export function buildWorktreePruneDenyReason(): string {
+  return [
+    '🔒 [branch-delete-gate] 禁止 AI 执行 git worktree prune。',
+    '',
+    '步骤：',
+    '1. 使用 git worktree list 确认目标路径',
+    '2. merge 并 commit 后执行 git worktree remove <path>',
+  ].join('\n');
+}
+
+export function evaluateBranchDeleteCommand(cmd: string, cwd: string): CheckResult | null {
+  if (!isGitBranchDeleteRelatedCommand(cmd)) return null;
+
+  const insideGit = execCommand('git rev-parse --is-inside-work-tree', { cwd });
+  if (!insideGit.success) {
+    return formatResult(
+      'branch-delete-gate',
+      DECISION.DENY,
+      '🔒 [branch-delete-gate] 非 Git 仓库，禁止执行分支/worktree 删除命令',
+    );
+  }
+
+  if (isGitWorktreePruneCommand(cmd)) {
+    return formatResult('branch-delete-gate', DECISION.DENY, buildWorktreePruneDenyReason());
+  }
+
+  const base = resolveBaseBranch(cwd);
+  if (!base) {
+    return formatResult(
+      'branch-delete-gate',
+      DECISION.DENY,
+      '🔒 [branch-delete-gate] 无法确定 main/master 基准分支，禁止删除操作',
+    );
+  }
+
+  execCommand('git fetch --quiet', { cwd, timeout: 60000 });
+
+  const branchTargets = [
+    ...extractBranchDeleteTargets(cmd),
+    ...extractRemoteBranchDeleteTargets(cmd),
+    ...extractUpdateRefDeleteTargets(cmd),
+  ];
+
+  for (const branch of branchTargets) {
+    if (isProtectedBranch(branch)) {
+      return formatResult('branch-delete-gate', DECISION.DENY, buildProtectedBranchDeleteDenyReason(branch));
+    }
+    if (!isBranchMergedInto(branch, base, cwd)) {
+      return formatResult('branch-delete-gate', DECISION.DENY, buildUnmergedBranchDeleteDenyReason(branch, base));
+    }
+  }
+
+  for (const worktreePath of extractWorktreeRemovePaths(cmd)) {
+    const branch = getWorktreeBranch(worktreePath, cwd);
+    if (!branch) {
+      return formatResult(
+        'branch-delete-gate',
+        DECISION.DENY,
+        `🔒 [branch-delete-gate] 无法解析 worktree 关联分支: ${worktreePath}`,
+      );
+    }
+    if (isProtectedBranch(branch)) {
+      return formatResult('branch-delete-gate', DECISION.DENY, buildProtectedBranchDeleteDenyReason(branch));
+    }
+    if (hasUncommittedChanges(worktreePath)) {
+      return formatResult(
+        'branch-delete-gate',
+        DECISION.DENY,
+        buildDirtyWorktreeDeleteDenyReason(worktreePath, branch),
+      );
+    }
+    if (!isBranchMergedInto(branch, base, cwd)) {
+      return formatResult('branch-delete-gate', DECISION.DENY, buildUnmergedBranchDeleteDenyReason(branch, base));
+    }
+  }
+
+  const isDeleteWithoutTargets =
+    (isGitBranchDeleteCommand(cmd) ||
+      isGitRemoteBranchDeleteCommand(cmd) ||
+      isGitRefDeleteBypass(cmd) ||
+      /\bgit\s+worktree\s+remove\b/.test(cmd)) &&
+    branchTargets.length === 0 &&
+    extractWorktreeRemovePaths(cmd).length === 0;
+
+  if (isDeleteWithoutTargets) {
+    return formatResult('branch-delete-gate', DECISION.DENY, '🔒 [branch-delete-gate] 无法解析删除目标，禁止执行');
+  }
+
+  return null;
 }

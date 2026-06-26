@@ -8,6 +8,7 @@
 | 敏感内容        | protect-secrets          | Read/Edit/Write/Bash   | beforeReadFile + preToolUse |
 | Prompt 密钥     | user-prompt-filter       | UserPromptSubmit       | beforeSubmitPrompt          |
 | main 写入禁止   | branch-gate              | Write/Edit/Bash        | preToolUse Shell/Write      |
+| 未合并分支删除  | branch-delete-gate       | PreToolUse Bash        | beforeShellExecution        |
 | 工具健康检查    | session-start            | SessionStart           | sessionStart                |
 | 安全 Webhook    | notification / notify    | Notification + BLOCKED | BLOCKED 直连                |
 | 自动暂存        | auto-stage               | PostToolUse Edit/Write | afterFileEdit               |
@@ -76,6 +77,8 @@
 | ------------------------------------- | ------------------------ |
 | `--no-verify` / `core.hooksPath`      | block-dangerous-commands |
 | `gh pr merge` / 默认 `git pull` merge | block-dangerous-commands |
+| `git update-ref -d refs/heads/*`      | block-dangerous-commands |
+| 未合并分支/worktree 删除              | branch-delete-gate       |
 
 ## D. 已移除
 

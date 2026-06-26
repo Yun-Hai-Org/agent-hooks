@@ -35,6 +35,11 @@
             "type": "command",
             "command": "bun .claude/hooks/resolve-hook-path.ts block-dangerous-commands.ts",
             "statusMessage": "检查危险命令和工具限制..."
+          },
+          {
+            "type": "command",
+            "command": "bun .claude/hooks/resolve-hook-path.ts branch-delete-gate.ts",
+            "statusMessage": "检查未合并分支/worktree 删除..."
           }
         ]
       },

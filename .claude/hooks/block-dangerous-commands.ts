@@ -332,6 +332,13 @@ const PATTERNS = [
     regex: /\bgit\s+pull\b(?!.*--rebase)(?!.*--ff-only)/,
     reason: 'git pull 默认 merge 会绕过 pre-merge-commit，请使用 git pull --rebase 或 git fetch + git merge',
   },
+  // 34f. git update-ref 删分支（绕过 branch -d；合并判定由 branch-delete-gate 负责）
+  {
+    level: 'strict',
+    id: 'git-update-ref-delete',
+    regex: /\bgit\s+update-ref\s+-d\s+refs\/heads\//,
+    reason: '禁止通过 git update-ref -d 删除分支，请使用 git branch -d（需 branch-delete-gate 校验已合并）',
+  },
 
   // ==================== STRICT - 分支操作（非阻止） ====================
   // 35. git force push any (非 main/master)

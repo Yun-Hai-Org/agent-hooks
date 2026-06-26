@@ -6,6 +6,13 @@ import {
   isGitPushCommand,
   isGitCommitCommand,
   isGitMergeCommand,
+  isGitBranchDeleteCommand,
+  isGitRemoteBranchDeleteCommand,
+  isGitWorktreeRemoveCommand,
+  isGitRefDeleteBypass,
+  extractBranchDeleteTargets,
+  extractRemoteBranchDeleteTargets,
+  extractWorktreeRemovePaths,
   hasUncommittedChanges,
   buildUncommittedWorktreeDenyReason,
 } from '../../checks/git-policy.js';
@@ -27,6 +34,24 @@ describe('adversarial: git-policy command detection', () => {
     expect(isGitMergeCommand('git merge --no-ff feat/x')).toBe(true);
     expect(isGitMergeCommand('git merge feat/x')).toBe(true);
     expect(isGitMergeCommand('git checkout feat/x')).toBe(false);
+  });
+
+  it('应识别分支/worktree 删除命令', () => {
+    expect(isGitBranchDeleteCommand('git branch -D feat/x')).toBe(true);
+    expect(isGitBranchDeleteCommand('git  branch  --delete feat/x')).toBe(true);
+    expect(isGitRemoteBranchDeleteCommand('git push origin --delete feat/x')).toBe(true);
+    expect(isGitRemoteBranchDeleteCommand('git push origin :feat/x')).toBe(true);
+    expect(isGitWorktreeRemoveCommand('git worktree remove /tmp/wt')).toBe(true);
+    expect(isGitWorktreeRemoveCommand('git worktree prune')).toBe(true);
+    expect(isGitRefDeleteBypass('git update-ref -d refs/heads/feat/x')).toBe(true);
+    expect(isGitBranchDeleteCommand('git branch')).toBe(false);
+  });
+
+  it('应解析删除目标', () => {
+    expect(extractBranchDeleteTargets('git branch -D feat/a feat/b')).toEqual(['feat/a', 'feat/b']);
+    expect(extractRemoteBranchDeleteTargets('git push origin --delete feat/x')).toEqual(['feat/x']);
+    expect(extractRemoteBranchDeleteTargets('git push origin :refs/heads/feat/x')).toEqual(['feat/x']);
+    expect(extractWorktreeRemovePaths('git worktree remove --force /tmp/wt')).toEqual(['/tmp/wt']);
   });
 });
 
