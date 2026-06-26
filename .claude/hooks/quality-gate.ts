@@ -4,7 +4,7 @@
  * profiles: commit | full
  */
 
-import { decide, formatResult, log, timeCheck, DECISION } from './security-orchestrator.js';
+import { decide, formatResult, log, timeCheck, DECISION, isGatePassed } from './security-orchestrator.js';
 import {
   checkBranch,
   checkCommitMessage,
@@ -167,7 +167,7 @@ export async function runQualityGate(
     ];
     const finalDecision = decide(results);
     return {
-      passed: finalDecision.decision !== DECISION.DENY,
+      passed: isGatePassed(finalDecision.decision),
       results,
       decision: finalDecision,
       timing: computeTiming(results),
@@ -241,7 +241,7 @@ export async function runQualityGate(
   ];
   const finalDecision = decide(results);
   return {
-    passed: finalDecision.decision !== DECISION.DENY,
+    passed: isGatePassed(finalDecision.decision),
     results,
     decision: finalDecision,
     timing: computeTiming(results),

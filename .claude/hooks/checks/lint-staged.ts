@@ -42,11 +42,11 @@ export async function runLintStaged(cwd?: string) {
           `${getBunxInvocation(cwd)} eslint ${files} --max-warnings 0 --no-warn-ignored --report-unused-disable-directives`,
           {
             cwd,
-            timeout: 30000,
+            timeout: 60000,
           },
         ),
-        30000,
-        'eslint staged 超时 (30s)',
+        60000,
+        'eslint staged 超时 (60s)',
       );
       results.push(
         eslintResult.success

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import {
   formatResult,
   decide,
+  isGatePassed,
   formatHookOutput,
   checkToolAvailable,
   detectToolchain,
@@ -76,6 +77,12 @@ describe('security-orchestrator', () => {
   it('decide - 空数组应该返回 allow', () => {
     const d = decide([]);
     expect(d.decision).toBe('allow');
+  });
+
+  it('isGatePassed - 仅 allow 通过质量门', () => {
+    expect(isGatePassed('allow')).toBe(true);
+    expect(isGatePassed('warn')).toBe(false);
+    expect(isGatePassed('deny')).toBe(false);
   });
 
   it('formatHookOutput - allow 应该返回 {}', () => {

@@ -209,6 +209,10 @@ export function decide(results: CheckResult[]): DecideResult {
   };
 }
 
+export function isGatePassed(decision: Decision): boolean {
+  return decision === DECISION.ALLOW;
+}
+
 export async function timeCheck<T extends CheckResult>(check: Promise<T> | T): Promise<T> {
   const start = performance.now();
   const result = await check;
