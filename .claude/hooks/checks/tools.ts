@@ -1,6 +1,6 @@
 import { existsSync } from 'fs';
 import { basename, join } from 'path';
-import { execCommand, formatResult, DECISION } from '../security-orchestrator.js';
+import { execCommand, formatResult, DECISION, HOOKS_DIR } from '../security-orchestrator.js';
 import type { CheckResult } from '../types.js';
 
 export const TOOL_INSTALL_HINTS: Record<string, string> = {
@@ -36,14 +36,19 @@ export function getToolInstallHint(tool: string): string {
   return TOOL_INSTALL_HINTS[tool] ?? `请先安装 ${tool}`;
 }
 
+const VENDORED_BUN = join(HOOKS_DIR, '..', '..', '.tools', 'bun-darwin-x64', 'bun');
+
 /** Cursor 钩子进程的 PATH 通常不含 bun，需用当前解释器或 ~/.cursor/bun */
 export function resolveBunExecutable(): string {
   if (basename(process.execPath) === 'bun') {
     return process.execPath;
   }
-  const cursorBun = join(process.env['HOME'] ?? '', '.cursor', 'bun');
-  if (existsSync(cursorBun)) {
-    return cursorBun;
+  const home = process.env['HOME'] ?? '';
+  const candidates = [join(home, '.cursor', 'bun'), join(home, '.bun', 'bin', 'bun'), VENDORED_BUN];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
   }
   return 'bun';
 }
@@ -53,7 +58,13 @@ export function resolveBunxExecutable(): string {
   if (existsSync(cursorBunx)) {
     return cursorBunx;
   }
-  return resolveBunExecutable();
+  return `"${resolveBunExecutable()}" x`;
+}
+
+/** Shell 命令前缀，用于 bunx 管理的 CLI（prettier/eslint/tsc 等） */
+export function getBunxInvocation(_cwd?: string): string {
+  const bunx = resolveBunxExecutable();
+  return bunx.includes(' ') ? bunx : `"${bunx}"`;
 }
 
 function isResolvedExecutableAvailable(resolved: string): boolean {
@@ -65,7 +76,11 @@ export function isToolInstalled(tool: string, cwd?: string): boolean {
     return isResolvedExecutableAvailable(resolveBunExecutable()) || execCommand('command -v bun', { cwd }).success;
   }
   if (tool === 'bunx') {
-    return isResolvedExecutableAvailable(resolveBunxExecutable()) || execCommand('command -v bunx', { cwd }).success;
+    return (
+      isResolvedExecutableAvailable(resolveBunExecutable()) ||
+      existsSync(join(process.env['HOME'] ?? '', '.cursor', 'bunx')) ||
+      execCommand('command -v bunx', { cwd }).success
+    );
   }
   if (tool === 'knip') {
     return (
@@ -73,6 +88,9 @@ export function isToolInstalled(tool: string, cwd?: string): boolean {
       execCommand('command -v bunx', { cwd }).success ||
       isResolvedExecutableAvailable(resolveBunExecutable())
     );
+  }
+  if (['prettier', 'eslint', 'markdownlint', 'stylelint'].includes(tool)) {
+    return isToolInstalled('bun', cwd) || execCommand(`command -v ${tool}`, { cwd }).success;
   }
   return execCommand(`command -v ${tool}`, { cwd }).success;
 }

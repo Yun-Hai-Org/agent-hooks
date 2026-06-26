@@ -35,7 +35,13 @@ export const LOG_DIR = join(process.env['HOME'] ?? '', '.claude', 'hooks-logs');
 /** Cursor/IDE 钩子进程 PATH 通常不含 ~/.cursor 与 Homebrew，与 git hook shell wrapper 对齐 */
 export function getHookProcessEnv(extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const home = process.env['HOME'] ?? '';
-  const prefix = [join(home, '.cursor'), join(home, '.local', 'bin'), '/opt/homebrew/bin', '/usr/local/bin'];
+  const prefix = [
+    join(home, '.cursor'),
+    join(home, '.bun', 'bin'),
+    join(home, '.local', 'bin'),
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+  ];
   const path = [...prefix, process.env['PATH'] ?? ''].filter(Boolean).join(':');
   return { ...process.env, PATH: path, ...extra };
 }

@@ -2,7 +2,13 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
-import { denyIfToolMissing, denyOnToolError, denyIfRuffMissing, getRuffInvocation } from './tools.js';
+import {
+  denyIfToolMissing,
+  denyOnToolError,
+  denyIfRuffMissing,
+  getBunxInvocation,
+  getRuffInvocation,
+} from './tools.js';
 import type { CheckResult } from '../types.js';
 
 function filterExistingStagedFiles(files: string[], cwd?: string): string[] {
@@ -32,10 +38,13 @@ export async function runLintStaged(cwd?: string) {
     const files = jsFiles.map((f) => `"${f}"`).join(' ');
     try {
       const eslintResult = await withTimeout(
-        execCommandAsync(`bunx eslint ${files} --max-warnings 0 --no-warn-ignored --report-unused-disable-directives`, {
-          cwd,
-          timeout: 30000,
-        }),
+        execCommandAsync(
+          `${getBunxInvocation(cwd)} eslint ${files} --max-warnings 0 --no-warn-ignored --report-unused-disable-directives`,
+          {
+            cwd,
+            timeout: 30000,
+          },
+        ),
         30000,
         'eslint staged 超时 (30s)',
       );

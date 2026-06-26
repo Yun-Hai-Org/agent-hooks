@@ -1,5 +1,11 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
-import { denyIfToolMissing, denyOnToolError, denyIfRuffMissing, getRuffInvocation } from './tools.js';
+import {
+  denyIfToolMissing,
+  denyOnToolError,
+  denyIfRuffMissing,
+  getBunxInvocation,
+  getRuffInvocation,
+} from './tools.js';
 import { isHooksProject } from './hooks-project.js';
 import type { CheckResult } from '../types.js';
 
@@ -17,7 +23,7 @@ export async function runLintFull(cwd?: string) {
     try {
       const eslintResult = await withTimeout(
         execCommandAsync(
-          'bunx eslint .claude/hooks --ignore-pattern "**/__tests__/**" --max-warnings 0 --report-unused-disable-directives',
+          `${getBunxInvocation(cwd)} eslint .claude/hooks --ignore-pattern "**/__tests__/**" --max-warnings 0 --report-unused-disable-directives`,
           {
             cwd,
             timeout: 120000,

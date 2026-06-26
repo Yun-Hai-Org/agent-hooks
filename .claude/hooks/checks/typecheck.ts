@@ -1,6 +1,12 @@
 import { execCommand, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
-import { denyIfPyrightMissing, denyIfToolMissing, denyOnToolError, isPyrightAvailable } from './tools.js';
+import {
+  denyIfPyrightMissing,
+  denyIfToolMissing,
+  denyOnToolError,
+  getBunxInvocation,
+  isPyrightAvailable,
+} from './tools.js';
 
 interface TypecheckToolResult {
   tool?: string;
@@ -68,7 +74,7 @@ export async function runStagedTypecheck(cwd?: string) {
       resolve({ tool: 'tsc', success: true, stdout: 'no tsconfig.json, skip', stderr: '' });
       return;
     }
-    resolve({ tool: 'tsc', ...execCommand('bunx tsc --noEmit', { cwd, timeout: 30000 }) });
+    resolve({ tool: 'tsc', ...execCommand(`${getBunxInvocation(cwd)} tsc --noEmit`, { cwd, timeout: 30000 }) });
   });
 
   try {
@@ -119,7 +125,7 @@ export async function runFullTypecheck(cwd?: string) {
       resolve({ tool: 'tsc', success: true, stdout: 'no tsconfig.json, skip', stderr: '' });
       return;
     }
-    resolve({ tool: 'tsc', ...execCommand('bunx tsc --noEmit', { cwd, timeout: 60000 }) });
+    resolve({ tool: 'tsc', ...execCommand(`${getBunxInvocation(cwd)} tsc --noEmit`, { cwd, timeout: 60000 }) });
   });
 
   try {

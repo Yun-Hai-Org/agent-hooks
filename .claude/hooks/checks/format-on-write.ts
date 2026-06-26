@@ -1,7 +1,7 @@
 import { existsSync } from 'fs';
 import { extname } from 'path';
 import { execCommand, execCommandAsync, withTimeout } from '../security-orchestrator.js';
-import { denyIfRuffMissing, getRuffInvocation, isToolInstalled, resolveBunxExecutable } from './tools.js';
+import { denyIfRuffMissing, getBunxInvocation, getRuffInvocation, isToolInstalled } from './tools.js';
 
 export interface FormatOnWriteResult {
   formatted: boolean;
@@ -56,7 +56,7 @@ export async function formatFileOnWrite(filePath: string, cwd?: string): Promise
       result.skipped.push('prettier-bun-missing');
     } else {
       try {
-        const bunx = resolveBunxExecutable();
+        const bunx = getBunxInvocation(repoCwd);
         const prettierResult = await withTimeout(
           execCommandAsync(`${bunx} prettier --write "${filePath}"`, { cwd: repoCwd, timeout: 30000 }),
           30000,
@@ -79,7 +79,7 @@ export async function formatFileOnWrite(filePath: string, cwd?: string): Promise
       result.skipped.push('markdownlint-bun-missing');
     } else {
       try {
-        const bunx = resolveBunxExecutable();
+        const bunx = getBunxInvocation(repoCwd);
         const mdResult = await withTimeout(
           execCommandAsync(`${bunx} markdownlint-cli2 --fix "${filePath}"`, { cwd: repoCwd, timeout: 60000 }),
           60000,

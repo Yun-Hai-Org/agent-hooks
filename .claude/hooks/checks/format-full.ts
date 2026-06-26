@@ -1,5 +1,11 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
-import { denyIfToolMissing, denyOnToolError, denyIfRuffMissing, getRuffInvocation } from './tools.js';
+import {
+  denyIfToolMissing,
+  denyOnToolError,
+  denyIfRuffMissing,
+  getBunxInvocation,
+  getRuffInvocation,
+} from './tools.js';
 import type { CheckResult } from '../types.js';
 
 export async function runFormatFull(cwd?: string) {
@@ -11,7 +17,7 @@ export async function runFormatFull(cwd?: string) {
 
   try {
     const prettierResult = await withTimeout(
-      execCommandAsync('bunx prettier --check .', { cwd, timeout: 120000 }),
+      execCommandAsync(`${getBunxInvocation(cwd)} prettier --check .`, { cwd, timeout: 120000 }),
       120000,
       'prettier 超时 (120s)',
     );

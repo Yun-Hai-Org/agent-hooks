@@ -16,7 +16,7 @@ import { join } from 'path';
 import { LOG_DIR, getHookProcessEnv } from './security-orchestrator.js';
 import { getPlatform } from './hook-adapter.js';
 import { resolveContainerRuntime } from './checks/container-runtime.js';
-import { isToolInstalled, resolveBunExecutable, resolveBunxExecutable } from './checks/tools.js';
+import { isToolInstalled, getBunxInvocation, resolveBunExecutable } from './checks/tools.js';
 import type { ToolStatus } from './types.js';
 const HOOK_NAME = 'session-start';
 const GLOBAL_TIMEOUT_MS = 2000;
@@ -32,7 +32,7 @@ function log(data: Record<string, unknown>) {
 
 function resolveVersionCommand(versionCmd: string): string {
   if (versionCmd.startsWith('bunx ')) {
-    return `"${resolveBunxExecutable()}" ${versionCmd.slice(5)}`;
+    return `${getBunxInvocation()} ${versionCmd.slice(5)}`;
   }
   if (versionCmd.startsWith('bun ')) {
     return `"${resolveBunExecutable()}" ${versionCmd.slice(4)}`;
@@ -104,16 +104,16 @@ const TOOLS: { name: string; binary: string; versionCmd?: string }[] = [
   // SQL 工具
   { name: 'sqlfluff', binary: 'sqlfluff', versionCmd: 'sqlfluff version' },
   // CSS 工具
-  { name: 'stylelint', binary: 'stylelint', versionCmd: 'stylelint --version' },
+  { name: 'stylelint', binary: 'stylelint', versionCmd: 'bunx stylelint --version' },
   // 通用格式化
-  { name: 'prettier', binary: 'prettier', versionCmd: 'prettier --version' },
+  { name: 'prettier', binary: 'prettier', versionCmd: 'bunx prettier --version' },
   // JS/TS 工具
-  { name: 'eslint', binary: 'eslint', versionCmd: 'eslint --version' },
+  { name: 'eslint', binary: 'eslint', versionCmd: 'bunx eslint --version' },
   // Python 工具
   { name: 'ruff', binary: 'ruff', versionCmd: 'ruff --version' },
   { name: 'pyright', binary: 'pyright', versionCmd: 'pyright --version' },
   // Markdown 工具
-  { name: 'markdownlint', binary: 'markdownlint', versionCmd: 'markdownlint --version' },
+  { name: 'markdownlint', binary: 'markdownlint', versionCmd: 'bunx markdownlint-cli2 --version' },
   // JSON/YAML 工具
   { name: 'jq', binary: 'jq', versionCmd: 'jq --version' },
   { name: 'yq', binary: 'yq', versionCmd: 'yq --version' },
@@ -125,7 +125,7 @@ const TOOLS: { name: string; binary: string; versionCmd?: string }[] = [
   { name: 'osv-scanner', binary: 'osv-scanner', versionCmd: 'osv-scanner --version' },
   { name: 'pip-audit', binary: 'pip-audit', versionCmd: 'pip-audit --version' },
   // 死代码检测
-  { name: 'knip', binary: 'knip', versionCmd: 'knip --version' },
+  { name: 'knip', binary: 'knip', versionCmd: 'bunx knip --version' },
   // 包管理器
 ];
 

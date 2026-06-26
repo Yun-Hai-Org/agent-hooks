@@ -3,7 +3,7 @@ import { basename, dirname, extname, join } from 'path';
 import { execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { getStagedFiles, filterExistingStagedFiles } from './git-policy.js';
 import { classifyFiles, listTrackedFiles } from './file-patterns.js';
-import { denyIfToolMissing, denyOnToolError } from './tools.js';
+import { denyIfToolMissing, denyOnToolError, getBunxInvocation } from './tools.js';
 import type { CheckResult } from '../types.js';
 
 export function findSchemaFile(filePath: string, cwd?: string): string | null {
@@ -69,7 +69,7 @@ export async function runCheckJsonschema(
 
   const formatFlag = format === 'yaml' ? '--format yaml ' : '';
   const result = await execCommandAsync(
-    `bunx check-jsonschema ${formatFlag}--schemafile "${schemaPath}" "${filePath}"`,
+    `${getBunxInvocation(cwd)} check-jsonschema ${formatFlag}--schemafile "${schemaPath}" "${filePath}"`,
     { cwd, timeout: 30000 },
   );
   return {

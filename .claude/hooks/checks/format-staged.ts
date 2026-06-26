@@ -1,6 +1,12 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { getStagedFiles, filterExistingStagedFiles } from './git-policy.js';
-import { denyIfToolMissing, denyOnToolError, denyIfRuffMissing, getRuffInvocation } from './tools.js';
+import {
+  denyIfToolMissing,
+  denyOnToolError,
+  denyIfRuffMissing,
+  getBunxInvocation,
+  getRuffInvocation,
+} from './tools.js';
 import type { CheckResult } from '../types.js';
 
 export async function runFormatStaged(cwd?: string) {
@@ -25,7 +31,7 @@ export async function runFormatStaged(cwd?: string) {
     const files = jsFiles.map((f) => `"${f}"`).join(' ');
     try {
       const prettierResult = await withTimeout(
-        execCommandAsync(`bunx prettier --check ${files}`, { cwd, timeout: 30000 }),
+        execCommandAsync(`${getBunxInvocation(cwd)} prettier --check ${files}`, { cwd, timeout: 30000 }),
         30000,
         'prettier staged 超时 (30s)',
       );

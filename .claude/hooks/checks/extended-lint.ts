@@ -8,7 +8,7 @@ import {
   isDockerfilePath,
   listTrackedFiles,
 } from './file-patterns.js';
-import { denyIfToolMissing, denyOnToolError } from './tools.js';
+import { denyIfToolMissing, denyOnToolError, getBunxInvocation } from './tools.js';
 import { denyIfContainerRuntimeMissing, getComposeConfigCmd, resolveContainerRuntime } from './container-runtime.js';
 
 export const HADOLINT_SECURITY_RULES: Readonly<Record<string, string>> = Object.freeze({
@@ -113,7 +113,7 @@ async function runExtendedChecks(classified: ReturnType<typeof classifyFiles>, i
     const files = classified.md.map((f) => `"${f}"`).join(' ');
     try {
       const mdResult = await withTimeout(
-        execCommandAsync(`bunx markdownlint-cli2 ${files}`, { cwd, timeout: 120000 }),
+        execCommandAsync(`${getBunxInvocation(cwd)} markdownlint-cli2 ${files}`, { cwd, timeout: 120000 }),
         120000,
         'markdownlint 超时 (120s)',
       );
@@ -285,7 +285,7 @@ async function runExtendedChecks(classified: ReturnType<typeof classifyFiles>, i
     const files = classified.css.map((f) => `"${f}"`).join(' ');
     try {
       const stylelintResult = await withTimeout(
-        execCommandAsync(`bunx stylelint ${files}`, { cwd, timeout: 60000 }),
+        execCommandAsync(`${getBunxInvocation(cwd)} stylelint ${files}`, { cwd, timeout: 60000 }),
         60000,
         'stylelint 超时 (60s)',
       );

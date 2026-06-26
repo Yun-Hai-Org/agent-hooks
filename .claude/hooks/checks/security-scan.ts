@@ -1,5 +1,5 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
-import { denyIfToolMissing, denyOnToolError } from './tools.js';
+import { denyIfToolMissing, denyOnToolError, getBunxInvocation } from './tools.js';
 import { isHooksProject } from './hooks-project.js';
 import { getStagedFiles } from './git-policy.js';
 import type { CheckResult } from '../types.js';
@@ -198,7 +198,7 @@ export async function runKnip(cwd?: string): Promise<CheckResult> {
   if (missing) return missing;
   try {
     const result = await withTimeout(
-      execCommandAsync('bunx knip --reporter json', { cwd, timeout: 30000 }),
+      execCommandAsync(`${getBunxInvocation(cwd)} knip --reporter json`, { cwd, timeout: 30000 }),
       30000,
       'knip 超时 (30s)',
     );

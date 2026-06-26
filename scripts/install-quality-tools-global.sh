@@ -31,6 +31,7 @@ HOOKS_REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
 if [[ -x "$HOOKS_REPO/.tools/bun-darwin-x64/bun" ]]; then
 	mkdir -p "${HOME}/.cursor"
 	ln -sf "$HOOKS_REPO/.tools/bun-darwin-x64/bun" "${HOME}/.cursor/bun"
+	ln -sf "${HOME}/.cursor/bun" "${HOME}/.cursor/bunx"
 fi
 
 echo "[install-quality-tools-global] Done. Next: ./scripts/link-cursor-hooks-global.sh && ./scripts/install-git-hooks-global.sh"
