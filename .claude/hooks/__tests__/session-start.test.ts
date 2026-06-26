@@ -1,6 +1,8 @@
 import { describe, it, expect, mock } from 'bun:test';
 import { spawn } from 'child_process';
 import { join } from 'path';
+import { getHookProcessEnv } from '../security-orchestrator.js';
+import { resolveBunExecutable } from '../checks/tools.js';
 import {
   checkTool,
   formatToolStatus,
@@ -18,8 +20,9 @@ describe('session-start', () => {
   // 辅助函数：运行 hook 并获取输出
   function runHook(input = '{}') {
     return new Promise((resolve, reject) => {
-      const child = spawn('bun', [HOOK_PATH], {
+      const child = spawn(resolveBunExecutable(), [HOOK_PATH], {
         stdio: ['pipe', 'pipe', 'pipe'],
+        env: getHookProcessEnv(),
       });
 
       let stdout = '';

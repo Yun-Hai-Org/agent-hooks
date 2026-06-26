@@ -14,8 +14,10 @@
  */
 
 import { existsSync } from 'fs';
-import { basename, join, resolve } from 'path';
+import { join, resolve } from 'path';
 import { spawnSync } from 'child_process';
+import { getHookProcessEnv } from './security-orchestrator.js';
+import { resolveBunExecutable } from './checks/tools.js';
 
 // ─── 常量 ───────────────────────────────────────────────────────────────────
 
@@ -55,17 +57,7 @@ export function resolveHookPath(hookFile: string, cwd?: string) {
   return null;
 }
 
-/** Cursor 钩子进程的 PATH 通常不含 bun，需用当前解释器或 ~/.cursor/bun */
-export function resolveBunExecutable() {
-  if (basename(process.execPath) === 'bun') {
-    return process.execPath;
-  }
-  const cursorBun = join(process.env['HOME'] ?? '', '.cursor', 'bun');
-  if (existsSync(cursorBun)) {
-    return cursorBun;
-  }
-  return 'bun';
-}
+export { resolveBunExecutable } from './checks/tools.js';
 
 // ─── 主流程 ──────────────────────────────────────────────────────────────────
 
@@ -91,7 +83,7 @@ function main() {
   // 使用 bun 执行解析后的钩子脚本，传递 stdin
   const result = spawnSync(resolveBunExecutable(), [resolved.path], {
     stdio: ['inherit', 'inherit', 'inherit'],
-    env: process.env,
+    env: getHookProcessEnv(),
   });
 
   process.exit(result.status ?? 0);

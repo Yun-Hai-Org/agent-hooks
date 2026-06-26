@@ -13,9 +13,10 @@
 import { execSync } from 'child_process';
 import { existsSync, appendFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { LOG_DIR } from './security-orchestrator.js';
+import { LOG_DIR, getHookProcessEnv } from './security-orchestrator.js';
 import { getPlatform } from './hook-adapter.js';
 import { resolveContainerRuntime } from './checks/container-runtime.js';
+import { isToolInstalled, resolveBunExecutable, resolveBunxExecutable } from './checks/tools.js';
 import type { ToolStatus } from './types.js';
 const HOOK_NAME = 'session-start';
 const GLOBAL_TIMEOUT_MS = 2000;
@@ -29,13 +30,24 @@ function log(data: Record<string, unknown>) {
   } catch {}
 }
 
+function resolveVersionCommand(versionCmd: string): string {
+  if (versionCmd.startsWith('bunx ')) {
+    return `"${resolveBunxExecutable()}" ${versionCmd.slice(5)}`;
+  }
+  if (versionCmd.startsWith('bun ')) {
+    return `"${resolveBunExecutable()}" ${versionCmd.slice(4)}`;
+  }
+  return versionCmd;
+}
+
 function getToolVersion(command: string): string {
   try {
     // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process -- command 为内部固定的工具版本探测命令
-    const output = execSync(command, {
+    const output = execSync(resolveVersionCommand(command), {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: PER_TOOL_TIMEOUT_MS,
+      env: getHookProcessEnv(),
     });
     const lines = output.trim().split('\n');
     const versionLine = lines.find((l) => /^\s*version[:\s]/i.test(l));
@@ -61,14 +73,11 @@ function checkTool(name: string, binary: string, versionCmd?: string): ToolStatu
   if (binary === '__container_runtime__') {
     return checkContainerRuntime();
   }
-  try {
-    // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process -- binary 为内部固定的工具名
-    execSync(`which ${binary}`, { stdio: 'pipe', timeout: PER_TOOL_TIMEOUT_MS });
-    const version = versionCmd ? getToolVersion(versionCmd) : '';
-    return { name, available: true, version };
-  } catch {
+  if (!isToolInstalled(binary)) {
     return { name, available: false, version: '' };
   }
+  const version = versionCmd ? getToolVersion(versionCmd) : '';
+  return { name, available: true, version };
 }
 
 /**
@@ -249,6 +258,7 @@ function checkGitHooksPath() {
       cwd,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: getHookProcessEnv(),
     }).trim();
     const home = process.env['HOME'] ?? '';
     const globalHooksPath = join(home, '.git-hooks');

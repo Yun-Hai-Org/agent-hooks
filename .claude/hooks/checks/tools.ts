@@ -1,3 +1,5 @@
+import { existsSync } from 'fs';
+import { basename, join } from 'path';
 import { execCommand, formatResult, DECISION } from '../security-orchestrator.js';
 import type { CheckResult } from '../types.js';
 
@@ -34,9 +36,45 @@ export function getToolInstallHint(tool: string): string {
   return TOOL_INSTALL_HINTS[tool] ?? `请先安装 ${tool}`;
 }
 
+/** Cursor 钩子进程的 PATH 通常不含 bun，需用当前解释器或 ~/.cursor/bun */
+export function resolveBunExecutable(): string {
+  if (basename(process.execPath) === 'bun') {
+    return process.execPath;
+  }
+  const cursorBun = join(process.env['HOME'] ?? '', '.cursor', 'bun');
+  if (existsSync(cursorBun)) {
+    return cursorBun;
+  }
+  return 'bun';
+}
+
+export function resolveBunxExecutable(): string {
+  const cursorBunx = join(process.env['HOME'] ?? '', '.cursor', 'bunx');
+  if (existsSync(cursorBunx)) {
+    return cursorBunx;
+  }
+  return resolveBunExecutable();
+}
+
+function isResolvedExecutableAvailable(resolved: string): boolean {
+  return resolved !== 'bun' && resolved !== 'bunx' && existsSync(resolved);
+}
+
 export function isToolInstalled(tool: string, cwd?: string): boolean {
-  const env = { ...process.env };
-  return execCommand(`command -v ${tool}`, { cwd, env }).success;
+  if (tool === 'bun') {
+    return isResolvedExecutableAvailable(resolveBunExecutable()) || execCommand('command -v bun', { cwd }).success;
+  }
+  if (tool === 'bunx') {
+    return isResolvedExecutableAvailable(resolveBunxExecutable()) || execCommand('command -v bunx', { cwd }).success;
+  }
+  if (tool === 'knip') {
+    return (
+      execCommand('command -v knip', { cwd }).success ||
+      execCommand('command -v bunx', { cwd }).success ||
+      isResolvedExecutableAvailable(resolveBunExecutable())
+    );
+  }
+  return execCommand(`command -v ${tool}`, { cwd }).success;
 }
 
 export function getRuffInvocation(cwd?: string): string {

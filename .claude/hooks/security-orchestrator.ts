@@ -32,6 +32,14 @@ export const HOOKS_DIR = __dirname;
 export const TESTS_DIR = join(__dirname, '__tests__');
 export const LOG_DIR = join(process.env['HOME'] ?? '', '.claude', 'hooks-logs');
 
+/** Cursor/IDE 钩子进程 PATH 通常不含 ~/.cursor 与 Homebrew，与 git hook shell wrapper 对齐 */
+export function getHookProcessEnv(extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const home = process.env['HOME'] ?? '';
+  const prefix = [join(home, '.cursor'), join(home, '.local', 'bin'), '/opt/homebrew/bin', '/usr/local/bin'];
+  const path = [...prefix, process.env['PATH'] ?? ''].filter(Boolean).join(':');
+  return { ...process.env, PATH: path, ...extra };
+}
+
 export function log(hookName: string, data: Record<string, unknown>): void {
   try {
     if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
@@ -46,13 +54,15 @@ export function log(hookName: string, data: Record<string, unknown>): void {
 type ExecCommandOptions = ExecSyncOptions & { timeout?: number };
 
 export function execCommand(command: string, options: ExecCommandOptions = {}): ExecResult {
+  const { env, ...rest } = options;
   try {
     // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process -- 本仓库核心职责即执行 git/lint 命令，command 由内部检查器构造
     const result = execSync(command, {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 30000,
-      ...options,
+      ...rest,
+      env: getHookProcessEnv(env),
     });
     return { success: true, stdout: String(result), stderr: '' };
   } catch (error: unknown) {
@@ -70,8 +80,9 @@ export function execCommand(command: string, options: ExecCommandOptions = {}): 
 type ExecCommandAsyncOptions = ExecOptions & { timeout?: number };
 
 export function execCommandAsync(command: string, options: ExecCommandAsyncOptions = {}): Promise<ExecResult> {
+  const { env, ...rest } = options;
   return new Promise((resolve) => {
-    const timeout = options.timeout ?? 30000;
+    const timeout = rest.timeout ?? 30000;
     let settled = false;
     const finish = (result: ExecResult) => {
       if (settled) return;
@@ -85,7 +96,8 @@ export function execCommandAsync(command: string, options: ExecCommandAsyncOptio
       {
         encoding: 'utf-8',
         timeout,
-        ...options,
+        ...rest,
+        env: getHookProcessEnv(env),
       },
       (error, stdout, stderr) => {
         if (error) {
@@ -211,7 +223,7 @@ export function formatHookOutput(decision: string, reason: string): string {
 export function checkToolAvailable(toolName: string, cwd?: string): ToolAvailability {
   try {
     // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process -- toolName 为内部固定的工具名
-    execSync(`which ${toolName}`, { cwd, stdio: 'pipe' });
+    execSync(`which ${toolName}`, { cwd, stdio: 'pipe', env: getHookProcessEnv() });
     return { available: true };
   } catch {
     return { available: false, message: `${toolName} 未安装或不在 PATH 中` };

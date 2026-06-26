@@ -49,15 +49,10 @@ describe('resolve-hook-path', () => {
     });
 
     it('全局目录存在钩子时回退成功', () => {
-      // 用 security-orchestrator.js 验证全局路径解析逻辑
-      // 如果项目级目录没有此文件但全局有，应返回 global source
-      // 这里测试文件确实在项目级存在，验证 source 为 project
       const result = resolveHookPath('security-orchestrator.ts', tempDir);
-      // 文件在当前项目的 .claude/hooks/ 中存在
-      if (result) {
-        expect(result.source).toBe('project');
-        expect(existsSync(result.path)).toBe(true);
-      }
+      expect(result).not.toBeNull();
+      expect(result!.source).toBe('global');
+      expect(existsSync(result!.path)).toBe(true);
     });
 
     it('未找到钩子时返回 null', () => {

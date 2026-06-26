@@ -14,6 +14,11 @@
 | Stop commit     | auto-commit              | Stop                   | stop                        |
 | push/merge 修复 | gate-retry-stop          | Stop                   | stop                        |
 
+**Hook 进程 PATH**：Cursor/Claude 钩子子进程的 PATH 通常不含 `~/.cursor`（bun 所在目录）。
+`security-orchestrator.getHookProcessEnv()` 集中 augment PATH（与全局 git hook shell wrapper 的
+`export PATH="${HOME}/.cursor:..."` 对齐），供 `session-start` 工具检测、`execCommand` 与
+`resolve-hook-path` spawn 使用。
+
 ## B. 本地质量三门（Git native only）
 
 | 操作           | Native Hook      | profile       | 失败                  |
