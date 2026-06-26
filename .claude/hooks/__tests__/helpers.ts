@@ -44,6 +44,10 @@ export function expectAllow(output) {
 
 const FIXTURE_DIR = join(dirname(new URL(import.meta.url).pathname), 'fixtures');
 
+export function disableGlobalGitHooks(cwd: string) {
+  execSync('git config --local core.hooksPath .git/hooks', { cwd, stdio: 'pipe' });
+}
+
 export function createTempGitRepo(branch = 'feat/test') {
   const repoName = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const repoPath = join(FIXTURE_DIR, repoName);
@@ -51,9 +55,10 @@ export function createTempGitRepo(branch = 'feat/test') {
   execSync('git init', { cwd: repoPath });
   execSync('git config user.email "test@test.com"', { cwd: repoPath });
   execSync('git config user.name "Test"', { cwd: repoPath });
+  disableGlobalGitHooks(repoPath);
   writeFileSync(join(repoPath, 'README.md'), '# Test');
   execSync('git add .', { cwd: repoPath });
-  execSync('git commit -m "init"', { cwd: repoPath });
+  execSync('git commit -m "chore: init"', { cwd: repoPath });
   if (branch !== 'master' && branch !== 'main') {
     execSync(`git checkout -b ${branch}`, { cwd: repoPath });
   }

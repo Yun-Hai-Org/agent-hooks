@@ -3,6 +3,8 @@ import { spawn, execSync } from 'child_process';
 import { join } from 'path';
 import { Readable } from 'stream';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { getHookProcessEnv } from '../security-orchestrator.js';
+import { resolveBunExecutable } from '../checks/tools.js';
 import {
   MAIN_BRANCHES,
   ALLOWED_PATHS_ON_MAIN,
@@ -28,9 +30,10 @@ describe('branch-gate', () => {
   // 辅助函数：运行 hook 并获取输出
   function runHook(input) {
     return new Promise((resolve, reject) => {
-      const child = spawn('bun', [HOOK_PATH], {
+      const child = spawn(resolveBunExecutable(), [HOOK_PATH], {
         cwd: process.cwd(),
         stdio: ['pipe', 'pipe', 'pipe'],
+        env: getHookProcessEnv(),
       });
 
       let stdout = '';
@@ -298,9 +301,10 @@ describe('branch-gate', () => {
 
   describe('错误处理', () => {
     it('应该处理无效 JSON', async () => {
-      const child = spawn('bun', [HOOK_PATH], {
+      const child = spawn(resolveBunExecutable(), [HOOK_PATH], {
         cwd: process.cwd(),
         stdio: ['pipe', 'pipe', 'pipe'],
+        env: getHookProcessEnv(),
       });
 
       let stdout = '';

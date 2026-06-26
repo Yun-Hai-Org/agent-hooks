@@ -18,6 +18,7 @@ describe('auto-stage', () => {
     execSync('git init', { cwd: gitRepoDir, stdio: 'pipe' });
     execSync('git config user.email "test@example.com"', { cwd: gitRepoDir, stdio: 'pipe' });
     execSync('git config user.name "Test User"', { cwd: gitRepoDir, stdio: 'pipe' });
+    execSync('git config --local core.hooksPath .git/hooks', { cwd: gitRepoDir, stdio: 'pipe' });
 
     // Clean environment
     delete process.env.CLAUDE_HOOK_PREVIOUS_DENIED;
@@ -112,7 +113,7 @@ describe('auto-stage', () => {
       // Create and commit
       writeFileSync(testFile, 'initial content');
       execSync('git add .', { cwd: gitRepoDir, stdio: 'pipe' });
-      execSync('git commit -m "initial"', { cwd: gitRepoDir, stdio: 'pipe' });
+      execSync('git commit -m "chore: initial"', { cwd: gitRepoDir, stdio: 'pipe' });
 
       // Modify and stage
       writeFileSync(testFile, 'modified content');

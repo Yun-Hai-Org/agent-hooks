@@ -11,10 +11,14 @@ import {
   DECISION,
 } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
-import { denyIfToolMissing, denyOnToolError, isToolInstalled } from './tools.js';
+import { denyIfToolMissing, denyOnToolError, isToolInstalled, resolveBunExecutable } from './tools.js';
 import { isHooksProject } from './hooks-project.js';
 
 const ADVERSARIAL_DIR = join(TESTS_DIR, 'adversarial');
+
+function bunTestCommand(args: string): string {
+  return `"${resolveBunExecutable()}" test ${args}`;
+}
 
 export async function runRelatedTests(cwd?: string) {
   const stagedFiles = getStagedFiles(cwd);
@@ -84,7 +88,7 @@ export async function runRelatedTests(cwd?: string) {
         return formatResult('related-tests', DECISION.DENY, '关联 Python 测试失败', { output: output.slice(0, 500) });
       }
       const jsResult = await withTimeout(
-        Promise.resolve(execCommand(`bun test ${jsFiles.map((f) => `"${f}"`).join(' ')}`, { cwd, timeout: 30000 })),
+        Promise.resolve(execCommand(bunTestCommand(jsFiles.map((f) => `"${f}"`).join(' ')), { cwd, timeout: 30000 })),
         30000,
         'bun test 超时 (30s)',
       );
@@ -98,7 +102,7 @@ export async function runRelatedTests(cwd?: string) {
 
     const cmd = isPython
       ? `uv run python -m pytest ${testFileList.map((f) => `"${f}"`).join(' ')} -x -q`
-      : `bun test ${testFileList.map((f) => `"${f}"`).join(' ')}`;
+      : bunTestCommand(testFileList.map((f) => `"${f}"`).join(' '));
 
     const result = await withTimeout(
       Promise.resolve(execCommand(cmd, { cwd, timeout: 30000 })),
@@ -177,7 +181,7 @@ export async function runFullProjectTests(cwd?: string) {
         } else {
           const files = projectTestFiles.map((f) => `./${f}`).join(' ');
           const jsResult = await withTimeout(
-            execCommandAsync(`bun test ${files} --coverage`, { cwd, timeout: 120000 }),
+            execCommandAsync(bunTestCommand(`${files} --coverage`), { cwd, timeout: 120000 }),
             120000,
             'bun test 超时 (120s)',
           );
@@ -245,7 +249,7 @@ export async function runHookUnitTests(cwd?: string, options: { coverageThreshol
     let combinedOutput = '';
     for (let i = 0; i < files.length; i += HOOK_UNIT_TEST_BATCH_SIZE) {
       const batch = files.slice(i, i + HOOK_UNIT_TEST_BATCH_SIZE);
-      const cmd = `bun test ${batch.map((f) => `"./${f}"`).join(' ')} --dots`;
+      const cmd = bunTestCommand(`${batch.map((f) => `"./${f}"`).join(' ')} --dots`);
       const result = await withTimeout(
         execCommandAsync(cmd, { cwd, timeout: 300000 }),
         300000,
@@ -261,7 +265,7 @@ export async function runHookUnitTests(cwd?: string, options: { coverageThreshol
     if (options.coverageThreshold !== undefined) {
       const allFiles = files.map((f) => `"./${f}"`).join(' ');
       const coverageResult = await withTimeout(
-        execCommandAsync(`bun test ${allFiles} --coverage --dots`, { cwd, timeout: 300000 }),
+        execCommandAsync(bunTestCommand(`${allFiles} --coverage --dots`), { cwd, timeout: 300000 }),
         300000,
         'Hook 覆盖率测试超时 (300s)',
       );
@@ -319,7 +323,7 @@ export async function runHookAdversarialTests(cwd?: string) {
     return formatResult('hook-adversarial', DECISION.DENY, '无对抗性测试文件');
   }
   try {
-    const cmd = `bun test ${files.map((f) => `"./${f}"`).join(' ')}`;
+    const cmd = bunTestCommand(files.map((f) => `"./${f}"`).join(' '));
     const result = await withTimeout(execCommandAsync(cmd, { cwd, timeout: 60000 }), 60000, '对抗性测试超时 (60s)');
     if (!result.success) {
       return formatResult('hook-adversarial', DECISION.DENY, 'Hook 对抗性测试失败', {

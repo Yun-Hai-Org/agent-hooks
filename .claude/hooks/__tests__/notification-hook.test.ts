@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, mock } from 'bun:test';
 import { spawn } from 'child_process';
 import { join } from 'path';
+import { getHookProcessEnv } from '../security-orchestrator.js';
+import { resolveBunExecutable } from '../checks/tools.js';
 import {
   isCoolingDown,
   recordSent,
@@ -24,9 +26,9 @@ describe('notification-hook', () => {
   // 辅助函数：运行 hook 并获取输出
   function runHook(input = '{}', envOverrides = {}) {
     return new Promise((resolve, reject) => {
-      const child = spawn('bun', [HOOK_PATH], {
+      const child = spawn(resolveBunExecutable(), [HOOK_PATH], {
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, ...envOverrides },
+        env: getHookProcessEnv(envOverrides),
       });
 
       let stdout = '';

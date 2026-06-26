@@ -9,8 +9,9 @@ import {
   checkCommitMessage,
   checkSensitiveStagedFiles as checkSensitiveFiles,
 } from '../checks/git-policy.js';
-import { getCurrentBranch } from '../security-orchestrator.js';
+import { getCurrentBranch, getHookProcessEnv } from '../security-orchestrator.js';
 import { DECISION } from '../security-orchestrator.js';
+import { resolveBunExecutable } from '../checks/tools.js';
 import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
 
 import { PROJECT_ROOT } from './helpers.js';
@@ -40,8 +41,9 @@ describe('commit-gate', () => {
   // 辅助函数：运行 hook 并获取输出
   function runHook(input) {
     return new Promise((resolve, reject) => {
-      const child = spawn('bun', [HOOK_PATH], {
+      const child = spawn(resolveBunExecutable(), [HOOK_PATH], {
         stdio: ['pipe', 'pipe', 'pipe'],
+        env: getHookProcessEnv(),
       });
 
       let stdout = '';
@@ -340,8 +342,9 @@ describe('commit-gate', () => {
     });
 
     it('应该处理无效 JSON', async () => {
-      const child = spawn('bun', [HOOK_PATH], {
+      const child = spawn(resolveBunExecutable(), [HOOK_PATH], {
         stdio: ['pipe', 'pipe', 'pipe'],
+        env: getHookProcessEnv(),
       });
 
       let stdout = '';
