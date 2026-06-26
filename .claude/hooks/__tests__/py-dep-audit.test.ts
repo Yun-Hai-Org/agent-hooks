@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test';
 import { runPyDepAudit, osvHasVulnerabilities, pipAuditHasVulnerabilities } from '../checks/py-dep-audit.js';
 import { DECISION } from '../security-orchestrator.js';
+import { PROJECT_ROOT } from './helpers.js';
 
 describe('py-dep-audit', () => {
   it('无 pyproject.toml 时 SKIP', async () => {
@@ -9,7 +10,7 @@ describe('py-dep-audit', () => {
   });
 
   it('本项目无 Python 运行时依赖时 SKIP', async () => {
-    const result = await runPyDepAudit(process.cwd());
+    const result = await runPyDepAudit(PROJECT_ROOT);
     expect(result.checkId).toBe('py-dep-audit');
     expect(result.decision).toBe(DECISION.SKIP);
     expect(result.message).toContain('无 Python 运行时依赖');
