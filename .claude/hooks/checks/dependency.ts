@@ -1,6 +1,6 @@
 import { execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
-import { denyIfToolMissing, denyOnToolError } from './tools.js';
+import { denyIfToolMissing, denyOnToolError, getBunAuditInvocation } from './tools.js';
 import type { CheckResult } from '../types.js';
 
 const DEP_AUDIT_TIMEOUT_MS = 30000;
@@ -43,9 +43,19 @@ export async function runDepAudit(cwd?: string, options: { staged?: boolean } = 
   const missing = denyIfToolMissing('bun', 'dep-audit', cwd);
   if (missing) return missing;
 
+  const auditCmd = getBunAuditInvocation(cwd);
+  if (!auditCmd) {
+    return formatResult(
+      'dep-audit',
+      DECISION.DENY,
+      'bun >= 1.2.15 才支持 audit。请运行: ./scripts/install-vendored-bun.sh',
+      { installHint: './scripts/install-vendored-bun.sh' },
+    );
+  }
+
   try {
     const result = await withTimeout(
-      execCommandAsync('bun audit --json', { cwd, timeout: DEP_AUDIT_TIMEOUT_MS }),
+      execCommandAsync(auditCmd, { cwd, timeout: DEP_AUDIT_TIMEOUT_MS }),
       DEP_AUDIT_TIMEOUT_MS,
       `bun audit 超时 (${String(DEP_AUDIT_TIMEOUT_MS / 1000)}s)`,
     );

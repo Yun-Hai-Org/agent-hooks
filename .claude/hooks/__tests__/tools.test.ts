@@ -7,6 +7,10 @@ import {
   getToolInstallHint,
   isToolInstalled,
   resolveBunExecutable,
+  parseBunVersion,
+  bunVersionAtLeast,
+  MIN_BUN_AUDIT_VERSION,
+  listBunExecutableCandidates,
 } from '../checks/tools.js';
 
 describe('checks/tools', () => {
@@ -93,5 +97,20 @@ describe('checks/tools', () => {
     const resolved = resolveBunExecutable();
     expect(resolved).not.toBe('bun');
     expect(resolved.includes('bun-darwin-x64') || resolved.includes('.cursor')).toBe(true);
+  });
+
+  it('parseBunVersion 应解析 semver', () => {
+    expect(parseBunVersion('1.2.15')).toEqual({ major: 1, minor: 2, patch: 15 });
+    expect(parseBunVersion('not-a-version')).toBeNull();
+  });
+
+  it('bunVersionAtLeast 应正确比较', () => {
+    expect(bunVersionAtLeast({ major: 1, minor: 2, patch: 15 }, MIN_BUN_AUDIT_VERSION)).toBe(true);
+    expect(bunVersionAtLeast({ major: 1, minor: 2, patch: 14 }, MIN_BUN_AUDIT_VERSION)).toBe(false);
+  });
+
+  it('listBunExecutableCandidates 应返回非空列表', () => {
+    const candidates = listBunExecutableCandidates();
+    expect(candidates.length).toBeGreaterThan(0);
   });
 });
