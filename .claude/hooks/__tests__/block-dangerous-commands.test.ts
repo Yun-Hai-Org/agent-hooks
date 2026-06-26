@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'bun:test';
-import { checkCommand, PATTERNS, ALLOW_PATTERNS } from '../block-dangerous-commands.js';
+import { describe, it, expect, afterEach } from 'bun:test';
+import { execSync } from 'child_process';
+import { checkCommand, PATTERNS, ALLOW_PATTERNS, checkMergeNoFfRequired } from '../block-dangerous-commands.js';
+import { createTempGitRepo, cleanupTempGitRepo } from './helpers.js';
 
 describe('block-dangerous-commands', () => {
   // CRITICAL level
@@ -226,6 +228,78 @@ describe('block-dangerous-commands', () => {
   it('异常输入应该返回非 blocked', () => {
     const r = checkCommand('');
     expect(r.blocked).toBe(false);
+  });
+});
+
+describe('block-dangerous-commands - main/master merge --no-ff', () => {
+  let mainRepo: string;
+  let featRepo: string;
+
+  afterEach(() => {
+    if (mainRepo) cleanupTempGitRepo(mainRepo);
+    if (featRepo) cleanupTempGitRepo(featRepo);
+    mainRepo = '';
+    featRepo = '';
+  });
+
+  it('main 上 git merge feat/x 应被阻止', () => {
+    mainRepo = createTempGitRepo('main');
+    execSync('git branch -M main', { cwd: mainRepo });
+    execSync('git checkout -b feat/x', { cwd: mainRepo });
+    execSync('git commit --allow-empty -m "chore: feat commit"', { cwd: mainRepo });
+    execSync('git checkout main', { cwd: mainRepo });
+
+    const r = checkMergeNoFfRequired('git merge feat/x', mainRepo);
+    expect(r.blocked).toBe(true);
+    expect(r.id).toBe('merge-ff-bypass');
+  });
+
+  it('main 上 git merge --no-ff feat/x 应允许', () => {
+    mainRepo = createTempGitRepo('main');
+    execSync('git branch -M main', { cwd: mainRepo });
+    execSync('git checkout -b feat/x', { cwd: mainRepo });
+    execSync('git commit --allow-empty -m "chore: feat commit"', { cwd: mainRepo });
+    execSync('git checkout main', { cwd: mainRepo });
+
+    const r = checkMergeNoFfRequired('git merge --no-ff feat/x', mainRepo);
+    expect(r.blocked).toBe(false);
+  });
+
+  it('main 上 git merge --squash feat/x 应被阻止', () => {
+    mainRepo = createTempGitRepo('main');
+    execSync('git branch -M main', { cwd: mainRepo });
+
+    const r = checkMergeNoFfRequired('git merge --squash feat/x', mainRepo);
+    expect(r.blocked).toBe(true);
+    expect(r.id).toBe('merge-squash-bypass');
+  });
+
+  it('feature 分支上 git merge --squash other 应允许', () => {
+    featRepo = createTempGitRepo('feat/other');
+
+    const r = checkMergeNoFfRequired('git merge --squash other', featRepo);
+    expect(r.blocked).toBe(false);
+  });
+
+  it('feature 分支上 git merge other 应允许', () => {
+    featRepo = createTempGitRepo('feat/other');
+
+    const r = checkMergeNoFfRequired('git merge other', featRepo);
+    expect(r.blocked).toBe(false);
+  });
+
+  it('git merge --abort 应允许', () => {
+    mainRepo = createTempGitRepo('main');
+    execSync('git branch -M main', { cwd: mainRepo });
+
+    const r = checkMergeNoFfRequired('git merge --abort', mainRepo);
+    expect(r.blocked).toBe(false);
+  });
+
+  it('git checkout main && git merge feat/x 应被阻止', () => {
+    const r = checkMergeNoFfRequired('git checkout main && git merge feat/x', process.cwd());
+    expect(r.blocked).toBe(true);
+    expect(r.id).toBe('merge-ff-bypass');
   });
 });
 

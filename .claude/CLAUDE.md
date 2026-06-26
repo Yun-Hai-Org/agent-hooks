@@ -33,7 +33,9 @@
 1. `git checkout -b feat/your-feature` 创建 feature 分支
 2. 在 feature 分支上开发和修改文件
 3. `git commit -m "feat: 描述"` 提交（提交门自动检查）
-4. `git checkout main && git merge feat/your-feature` 合并（合并门自动检查）
+4. `git checkout main && git merge --no-ff feat/your-feature` 合并（合并门自动检查）
+
+**终端 alias（可选）**：`git config --global alias.merge-safe '!f(){ git merge --no-ff "$@"; }; f'`
 
 ## 工具使用对照表
 

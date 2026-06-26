@@ -13,9 +13,10 @@
 
 import { appendFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
-import { LOG_DIR } from './security-orchestrator.js';
+import { LOG_DIR, getCurrentBranch } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
 import { notifySecurityEventAsync } from './notify-security-event.js';
+import { isGitMergeCommand, isProtectedBranch } from './checks/git-policy.js';
 
 const SAFETY_LEVEL = 'strict';
 
@@ -422,6 +423,56 @@ function checkCommand(cmd: string, safetyLevel: string = SAFETY_LEVEL) {
   return { blocked: false, pattern: null, allowed: false };
 }
 
+export interface MergeNoFfCheckResult {
+  blocked: boolean;
+  id?: 'merge-ff-bypass' | 'merge-squash-bypass';
+  reason?: string;
+}
+
+const MERGE_IN_PROGRESS = /\bgit\s+merge\b[^\n]*--(?:abort|continue|quit)(?:\s|$)/;
+
+function isCompositeMergeOntoProtectedBranch(cmd: string): boolean {
+  return /\bgit\s+(?:checkout|switch)\b[^\n]*\b(main|master)\b[\s\S]*\bgit\s+merge\b/.test(cmd);
+}
+
+function isMergeOntoProtectedBranch(cmd: string, cwd?: string): boolean {
+  if (isCompositeMergeOntoProtectedBranch(cmd)) return true;
+  const branch = getCurrentBranch(cwd ?? process.cwd());
+  return branch !== null && isProtectedBranch(branch);
+}
+
+export function checkMergeNoFfRequired(cmd: string, cwd?: string): MergeNoFfCheckResult {
+  if (!cmd || !isGitMergeCommand(cmd)) {
+    return { blocked: false };
+  }
+
+  if (MERGE_IN_PROGRESS.test(cmd)) {
+    return { blocked: false };
+  }
+
+  if (!isMergeOntoProtectedBranch(cmd, cwd)) {
+    return { blocked: false };
+  }
+
+  if (cmd.includes('--squash')) {
+    return {
+      blocked: true,
+      id: 'merge-squash-bypass',
+      reason: 'git merge --squash 不触发 pre-merge-commit。在 main/master 请使用：git merge --no-ff <branch>',
+    };
+  }
+
+  if (cmd.includes('--no-ff')) {
+    return { blocked: false };
+  }
+
+  return {
+    blocked: true,
+    id: 'merge-ff-bypass',
+    reason: 'Fast-forward merge 会绕过 pre-merge-commit 全量门。在 main/master 请使用：git merge --no-ff <branch>',
+  };
+}
+
 /**
  *
  */
@@ -461,6 +512,27 @@ async function main() {
           session_id,
         });
         console.log(formatDenyOutput('deny', reason));
+        return;
+      }
+
+      const mergeCheck = checkMergeNoFfRequired(cmd, cwd);
+      if (mergeCheck.blocked) {
+        const reason = `⚠️ [${mergeCheck.id ?? 'merge-protected'}] ${mergeCheck.reason ?? 'main/master 上须使用 git merge --no-ff'}`;
+        log({
+          level: 'BLOCKED',
+          id: mergeCheck.id,
+          priority: 'strict',
+          cmd: cmd.slice(0, 200),
+          session_id,
+          cwd,
+        });
+        notifySecurityEventAsync({
+          hook: 'block-dangerous-commands',
+          severity: 'strict',
+          reason,
+          session_id,
+        });
+        process.stdout.write(`${formatDenyOutput('deny', reason)}\n`);
         return;
       }
 
