@@ -61,7 +61,7 @@ export async function runDepAudit(cwd?: string, options: { staged?: boolean } = 
     );
     const severities = parseBunAuditSeverities(result.stdout);
     if (severities === null) {
-      return formatResult('dep-audit', DECISION.WARN, '依赖审计无法执行（输出不可解析，可能离线或 registry 不可达）', {
+      return formatResult('dep-audit', DECISION.DENY, '依赖审计输出不可解析，按失败处理（fail-closed）', {
         output: (result.stderr || result.stdout).slice(0, 300),
       });
     }
