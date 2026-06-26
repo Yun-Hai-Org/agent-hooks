@@ -82,6 +82,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts format-on-write.ts",
+            "statusMessage": "写入后自动格式化..."
+          },
+          {
+            "type": "command",
             "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts auto-stage.ts",
             "statusMessage": "自动暂存修改文件..."
           }

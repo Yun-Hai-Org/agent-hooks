@@ -31,6 +31,9 @@
     ],
     "afterFileEdit": [
       {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts format-on-write.ts"
+      },
+      {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts auto-stage.ts"
       }
     ],

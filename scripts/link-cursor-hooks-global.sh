@@ -4,8 +4,9 @@
 # 用法: ./scripts/link-cursor-hooks-global.sh [HOOKS_REPO]
 # 默认 HOOKS_REPO 为脚本所在仓库根目录。
 #
-# 双触发说明: 在本 hooks 仓库内打开 Cursor 时，项目级与用户级可能各加载一次
-# hooks.json。开发调试时可运行 ./scripts/unlink-cursor-hooks-global.sh 临时移除全局软链。
+# 双触发说明: 在本 hooks 仓库内打开 Cursor 时，若同时存在项目级 hooks.json
+# 与全局 ~/.cursor/hooks.json，会各加载一次。策略 B：仅保留 .cursor/hooks.json.example
+# 作源，全局软链指向它；本仓库不设 .cursor/hooks.json。见 apply-hooks-repo-strategy-b.sh。
 
 set -euo pipefail
 
@@ -16,8 +17,8 @@ if [[ ! -d "$HOOKS_REPO/.claude/hooks" ]]; then
 	echo "error: missing $HOOKS_REPO/.claude/hooks" >&2
 	exit 1
 fi
-if [[ ! -f "$HOOKS_REPO/.cursor/hooks.json" ]]; then
-	echo "error: missing $HOOKS_REPO/.cursor/hooks.json" >&2
+if [[ ! -f "$HOOKS_REPO/.cursor/hooks.json.example" ]]; then
+	echo "error: missing $HOOKS_REPO/.cursor/hooks.json.example" >&2
 	exit 1
 fi
 
@@ -35,12 +36,12 @@ fi
 rm -f "$HOME/.cursor/hooks.json"
 
 ln -sf "$HOOKS_REPO/.claude/hooks" "$HOME/.claude/hooks"
-ln -sf "$HOOKS_REPO/.cursor/hooks.json" "$HOME/.cursor/hooks.json"
+ln -sf "$HOOKS_REPO/.cursor/hooks.json.example" "$HOME/.cursor/hooks.json"
 ln -sf "$HOOKS_REPO/.tools/bun-darwin-x64/bun" "$HOME/.cursor/bun"
 ln -sf "$HOME/.cursor/bun" "$HOME/.cursor/bunx"
 
 echo "linked ~/.claude/hooks -> $HOOKS_REPO/.claude/hooks"
-echo "linked ~/.cursor/hooks.json -> $HOOKS_REPO/.cursor/hooks.json"
+echo "linked ~/.cursor/hooks.json -> $HOOKS_REPO/.cursor/hooks.json.example"
 echo "linked ~/.cursor/bun -> $HOOKS_REPO/.tools/bun-darwin-x64/bun"
 echo "linked ~/.cursor/bunx -> ~/.cursor/bun"
 ls -la "$HOME/.claude/hooks" "$HOME/.cursor/hooks.json" "$HOME/.cursor/bun"

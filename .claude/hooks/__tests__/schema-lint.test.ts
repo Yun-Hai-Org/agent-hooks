@@ -129,6 +129,23 @@ describe('schema-lint', () => {
       const result = await runSchemaLintStaged('/tmp');
       expect(result.decision).toBe(DECISION.SKIP);
     });
+
+    it('暂存删除的文件不应触发 jq 失败', async () => {
+      const { createTempGitRepo, cleanupTempGitRepo, writeFile, disableGlobalGitHooks } = await import('./helpers.js');
+      const { execSync } = await import('child_process');
+      const repoDir = createTempGitRepo('feat/schema-delete');
+      try {
+        disableGlobalGitHooks(repoDir);
+        writeFile(repoDir, 'to-delete.json', '{"ok": true}\n');
+        execSync('git add to-delete.json', { cwd: repoDir, stdio: 'pipe' });
+        execSync('git commit -m "chore: add json"', { cwd: repoDir, stdio: 'pipe' });
+        execSync('git rm to-delete.json', { cwd: repoDir, stdio: 'pipe' });
+        const result = await runSchemaLintStaged(repoDir);
+        expect(result.decision).not.toBe(DECISION.DENY);
+      } finally {
+        cleanupTempGitRepo(repoDir);
+      }
+    });
   });
 
   describe('runSchemaLintFull', () => {

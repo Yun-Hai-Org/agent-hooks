@@ -1,5 +1,6 @@
 import { execCommand, formatResult, DECISION } from '../security-orchestrator.js';
-import { readFileSync, realpathSync } from 'fs';
+import { existsSync, readFileSync, realpathSync } from 'fs';
+import { join } from 'path';
 import type { CheckResult } from '../types.js';
 
 const COMMIT_TYPES = [
@@ -78,6 +79,12 @@ export function getStagedFiles(cwd?: string): string[] {
   const result = execCommand('git diff --cached --name-only', { cwd });
   if (!result.success) return [];
   return result.stdout.trim().split('\n').filter(Boolean);
+}
+
+export function filterExistingStagedFiles(files: string[], cwd?: string): string[] {
+  const root = cwd ?? process.cwd();
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- root 受信，f 为 git 暂存区文件路径
+  return files.filter((f) => existsSync(join(root, f)));
 }
 
 export function hasUncommittedChanges(cwd?: string): boolean {

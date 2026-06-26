@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { basename, dirname, extname, join } from 'path';
 import { execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
-import { getStagedFiles } from './git-policy.js';
+import { getStagedFiles, filterExistingStagedFiles } from './git-policy.js';
 import { classifyFiles, listTrackedFiles } from './file-patterns.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
 import type { CheckResult } from '../types.js';
@@ -175,7 +175,7 @@ async function runSchemaChecks(jsonFiles: string[], yamlFiles: string[], idPrefi
 }
 
 export async function runSchemaLintStaged(cwd?: string) {
-  const staged = getStagedFiles(cwd);
+  const staged = filterExistingStagedFiles(getStagedFiles(cwd), cwd);
   const { json, yaml } = classifyFiles(staged, cwd);
   return runSchemaChecks(json, yaml, 'schema-staged', cwd);
 }

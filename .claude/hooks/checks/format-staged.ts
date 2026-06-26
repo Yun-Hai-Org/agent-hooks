@@ -1,15 +1,7 @@
-import { existsSync } from 'fs';
-import { join } from 'path';
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
-import { getStagedFiles } from './git-policy.js';
+import { getStagedFiles, filterExistingStagedFiles } from './git-policy.js';
 import { denyIfToolMissing, denyOnToolError, denyIfRuffMissing, getRuffInvocation } from './tools.js';
 import type { CheckResult } from '../types.js';
-
-function filterExistingStagedFiles(files: string[], cwd?: string): string[] {
-  const root = cwd ?? process.cwd();
-  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- root 受信，f 为 git 暂存区文件路径
-  return files.filter((f) => existsSync(join(root, f)));
-}
 
 export async function runFormatStaged(cwd?: string) {
   const stagedFiles = filterExistingStagedFiles(getStagedFiles(cwd), cwd);

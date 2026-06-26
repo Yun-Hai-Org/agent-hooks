@@ -2,18 +2,19 @@
 
 ## A. IDE 实时安全（Cursor + Claude 双端 parity）
 
-| 检查项          | Hook                     | Claude 触发            | Cursor 触发                 |
-| --------------- | ------------------------ | ---------------------- | --------------------------- |
-| 危险命令        | block-dangerous-commands | PreToolUse Bash        | beforeShellExecution        |
-| 敏感内容        | protect-secrets          | Read/Edit/Write/Bash   | beforeReadFile + preToolUse |
-| Prompt 密钥     | user-prompt-filter       | UserPromptSubmit       | beforeSubmitPrompt          |
-| main 写入禁止   | branch-gate              | Write/Edit/Bash        | preToolUse Shell/Write      |
-| 未合并分支删除  | branch-delete-gate       | PreToolUse Bash        | beforeShellExecution        |
-| 工具健康检查    | session-start            | SessionStart           | sessionStart                |
-| 安全 Webhook    | notification / notify    | Notification + BLOCKED | BLOCKED 直连                |
-| 自动暂存        | auto-stage               | PostToolUse Edit/Write | afterFileEdit               |
-| Stop commit     | auto-commit              | Stop                   | stop                        |
-| push/merge 修复 | gate-retry-stop          | Stop                   | stop                        |
+| 检查项          | Hook                     | Claude 触发            | Cursor 触发                      |
+| --------------- | ------------------------ | ---------------------- | -------------------------------- |
+| 危险命令        | block-dangerous-commands | PreToolUse Bash        | beforeShellExecution             |
+| 敏感内容        | protect-secrets          | Read/Edit/Write/Bash   | beforeReadFile + preToolUse      |
+| Prompt 密钥     | user-prompt-filter       | UserPromptSubmit       | beforeSubmitPrompt               |
+| main 写入禁止   | branch-gate              | Write/Edit/Bash        | preToolUse Shell/Write           |
+| 未合并分支删除  | branch-delete-gate       | PreToolUse Bash        | beforeShellExecution             |
+| 工具健康检查    | session-start            | SessionStart           | sessionStart                     |
+| 写入后格式化    | format-on-write          | PostToolUse Edit/Write | afterFileEdit（先于 auto-stage） |
+| 安全 Webhook    | notification / notify    | Notification + BLOCKED | BLOCKED 直连                     |
+| 自动暂存        | auto-stage               | PostToolUse Edit/Write | afterFileEdit                    |
+| Stop commit     | auto-commit              | Stop                   | stop                             |
+| push/merge 修复 | gate-retry-stop          | Stop                   | stop                             |
 
 **Hook 进程 PATH**：Cursor/Claude 钩子子进程的 PATH 通常不含 `~/.cursor`（bun 所在目录）。
 `security-orchestrator.getHookProcessEnv()` 集中 augment PATH（与全局 git hook shell wrapper 的
@@ -65,6 +66,21 @@
 
 非 hooks 项目（无 `.claude/hooks/quality-gate.ts`）自动 **SKIP** hook-unit-tests / knip 等 hooks 专用检查。
 
+### hooks 仓库策略 B（避免 Cursor 双触发）
+
+在本 hooks 仓库内开发时，**不要**保留项目级 `.cursor/hooks.json`。配置源为 `.cursor/hooks.json.example`；全局安装脚本将其软链到 `~/.cursor/hooks.json`：
+
+```bash
+./scripts/link-cursor-hooks-global.sh
+./scripts/install-git-hooks-global.sh
+./scripts/apply-hooks-repo-strategy-b.sh   # 取消本仓库 local core.hooksPath
+```
+
+完成后重启 Cursor。业务项目（如 yingmi）通常仅依赖全局 hooks，无需项目级 `.cursor/hooks.json`。
+
+**写入后自动 fix**：`afterFileEdit` 顺序为 `format-on-write` → `auto-stage`
+（prettier / markdownlint / ruff format / shfmt / taplo）。pre-commit 仍只做 `--check`，不在 commit 内静默 `--write`。
+
 共享实现：`checks/*.ts` + `quality-gate.ts` + `~/.claude/hooks/native/*.ts`
 
 **commit profile 检查**：分支/msg/敏感文件/暂存 lint/format/测试/安全扫描等。
@@ -89,3 +105,12 @@
 ## E. P3
 
 见 [hooks-security-roadmap.md](./hooks-security-roadmap.md) 与 `.github/workflows/dast.yml`（stub）。
+
+## F. 可选后续（未纳入当前实现）
+
+| 项                         | 说明                                                             |
+| -------------------------- | ---------------------------------------------------------------- |
+| squash 调试 commit         | yingmi 分支未 push 时可 `git rebase -i` 合并 `test:` 系列 commit |
+| fix-staged 兜底            | 终端手改路径时的 `--write` 脚本（非 Cursor 写入路径）            |
+| eslint / ruff check --fix  | format-on-write 二期                                             |
+| baseline `.prettierignore` | 若要把完整 sequence baseline 重新纳入 git                        |
