@@ -68,7 +68,7 @@ describe('adversarial: git-policy uncommitted worktree', () => {
     execSync('git config user.name "Test"', { cwd: repoPath, stdio: 'pipe' });
     writeFileSync(join(repoPath, 'README.md'), '# test\n');
     execSync('git add README.md', { cwd: repoPath, stdio: 'pipe' });
-    execSync('git commit -m "chore: init"', { cwd: repoPath, stdio: 'pipe' });
+    execSync('git -c core.hooksPath=.git/hooks commit -m "chore: init"', { cwd: repoPath, stdio: 'pipe' });
   });
 
   afterEach(() => {

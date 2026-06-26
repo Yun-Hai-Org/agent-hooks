@@ -10,7 +10,7 @@ import {
   computeTiming,
   formatTimingSummary,
 } from '../quality-gate.js';
-import { DECISION, formatResult } from '../security-orchestrator.js';
+import { DECISION, formatResult, decide, isGatePassed } from '../security-orchestrator.js';
 import { checkCommitMessage } from '../checks/git-policy.js';
 import type { CheckResult } from '../types.js';
 
@@ -118,6 +118,18 @@ describe('quality-gate', () => {
 
     it('formatTimingSummary 无样本时应有提示', () => {
       expect(formatTimingSummary(computeTiming([]))).toContain('无可统计');
+    });
+  });
+
+  describe('isGatePassed', () => {
+    it('WARN 决策不应通过质量门', () => {
+      const results = [formatResult('a', DECISION.ALLOW, 'ok'), formatResult('b', DECISION.WARN, 'warn')];
+      expect(isGatePassed(decide(results).decision)).toBe(false);
+    });
+
+    it('全部 allow/skip 应通过质量门', () => {
+      const results = [formatResult('a', DECISION.ALLOW, 'ok'), formatResult('b', DECISION.SKIP, 'skip')];
+      expect(isGatePassed(decide(results).decision)).toBe(true);
     });
   });
 

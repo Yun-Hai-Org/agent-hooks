@@ -38,6 +38,70 @@ export function getToolInstallHint(tool: string): string {
 
 const VENDORED_BUN = join(HOOKS_DIR, '..', '..', '.tools', 'bun-darwin-x64', 'bun');
 
+/** bun audit 自 1.2.15 起可用；更早版本会把 audit 当成 npm script 名 */
+export const MIN_BUN_AUDIT_VERSION = { major: 1, minor: 2, patch: 15 } as const;
+
+export function parseBunVersion(raw: string): { major: number; minor: number; patch: number } | null {
+  const re = /(\d+)\.(\d+)\.(\d+)/;
+  const match = re.exec(raw.trim());
+  if (!match) return null;
+  return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) };
+}
+
+export function bunVersionAtLeast(
+  version: { major: number; minor: number; patch: number },
+  min: { major: number; minor: number; patch: number },
+): boolean {
+  if (version.major !== min.major) return version.major > min.major;
+  if (version.minor !== min.minor) return version.minor > min.minor;
+  return version.patch >= min.patch;
+}
+
+function isResolvedExecutableAvailable(resolved: string): boolean {
+  return resolved !== 'bun' && resolved !== 'bunx' && existsSync(resolved);
+}
+
+/** 按优先级列出本机可用的 bun 二进制路径（去重；~/.bun/bin 优先于 ~/.cursor/bun） */
+export function listBunExecutableCandidates(): string[] {
+  const home = process.env['HOME'] ?? '';
+  const raw = [
+    basename(process.execPath) === 'bun' ? process.execPath : null,
+    join(home, '.bun', 'bin', 'bun'),
+    join(home, '.cursor', 'bun'),
+    VENDORED_BUN,
+  ].filter((c): c is string => c !== null);
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+  for (const candidate of raw) {
+    if (seen.has(candidate) || !isResolvedExecutableAvailable(candidate)) continue;
+    seen.add(candidate);
+    candidates.push(candidate);
+  }
+  return candidates;
+}
+
+export function readBunVersion(bunPath: string, cwd?: string): { major: number; minor: number; patch: number } | null {
+  const result = execCommand(`"${bunPath}" --version`, { cwd, timeout: 5000 });
+  if (!result.success) return null;
+  return parseBunVersion(result.stdout || result.stderr);
+}
+
+/** 返回支持 `bun audit` 的 bun 路径 */
+export function resolveBunExecutableForAudit(cwd?: string): string | null {
+  for (const candidate of listBunExecutableCandidates()) {
+    const version = readBunVersion(candidate, cwd);
+    if (version && bunVersionAtLeast(version, MIN_BUN_AUDIT_VERSION)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+export function getBunAuditInvocation(cwd?: string): string | null {
+  const bunPath = resolveBunExecutableForAudit(cwd);
+  return bunPath ? `"${bunPath}" audit --json` : null;
+}
+
 /** Cursor 钩子进程的 PATH 通常不含 bun，需用当前解释器或 ~/.cursor/bun */
 export function resolveBunExecutable(): string {
   if (basename(process.execPath) === 'bun') {
@@ -65,10 +129,6 @@ export function resolveBunxExecutable(): string {
 export function getBunxInvocation(_cwd?: string): string {
   const bunx = resolveBunxExecutable();
   return bunx.includes(' ') ? bunx : `"${bunx}"`;
-}
-
-function isResolvedExecutableAvailable(resolved: string): boolean {
-  return resolved !== 'bun' && resolved !== 'bunx' && existsSync(resolved);
 }
 
 export function isToolInstalled(tool: string, cwd?: string): boolean {

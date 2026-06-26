@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'bun:test';
 import { parseBunAuditSeverities, evaluateBunAudit, runDepAudit } from '../checks/dependency.js';
-import { DECISION } from '../security-orchestrator.js';
+import { DECISION, formatResult } from '../security-orchestrator.js';
 import { createTempGitRepo, cleanupTempGitRepo } from './helpers.js';
 
 describe('parseBunAuditSeverities', () => {
@@ -41,5 +41,13 @@ describe('runDepAudit staged 触发', () => {
     repoDir = createTempGitRepo('feature');
     const result = await runDepAudit(repoDir, { staged: true });
     expect(result.decision).toBe(DECISION.SKIP);
+  });
+});
+
+describe('runDepAudit fail-closed', () => {
+  it('不可解析 audit JSON 应对应 DENY 决策路径', () => {
+    expect(parseBunAuditSeverities('audit request failed (status 404)')).toBeNull();
+    const simulated = formatResult('dep-audit', DECISION.DENY, '依赖审计输出不可解析，按失败处理（fail-closed）');
+    expect(simulated.decision).toBe(DECISION.DENY);
   });
 });
