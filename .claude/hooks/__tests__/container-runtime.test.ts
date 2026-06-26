@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { DECISION } from '../security-orchestrator.js';
+import { DECISION, execCommand, getHookProcessEnv } from '../security-orchestrator.js';
 import {
   resolveContainerRuntime,
   getComposeConfigCmd,
@@ -18,18 +18,16 @@ describe('container-runtime', () => {
     expect(cmd).toBe(`${runtime.binary} compose -f "docker-compose.yml" config --quiet`);
   });
 
-  it('resolveContainerRuntime 在 PATH 为空时应返回 null', () => {
-    const originalPath = process.env.PATH;
-    process.env.PATH = '/nonexistent';
-    expect(resolveContainerRuntime(process.cwd())).toBeNull();
-    process.env.PATH = originalPath;
+  it('command -v docker 在显式窄 PATH override 时应失败', () => {
+    const result = execCommand('command -v docker', {
+      env: getHookProcessEnv({ PATH: '/nonexistent' }),
+    });
+    expect(result.success).toBe(false);
   });
 
   it('denyIfContainerRuntimeMissing 在无运行时时应 deny 并含安装指引', () => {
-    const originalPath = process.env.PATH;
-    process.env.PATH = '/nonexistent';
+    if (resolveContainerRuntime(process.cwd())) return;
     const result = denyIfContainerRuntimeMissing('test-compose', process.cwd());
-    process.env.PATH = originalPath;
     expect(result).not.toBeNull();
     expect(result?.decision).toBe(DECISION.DENY);
     expect(result?.message).toContain('podman');

@@ -2,6 +2,8 @@ import { describe, test, expect } from 'bun:test';
 import { scanPrompt } from '../user-prompt-filter.js';
 import { spawnSync } from 'child_process';
 import { join } from 'path';
+import { getHookProcessEnv } from '../security-orchestrator.js';
+import { resolveBunExecutable } from '../checks/tools.js';
 
 const HOOK_PATH = join(import.meta.dir, '..', 'user-prompt-filter.ts');
 
@@ -12,11 +14,12 @@ const HOOK_PATH = join(import.meta.dir, '..', 'user-prompt-filter.ts');
  * @returns {Record<string, unknown>}
  */
 function runHook(input) {
-  const result = spawnSync('bun', [HOOK_PATH], {
+  const result = spawnSync(resolveBunExecutable(), [HOOK_PATH], {
     input: JSON.stringify(input),
     encoding: 'utf-8',
     timeout: 5000,
     stdio: ['pipe', 'pipe', 'pipe'],
+    env: getHookProcessEnv(),
   });
   if (result.error) throw result.error;
   return JSON.parse(result.stdout.trim());
@@ -197,11 +200,12 @@ describe('user-prompt-filter hook 集成', () => {
   });
 
   test('malformed JSON 不崩溃（fail-open）', () => {
-    const result = spawnSync('bun', [HOOK_PATH], {
+    const result = spawnSync(resolveBunExecutable(), [HOOK_PATH], {
       input: 'not valid json',
       encoding: 'utf-8',
       timeout: 5000,
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: getHookProcessEnv(),
     });
     const output = JSON.parse(result.stdout.trim());
     expect(output).toEqual({});

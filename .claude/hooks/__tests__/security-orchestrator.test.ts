@@ -256,9 +256,10 @@ describe('security-orchestrator', () => {
     execSync('git init', { cwd: tmpDir });
     execSync('git config user.email "test@test.com"', { cwd: tmpDir });
     execSync('git config user.name "Test"', { cwd: tmpDir });
+    execSync('git config --local core.hooksPath .git/hooks', { cwd: tmpDir });
     writeFileSync(join(tmpDir, '.gitignore'), '*.log\ndist/\n');
     writeFileSync(join(tmpDir, 'README.md'), '# test');
-    execSync('git add . && git commit -m "init"', { cwd: tmpDir });
+    execSync('git add . && git commit -m "chore: init"', { cwd: tmpDir });
     try {
       writeFileSync(join(tmpDir, 'app.log'), 'log');
       mkdirSync(join(tmpDir, 'dist'), { recursive: true });
