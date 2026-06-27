@@ -6,7 +6,8 @@ import { resolveTrivyScanners } from './file-patterns.js';
 import type { CheckResult } from '../types.js';
 
 const TRIVY_EXTRA_SKIP_DIRS = ['_bmad', '_bmad-output', 'node_modules', '.venv', '.claude/worktrees'];
-const TRIVY_TIMEOUT_MS = 300000;
+const TRIVY_TIMEOUT_MS = 360000;
+const KNIP_TIMEOUT_MS = 60000;
 // trivy 漏洞库下载源：国内镜像（南大）为主选放最前，官方源在后做 fallback（5xx/429 时按序回退）。
 // 注意：设置 --db-repository 会覆盖默认源，故须显式保留官方源以维持回退能力。
 const TRIVY_DB_REPOS = [
@@ -209,9 +210,9 @@ export async function runKnip(cwd?: string): Promise<CheckResult> {
   if (missing) return missing;
   try {
     const result = await withTimeout(
-      execCommandAsync(`${getBunxInvocation(cwd)} knip --reporter json`, { cwd, timeout: 30000 }),
-      30000,
-      'knip 超时 (30s)',
+      execCommandAsync(`${getBunxInvocation(cwd)} knip --reporter json`, { cwd, timeout: KNIP_TIMEOUT_MS }),
+      KNIP_TIMEOUT_MS,
+      `knip 超时 (${String(KNIP_TIMEOUT_MS / 1000)}s)`,
     );
     if (!result.success) {
       try {

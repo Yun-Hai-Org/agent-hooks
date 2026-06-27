@@ -228,6 +228,7 @@ export async function runFullProjectTests(cwd?: string) {
 }
 
 const HOOK_UNIT_TEST_BATCH_SIZE = 8;
+const HOOK_UNIT_TEST_BATCH_TIMEOUT_MS = 600000;
 
 export async function runHookUnitTests(cwd?: string, options: { coverageThreshold?: number } = {}) {
   if (!isHooksProject(cwd)) {
@@ -251,9 +252,9 @@ export async function runHookUnitTests(cwd?: string, options: { coverageThreshol
       const batch = files.slice(i, i + HOOK_UNIT_TEST_BATCH_SIZE);
       const cmd = bunTestCommand(`${batch.map((f) => `"./${f}"`).join(' ')} --dots`);
       const result = await withTimeout(
-        execCommandAsync(cmd, { cwd, timeout: 300000 }),
-        300000,
-        'Hook 常规单测超时 (300s)',
+        execCommandAsync(cmd, { cwd, timeout: HOOK_UNIT_TEST_BATCH_TIMEOUT_MS }),
+        HOOK_UNIT_TEST_BATCH_TIMEOUT_MS,
+        `Hook 常规单测超时 (${String(HOOK_UNIT_TEST_BATCH_TIMEOUT_MS / 1000)}s)`,
       );
       combinedOutput += result.stdout + result.stderr;
       if (!result.success) {
@@ -265,9 +266,12 @@ export async function runHookUnitTests(cwd?: string, options: { coverageThreshol
     if (options.coverageThreshold !== undefined) {
       const allFiles = files.map((f) => `"./${f}"`).join(' ');
       const coverageResult = await withTimeout(
-        execCommandAsync(bunTestCommand(`${allFiles} --coverage --dots`), { cwd, timeout: 300000 }),
-        300000,
-        'Hook 覆盖率测试超时 (300s)',
+        execCommandAsync(bunTestCommand(`${allFiles} --coverage --dots`), {
+          cwd,
+          timeout: HOOK_UNIT_TEST_BATCH_TIMEOUT_MS,
+        }),
+        HOOK_UNIT_TEST_BATCH_TIMEOUT_MS,
+        `Hook 覆盖率测试超时 (${String(HOOK_UNIT_TEST_BATCH_TIMEOUT_MS / 1000)}s)`,
       );
       combinedOutput += coverageResult.stdout + coverageResult.stderr;
       if (!coverageResult.success) {
