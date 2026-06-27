@@ -1,4 +1,6 @@
 import { join } from 'path';
+import { readFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import { parseCoveragePercent, BUSINESS_COVERAGE_THRESHOLD } from './coverage.js';
 import type { CheckResult } from '../types.js';
 import {
@@ -246,30 +248,61 @@ export async function runHookUnitTests(cwd?: string, options: { coverageThreshol
     return formatResult('hook-unit-tests', DECISION.DENY, '无 Hook 常规单测文件');
   }
   try {
-    const withCoverage = options.coverageThreshold !== undefined;
     const allFiles = files.map((f) => `"./${f}"`).join(' ');
-    const flags = withCoverage ? ' --coverage' : ' --dots';
-    const cmd = bunTestCommand(`${allFiles}${flags}`);
-    const result = await withTimeout(
-      execCommandAsync(cmd, { cwd, timeout: HOOK_UNIT_TEST_TIMEOUT_MS }),
-      HOOK_UNIT_TEST_TIMEOUT_MS,
-      `Hook 常规单测超时 (${String(HOOK_UNIT_TEST_TIMEOUT_MS / 1000)}s)`,
-    );
-    const combinedOutput = result.stdout + result.stderr;
-    if (!result.success) {
+    const withCoverage = options.coverageThreshold !== undefined;
+    let combinedOutput = '';
+    let success = false;
+
+    if (withCoverage) {
+      const logFile = join(tmpdir(), `hook-unit-tests-${String(Date.now())}.log`);
+      const inner = bunTestCommand(`${allFiles} --coverage`);
+      const cmd = `sh -c ${JSON.stringify(`${inner} > ${logFile} 2>&1`)}`;
+      const result = await withTimeout(
+        execCommandAsync(cmd, { cwd, timeout: HOOK_UNIT_TEST_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024 }),
+        HOOK_UNIT_TEST_TIMEOUT_MS,
+        `Hook 常规单测超时 (${String(HOOK_UNIT_TEST_TIMEOUT_MS / 1000)}s)`,
+      );
+      try {
+        combinedOutput = readFileSync(logFile, 'utf-8');
+      } catch {
+        combinedOutput = result.stdout + result.stderr;
+      } finally {
+        try {
+          rmSync(logFile);
+        } catch {
+          // ignore
+        }
+      }
+      success = result.success && !combinedOutput.includes('(fail)');
+    } else {
+      const cmd = bunTestCommand(`${allFiles} --dots`);
+      const result = await withTimeout(
+        execCommandAsync(cmd, { cwd, timeout: HOOK_UNIT_TEST_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024 }),
+        HOOK_UNIT_TEST_TIMEOUT_MS,
+        `Hook 常规单测超时 (${String(HOOK_UNIT_TEST_TIMEOUT_MS / 1000)}s)`,
+      );
+      combinedOutput = result.stdout + result.stderr;
+      success = result.success;
+    }
+
+    if (!success) {
       return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 常规单测失败', {
         output: combinedOutput.slice(0, 500),
       });
     }
-    if (options.coverageThreshold !== undefined) {
+    if (withCoverage) {
+      const threshold = options.coverageThreshold;
+      if (threshold === undefined) {
+        return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 覆盖率阈值未配置');
+      }
       const pct = parseCoveragePercent(combinedOutput);
-      if (pct === null || pct < options.coverageThreshold) {
+      if (pct === null || pct < threshold) {
         return formatResult(
           'hook-unit-tests',
           DECISION.DENY,
           pct === null
-            ? `Hook 单测通过但无法解析覆盖率（要求 >= ${String(options.coverageThreshold)}%）`
-            : `Hook 单测通过但覆盖率 ${String(pct)}% 低于 ${String(options.coverageThreshold)}%`,
+            ? `Hook 单测通过但无法解析覆盖率（要求 >= ${String(threshold)}%）`
+            : `Hook 单测通过但覆盖率 ${String(pct)}% 低于 ${String(threshold)}%`,
           { output: combinedOutput.slice(0, 500) },
         );
       }
