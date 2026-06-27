@@ -1,8 +1,8 @@
 ---
-stepsCompleted: [1]
+stepsCompleted: [1, 2]
 inputDocuments: []
 workflowType: 'research'
-lastStep: 2
+lastStep: 3
 research_type: 'domain'
 research_topic: 'Fintech 领域高安全金融开发 — 应引入的安全与合规检查'
 research_goals: '识别对安全高度要求的金融开发中，在现有 hooks 质量门体系之外还应引入的检查项；对照监管要求、行业实践与现有能力给出可落地的建议'
@@ -189,4 +189,181 @@ Payment Page 专项、Policy-as-Code 合规映射。**
 
 ---
 
-<!-- 后续步骤：竞争格局 → 监管聚焦 → 技术趋势 → 综合建议 -->
+## Competitive Landscape
+
+> **分析视角：** 竞争格局按「金融 DevSecOps 工具生态」划分，并对照本项目 hooks 已集成的 Semgrep / Trivy / Gitleaks 等能力。
+
+### Key Players and Market Leaders
+
+**Market Leaders（企业级 AST 平台）：**
+
+| 层级 | 代表厂商 | 金融场景优势 | 置信度 |
+| --- | --- | --- | --- |
+| 企业 SAST/SCA 套件 | Synopsys (Coverity/Black Duck)、Checkmarx One、Veracode | 合规框架映射、广语言覆盖、QSA 认可报告 | 高 |
+| 开发者优先平台 | Snyk、GitHub Advanced Security (CodeQL) | IDE/PR 集成、自动修复 PR、低切换成本 | 高 |
+| 供应链/容器 | Sonatype、Aqua (Trivy 上游)、JFrog | SBOM、制品库门禁、容器运行时 | 中高 |
+| 合规自动化 GRC | Aikido、Matproof、RegScale 类 | PCI/DORA 证据链、控制点映射 | 中 |
+
+**Major Competitors（按安全层）：**
+
+| 安全层 | 开源/低成本 | 商业平台 |
+| --- | --- | --- |
+| SAST | Semgrep、SonarQube Community | Checkmarx、Veracode、Snyk Code、CodeQL |
+| SCA/SBOM | Trivy、Grype+Syft、OSV-Scanner | Snyk、Black Duck、Sonatype Nexus |
+| Secrets | Gitleaks、TruffleHog | GitGuardian、GHAS Secret Protection |
+| IaC/K8s | Checkov、tfsec、KICS | Prisma Cloud、Checkmarx KICS (商业版) |
+| DAST/API | OWASP ZAP、Nuclei | Burp Enterprise、42Crunch (API) |
+| Policy-as-Code | OPA/Rego、Conftest | HashiCorp Sentinel、Harness OPA 集成 |
+| 证据聚合 | DefectDojo | ArmorCode、Brinqa |
+
+**Emerging Players:** Semgrep（OSS-first 挑战者）、Aikido（统一 AppSec + 合规）、Contrast（IAST/RASP）、42Crunch（API 安全专项）。
+
+**Global vs Regional:** 北美以 GHAS/Snyk/Veracode 为主；欧盟 DORA 驱动 Matproof、RegScale 等 GRC 自动化；
+亚太 FinTech 更倾向 **OSS 栈 + 单一商业 SCA** 组合。
+
+**Sources:**
+
+- [Mordor Intelligence - SAST Market](https://www.mordorintelligence.com/industry-reports/static-application-security-testing-market)
+- [DataIntelo - SAST Tool Market 2034](https://dataintelo.com/report/global-static-application-security-testing-sast-tool-market)
+- [TechBullion - US Secure Coding Market Tiers](https://techbullion.com/the-us-market-for-secure-coding-practices-vendors-use-cases-and-where-investment-is-going/)
+
+### Market Share and Competitive Positioning
+
+**Market Share Distribution（DevSecOps / AppSec，估算）：**
+
+| 厂商 | 估算份额 | 定位 |
+| --- | --- | --- |
+| Palo Alto (Prisma Cloud) | ~6–9% | 全栈云原生 CNAPP |
+| Snyk | ~5–7% | 开发者优先、OSS 依赖 |
+| Synopsys | ~4–7% | 企业 SAST/SCA 传统强者 |
+| Checkmarx | ~4–6% | 大型机构统一 AppSec |
+| Microsoft (GHAS) | ~3–5% | GitHub 生态捆绑 |
+| GitLab Ultimate | ~3–5% | 一体化 DevOps 平台 |
+| Top 5 SAST 厂商合计 | ~52% SAST 收入 | Synopsys/Checkmarx/Veracode/IBM/OpenText |
+
+**Competitive Positioning:**
+
+- **平台捆绑派（GitHub/GitLab）：** 「安全即仓库功能」——降低采购摩擦，适合已深度绑定单一 Git 平台的团队
+- **独立 AppSec 派（Snyk/Checkmarx/Veracode）：** 跨平台、更深检测与合规报告，面临平台捆绑的价格压力
+- **OSS-first 派（Semgrep/Trivy 生态）：** 检测能力接近商业工具，差距在 **工作流、库存、合规报告**
+
+**Value Proposition Mapping:**
+
+| 买家诉求 | 首选方案 |
+| --- | --- |
+| 零许可费 + CI 门禁 | Trivy + Semgrep + Gitleaks + Checkov（≈ 本项目现状） |
+| 审计证据 + PCI/DORA 映射 | 商业平台或 GRC 自动化（Aikido/Matproof）+ OPA 策略库 |
+| 开发者体验 + 自动修复 | Snyk 或 GHAS Code Security |
+| 全栈云安全 | Prisma Cloud / Aqua Platform |
+
+**Customer Segments Served:** Tier-1 银行偏 Synopsys/Checkmarx；成长型 FinTech 偏 GHAS/Snyk/OSS；
+国内证券期货偏 **SonarQube + 自研门禁 + 等保测评** 组合。
+
+**Sources:**
+
+- [Market Research Future - DevSecOps Market](https://www.marketresearchfuture.com/reports/devsecops-market-40850)
+- [MarketIntelo - SCA Market](https://marketintelo.com/report/software-composition-analysis-market)
+- [William Blair - DevSecOps Refresh Edition (PDF)](https://www.williamblair.com/-/media/downloads/eqr/2025/williamblair_a-developer-technology-quarterly-devsecops-refresh-edition.pdf)
+
+### Competitive Strategies and Differentiation
+
+**Cost Leadership Strategies:** Trivy、Gitleaks、Checkov 等 Apache/MIT 许可工具以零边际成本覆盖 80% 检测面；GitHub Dependabot 免费层覆盖基础 SCA。
+
+**Differentiation Strategies:**
+
+- **Snyk/GHAS：** 开发者 UX、IDE 内修复、Dependabot/Autofix 自动 PR
+- **Checkmarx/Veracode：** 企业治理、多业务线统一策略、审计级报告
+- **Aikido/Matproof：** 「扫描 + 合规证据」一体化，减少 GRC 与 AppSec 工具割裂
+- **Semgrep：** 可编程规则 + 金融/custom 规则集，适合内嵌 quality-gate
+
+**Focus/Niche Strategies:** 42Crunch（OpenAPI/API 安全）、GitGuardian（Secrets 专项）、Sonatype（制品库防火墙）。
+
+**Innovation Approaches:** AI 辅助 triage/修复（Snyk DeepCode、Veracode Fix、Copilot Autofix）；平台并购整合（CrowdStrike+Bionic、Palo Alto+多家）。
+
+**Sources:**
+
+- [Safeguard - Open Source vs Commercial Scanners 2026](https://safeguard.sh/resources/blog/open-source-vs-commercial-security-scanners-2026)
+- [Tajo - DevSecOps Tool Stack Guide 2026](https://tajo.io/blog/the-7-best-devsecops-tools-for-secure-development/)
+
+### Business Models and Value Propositions
+
+**Primary Business Models:**
+
+| 模式 | 代表 | 计费 |
+| --- | --- | --- |
+| 按开发者/提交者 | Snyk、GHAS | ~$25/dev/mo；GHAS Code Security ~$30/活跃提交者/月 |
+| 企业席位 + 平台费 | Checkmarx、Veracode | 六位数年度合同 |
+| 开源 + 商业云服务 | Semgrep、Aqua (Trivy) | 免费 CLI + Team/Enterprise SaaS |
+| GRC 证据平台 | Matproof、RegScale | 按框架/控制点/连接器 |
+
+**Revenue Streams:** 许可订阅为主；专业服务和 QSA 陪审为辅；OSS 厂商靠 Cloud/SaaS 和规则库增值。
+
+**Value Chain Integration:** 纵向整合趋势明显——CNAPP 厂商（Prisma、Wiz）向下覆盖 IaC/SAST，DevOps 平台向上嵌入安全；
+**quality-gate/hooks 层处于「编排与证据聚合」位置，价值在于统一 commit/push/merge 策略而非替代扫描引擎。**
+
+**Customer Relationship Models:** 开发者自助（Snyk/Semgrep）vs 安全团队集中治理（Checkmarx/Veracode）vs 合规官审计视图（GRC 平台）。
+
+**Sources:**
+
+- [GitHub Advanced Security](https://github.com/security/advanced-security)
+- [Scopir - Vulnerability Scanning Tools DevOps 2026](https://scopir.com/posts/vulnerability-scanning-tools-devops-2026/)
+
+### Competitive Dynamics and Entry Barriers
+
+**Barriers to Entry:**
+
+- 漏洞情报库质量与更新速度（NVD、GitHub Advisory、私有 intel）
+- 低误报与 CI 速度（金融团队对 pipeline 延迟敏感）
+- 监管合规映射能力（PCI 6.x、DORA 控制点 → 可审计证据）
+- 与现有 Git/CI 的深度集成
+
+**Competitive Intensity:** 中高（DevSecOps HHI 约 850–1100）；2022–2025 年 45+ 并购案加速整合。
+
+**Market Consolidation Trends:** Synopsys 业务剥离、Checkmarx PE 收购、平台厂商吞并 ASPM/SCA 初创；**point solution 被挤压，编排层（如本项目 hooks）重要性上升。**
+
+**Switching Costs:** GHAS 在 GitHub 内切换成本极低；Veracode/Checkmarx 企业合同切换成本高；OSS 栈切换成本低但需自建证据链。
+
+**Sources:**
+
+- [William Blair - DevSecOps Refresh (PDF)](https://www.williamblair.com/-/media/downloads/eqr/2025/williamblair_a-developer-technology-quarterly-devsecops-refresh-edition.pdf)
+- [Market Research Future - DevSecOps Market](https://www.marketresearchfuture.com/reports/devsecops-market-40850)
+
+### Ecosystem and Partnership Analysis
+
+**Supplier Relationships:** Trivy 由 Aqua Security 维护但核心扫描器开源；Semgrep 规则社区 + 商业 Registry；
+OPA/CNCF 生态与 Rego 策略库（如 PCI/DORA 预置策略）。
+
+**Distribution Channels:** GitHub Marketplace、GitLab CI 模板、IDE 插件（VS Code/JetBrains）、CNAPP 平台内嵌。
+
+**Technology Partnerships:** Microsoft GHAS ↔ Azure DevOps；Snyk ↔ 多 CI；Harness/GitLab 内置 OPA 门禁；JFrog ↔ SBOM/制品扫描。
+
+**Ecosystem Control:** Git 平台（Microsoft/GitLab）控制 **触发点与 PR 体验**；扫描引擎厂商控制 **检测深度**；
+GRC 平台控制 **审计叙事**——**hooks/quality-gate 可同时对接三者，是 FinTech 团队的理想编排层。**
+
+### 与本项目 hooks 栈的竞争定位
+
+| 能力 | 本项目（quality-gate） | 行业常见替代/补强 |
+| --- | --- | --- |
+| SAST | Semgrep (staged/full) | CodeQL、Checkmarx |
+| SCA/容器 | Trivy + dep audit | Snyk、Grype+Syft、Black Duck |
+| Secrets | Gitleaks | TruffleHog、GHAS Secret Protection |
+| IaC/K8s | k8s-lint、kind smoke | Checkov、tfsec、Prisma |
+| 合约/API | openapi-contract | 42Crunch、Spectral |
+| DAST | ❌ 缺失 | OWASP ZAP、Burp CI |
+| SBOM 发布证据 | ❌ 缺失（Trivy 可扩展） | Syft 生成 + 门禁存档 |
+| Policy-as-Code | ❌ 缺失 | OPA/Rego PCI-DORA 策略库 |
+| 合规证据/GRC | ❌ 缺失 | Aikido、Matproof、DefectDojo |
+| Payment Page | ❌ 缺失 | CSP/SRI lint、脚本清单检查 |
+
+**战略结论：** 本项目已覆盖 **OSS-first 栈的核心 70%**（与 Safeguard/Tajo 2026 推荐栈高度重合）；
+FinTech 差异化应补 **DAST、SBOM 证据归档、OPA 合规策略、Payment Page 专项**，而非替换 Semgrep/Trivy。
+
+**Sources:**
+
+- [ynotbhatc/rego_policy_libraries (PCI-DSS/DORA OPA)](https://github.com/ynotbhatc/rego_policy_libraries)
+- [Harness - PCI DSS in Modern Software Delivery](https://www.harness.io/harness-devops-academy/pci-dss-in-modern-software-delivery)
+- [Aikido - AppSec for FinTech](https://www.aikido.dev/industries/aikido-for-fintech)
+
+---
+
+<!-- 后续步骤：监管聚焦 → 技术趋势 → 综合建议 -->
