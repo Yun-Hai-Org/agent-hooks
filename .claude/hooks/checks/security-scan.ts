@@ -256,11 +256,12 @@ export async function runTrivy(cwd?: string): Promise<CheckResult> {
     }
 
     const scanners = resolveTrivyScanners(cwd);
+    const skipDbUpdate = '--skip-db-update';
     const skipCheckUpdate = scanners.includes('misconfig') ? '' : '--skip-check-update';
     const ignoredDirs = getGitIgnoredDirs(cwd);
     const skipDirs = buildTrivySkipArgs(ignoredDirs);
     const trivyCmd =
-      `"${trivyBin}" fs ${TRIVY_DB_REPO_FLAGS} --scanners ${scanners} --severity CRITICAL,HIGH,MEDIUM --format json ${skipCheckUpdate} ${skipDirs} .`.replace(
+      `"${trivyBin}" fs ${TRIVY_DB_REPO_FLAGS} --scanners ${scanners} --severity CRITICAL,HIGH,MEDIUM --format json ${skipDbUpdate} ${skipCheckUpdate} ${skipDirs} .`.replace(
         /\s+/g,
         ' ',
       );
