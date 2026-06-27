@@ -2,6 +2,7 @@ import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } fr
 import { denyIfToolMissing, denyOnToolError, getBunxInvocation } from './tools.js';
 import { isHooksProject } from './hooks-project.js';
 import { getStagedFiles } from './git-policy.js';
+import { resolveTrivyScanners } from './file-patterns.js';
 import type { CheckResult } from '../types.js';
 
 const TRIVY_EXTRA_SKIP_DIRS = ['_bmad', '_bmad-output', 'node_modules', '.venv', '.claude/worktrees'];
@@ -237,9 +238,21 @@ export async function runTrivy(cwd?: string): Promise<CheckResult> {
   const missing = denyIfToolMissing('trivy', 'trivy', cwd);
   if (missing) return missing;
   try {
+    const trivyBinResult = execCommand('command -v trivy', { cwd, timeout: 5000 });
+    const trivyBin = trivyBinResult.stdout.trim();
+    if (!trivyBin) {
+      return formatResult('trivy', DECISION.DENY, 'Trivy 未安装或不在 PATH 中', {});
+    }
+
+    const scanners = resolveTrivyScanners(cwd);
+    const skipCheckUpdate = scanners.includes('misconfig') ? '' : '--skip-check-update';
     const ignoredDirs = getGitIgnoredDirs(cwd);
     const skipDirs = buildTrivySkipArgs(ignoredDirs);
-    const trivyCmd = `trivy fs ${TRIVY_DB_REPO_FLAGS} --scanners vuln,misconfig,secret,license --severity CRITICAL,HIGH,MEDIUM --format json ${skipDirs} .`;
+    const trivyCmd =
+      `"${trivyBin}" fs ${TRIVY_DB_REPO_FLAGS} --scanners ${scanners} --severity CRITICAL,HIGH,MEDIUM --format json ${skipCheckUpdate} ${skipDirs} .`.replace(
+        /\s+/g,
+        ' ',
+      );
     const result = await withTimeout(
       execCommandAsync(trivyCmd, { cwd, timeout: TRIVY_TIMEOUT_MS }),
       TRIVY_TIMEOUT_MS,

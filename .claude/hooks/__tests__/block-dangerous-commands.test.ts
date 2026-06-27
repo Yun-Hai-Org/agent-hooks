@@ -1,7 +1,14 @@
 import { describe, it, expect, afterEach } from 'bun:test';
 import { execSync } from 'child_process';
-import { checkCommand, PATTERNS, ALLOW_PATTERNS, checkMergeNoFfRequired } from '../block-dangerous-commands.js';
-import { createTempGitRepo, cleanupTempGitRepo } from './helpers.js';
+import {
+  checkCommand,
+  PATTERNS,
+  ALLOW_PATTERNS,
+  checkMergeNoFfRequired,
+  checkMergeConcludeBypass,
+  checkProtectedBranchDelete,
+} from '../block-dangerous-commands.js';
+import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
 
 describe('block-dangerous-commands', () => {
   // CRITICAL level
@@ -300,6 +307,54 @@ describe('block-dangerous-commands - main/master merge --no-ff', () => {
     const r = checkMergeNoFfRequired('git checkout main && git merge feat/x', process.cwd());
     expect(r.blocked).toBe(true);
     expect(r.id).toBe('merge-ff-bypass');
+  });
+});
+
+describe('block-dangerous-commands - merge conclude bypass', () => {
+  let repoPath: string;
+
+  afterEach(() => {
+    if (repoPath) cleanupTempGitRepo(repoPath);
+  });
+
+  it('MERGE_HEAD 存在时 git commit 应被阻止', () => {
+    repoPath = createTempGitRepo('main');
+    writeFile(repoPath, '.git/MERGE_HEAD', 'abc123\n');
+    const r = checkMergeConcludeBypass('git commit -m "finish merge"', repoPath);
+    expect(r.blocked).toBe(true);
+    expect(r.id).toBe('merge-conclude-bypass');
+  });
+
+  it('MERGE_HEAD 存在时 git commit --amend 应允许', () => {
+    repoPath = createTempGitRepo('main');
+    writeFile(repoPath, '.git/MERGE_HEAD', 'abc123\n');
+    const r = checkMergeConcludeBypass('git commit --amend -m "amend"', repoPath);
+    expect(r.blocked).toBe(false);
+  });
+
+  it('无 MERGE_HEAD 时 git commit 应允许', () => {
+    repoPath = createTempGitRepo('main');
+    const r = checkMergeConcludeBypass('git commit -m "x"', repoPath);
+    expect(r.blocked).toBe(false);
+  });
+});
+
+describe('block-dangerous-commands - protected branch delete', () => {
+  it('git branch -D main 应被阻止', () => {
+    const r = checkProtectedBranchDelete('git branch -D main');
+    expect(r.blocked).toBe(true);
+    expect(r.id).toBe('protected-branch-delete');
+  });
+
+  it('git push origin --delete master 应被阻止', () => {
+    const r = checkProtectedBranchDelete('git push origin --delete master');
+    expect(r.blocked).toBe(true);
+    expect(r.id).toBe('protected-branch-delete');
+  });
+
+  it('git branch -d feat/x 不应被 B4 拦截', () => {
+    const r = checkProtectedBranchDelete('git branch -d feat/x');
+    expect(r.blocked).toBe(false);
   });
 });
 

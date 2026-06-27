@@ -111,6 +111,22 @@ export function listTrackedFiles(predicate: (file: string) => boolean, cwd?: str
   return result.stdout.trim().split('\n').filter(Boolean).filter(predicate);
 }
 
+export function hasTrivyMisconfigTargets(cwd?: string): boolean {
+  return (
+    listTrackedFiles((f) => {
+      if (isDockerfilePath(f)) return true;
+      if (isDockerComposePath(f)) return true;
+      if (isK8sManifestCandidatePath(f)) return true;
+      if (/\.tf$/i.test(f)) return true;
+      return false;
+    }, cwd).length > 0
+  );
+}
+
+export function resolveTrivyScanners(cwd?: string): string {
+  return hasTrivyMisconfigTargets(cwd) ? 'vuln,misconfig,secret,license' : 'vuln,secret,license';
+}
+
 export function hasStylelintConfig(cwd?: string): boolean {
   return (
     execCommand('test -f .stylelintrc.json', { cwd }).success ||

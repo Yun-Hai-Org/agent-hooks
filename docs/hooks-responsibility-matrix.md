@@ -23,12 +23,14 @@
 
 ## B. 本地质量三门（Git native only）
 
-| 操作           | Native Hook      | profile       | 失败                  |
-| -------------- | ---------------- | ------------- | --------------------- |
-| git commit     | pre-commit       | commit        | exit 1                |
-| commit message | commit-msg       | message 规则  | exit 1                |
-| git push       | pre-push         | full          | exit 1 + gate-pending |
-| git merge      | pre-merge-commit | full @ 合并树 | exit 1 abort merge    |
+| 操作           | Native Hook      | profile                            | 失败                  |
+| -------------- | ---------------- | ---------------------------------- | --------------------- |
+| git commit     | pre-commit       | commit；merge 结论 → full 或 cache | exit 1                |
+| commit message | commit-msg       | message 规则                       | exit 1                |
+| git push       | pre-push         | full                               | exit 1 + gate-pending |
+| git merge      | pre-merge-commit | full @ 合并树                      | exit 1 abort merge    |
+
+**merge 结论**：`pre-merge-commit` 失败时自动 `git merge --abort`；IDE 禁止 `git commit` 收尾（须 `git merge --continue` 或 `--abort`）。
 
 **main/master 须 `--no-ff`**：Fast-forward 与 `--squash` 均不触发 `pre-merge-commit`。
 终端：`branch.main/master.mergeoptions`（`configure-merge-no-ff-global.sh`）；
@@ -99,6 +101,7 @@ IDE：`block-dangerous-commands` 拦截无 `--no-ff` 的 merge 与 `--squash`。
 | main/master 无 `--no-ff` merge / `--squash` | block-dangerous-commands |
 | `gh pr merge` / 默认 `git pull` merge       | block-dangerous-commands |
 | `git update-ref -d refs/heads/*`            | block-dangerous-commands |
+| main/master 分支删除                        | block-dangerous-commands |
 | 未合并分支/worktree 删除                    | branch-delete-gate       |
 
 ## D. 已移除
