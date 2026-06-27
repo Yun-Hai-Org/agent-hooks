@@ -97,6 +97,16 @@ export function evaluateTrivyJson(stdout: string): CheckResult {
 const CODE_FILE_PATTERN =
   /\.(js|ts|jsx|tsx|mjs|cjs|py|go|java|rb|php|rs|swift|kt|scala|cs|cpp|c|h|yaml|yml|json|toml|sh|bash|zsh)$/i;
 
+/** dataset / iterate_state 等数据 JSON 不做 semgrep（避免大文件或冷启动超时） */
+const SEMGREP_SKIP_JSON_PATH =
+  /(^|\/)(dataset|data|fixtures|iterate_state|__snapshots__|_bmad-output|node_modules)(\/|$)/i;
+
+export function isSemgrepStagedTarget(filePath: string): boolean {
+  if (!CODE_FILE_PATTERN.test(filePath) || filePath.includes('__tests__')) return false;
+  if (/\.json$/i.test(filePath) && SEMGREP_SKIP_JSON_PATH.test(filePath)) return false;
+  return true;
+}
+
 const SEMGREP_CONFIGS = '--config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten';
 const SEMGREP_SEVERITY = '--severity ERROR --severity WARNING --severity INFO';
 // 全部规则保持全局强制。原先全局停用的 child_process / path-join-traversal 两条规则，
@@ -129,7 +139,7 @@ export function evaluateSemgrepOutput(stdout: string, checkId: string): CheckRes
 }
 
 export async function runSemgrepStaged(cwd?: string): Promise<CheckResult> {
-  const stagedFiles = getStagedFiles(cwd).filter((f) => CODE_FILE_PATTERN.test(f) && !f.includes('__tests__'));
+  const stagedFiles = getStagedFiles(cwd).filter((f) => isSemgrepStagedTarget(f));
   if (stagedFiles.length === 0) {
     return formatResult('semgrep-staged', DECISION.SKIP, '暂存区无（非测试）代码文件，跳过 semgrep');
   }
