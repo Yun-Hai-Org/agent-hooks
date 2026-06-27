@@ -13,9 +13,18 @@
 
 import { appendFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
-import { LOG_DIR } from './security-orchestrator.js';
+import { LOG_DIR, getCurrentBranch } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
 import { notifySecurityEventAsync } from './notify-security-event.js';
+import {
+  isGitMergeCommand,
+  isGitCommitCommand,
+  isProtectedBranch,
+  extractBranchDeleteTargets,
+  extractRemoteBranchDeleteTargets,
+  extractUpdateRefDeleteTargets,
+  buildProtectedBranchDeleteDenyReason,
+} from './checks/git-policy.js';
 
 const SAFETY_LEVEL = 'strict';
 
@@ -422,6 +431,130 @@ function checkCommand(cmd: string, safetyLevel: string = SAFETY_LEVEL) {
   return { blocked: false, pattern: null, allowed: false };
 }
 
+export interface MergeNoFfCheckResult {
+  blocked: boolean;
+  id?: 'merge-ff-bypass' | 'merge-squash-bypass';
+  reason?: string;
+}
+
+const MERGE_IN_PROGRESS = /\bgit\s+merge\b[^\n]*--(?:abort|continue|quit)(?:\s|$)/;
+
+function isCompositeMergeOntoProtectedBranch(cmd: string): boolean {
+  return /\bgit\s+(?:checkout|switch)\b[^\n]*\b(main|master)\b[\s\S]*\bgit\s+merge\b/.test(cmd);
+}
+
+function isMergeOntoProtectedBranch(cmd: string, cwd?: string): boolean {
+  if (isCompositeMergeOntoProtectedBranch(cmd)) return true;
+  const branch = getCurrentBranch(cwd ?? process.cwd());
+  return branch !== null && isProtectedBranch(branch);
+}
+
+export function checkMergeNoFfRequired(cmd: string, cwd?: string): MergeNoFfCheckResult {
+  if (!cmd || !isGitMergeCommand(cmd)) {
+    return { blocked: false };
+  }
+
+  if (MERGE_IN_PROGRESS.test(cmd)) {
+    return { blocked: false };
+  }
+
+  if (!isMergeOntoProtectedBranch(cmd, cwd)) {
+    return { blocked: false };
+  }
+
+  if (cmd.includes('--squash')) {
+    return {
+      blocked: true,
+      id: 'merge-squash-bypass',
+      reason: 'git merge --squash 不触发 pre-merge-commit。在 main/master 请使用：git merge --no-ff <branch>',
+    };
+  }
+
+  if (cmd.includes('--no-ff')) {
+    return { blocked: false };
+  }
+
+  return {
+    blocked: true,
+    id: 'merge-ff-bypass',
+    reason: 'Fast-forward merge 会绕过 pre-merge-commit 全量门。在 main/master 请使用：git merge --no-ff <branch>',
+  };
+}
+
+export interface MergeConcludeBypassCheckResult {
+  blocked: boolean;
+  id?: 'merge-conclude-bypass';
+  reason?: string;
+}
+
+export function checkMergeConcludeBypass(cmd: string, cwd?: string): MergeConcludeBypassCheckResult {
+  if (!cmd || !isGitCommitCommand(cmd)) {
+    return { blocked: false };
+  }
+  if (/(?:^|\s)--amend(?:\s|$|=)/.test(cmd)) {
+    return { blocked: false };
+  }
+  const workDir = cwd ?? process.cwd();
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 为 git 仓库根，拼接常量 MERGE_HEAD
+  if (!existsSync(join(workDir, '.git', 'MERGE_HEAD'))) {
+    return { blocked: false };
+  }
+  return {
+    blocked: true,
+    id: 'merge-conclude-bypass',
+    reason:
+      'git commit 会绕过 pre-merge-commit。请修复问题后执行 git merge --continue（重新触发 full 门），或 git merge --abort 取消合并',
+  };
+}
+
+export interface ProtectedBranchDeleteCheckResult {
+  blocked: boolean;
+  id?: 'protected-branch-delete';
+  reason?: string;
+}
+
+export function checkProtectedBranchDelete(cmd: string): ProtectedBranchDeleteCheckResult {
+  const targets = [
+    ...extractBranchDeleteTargets(cmd),
+    ...extractRemoteBranchDeleteTargets(cmd),
+    ...extractUpdateRefDeleteTargets(cmd),
+  ];
+  for (const branch of targets) {
+    if (isProtectedBranch(branch)) {
+      return {
+        blocked: true,
+        id: 'protected-branch-delete',
+        reason: buildProtectedBranchDeleteDenyReason(branch),
+      };
+    }
+  }
+  return { blocked: false };
+}
+
+function denyCustomCheck(
+  check: { id?: string; reason?: string },
+  cmd: string,
+  session_id: string | undefined,
+  cwd: string | undefined,
+): void {
+  const reason = `⚠️ [${check.id ?? 'blocked'}] ${check.reason ?? '命令被阻止'}`;
+  log({
+    level: 'BLOCKED',
+    id: check.id,
+    priority: 'strict',
+    cmd: cmd.slice(0, 200),
+    session_id,
+    cwd,
+  });
+  notifySecurityEventAsync({
+    hook: 'block-dangerous-commands',
+    severity: 'strict',
+    reason,
+    ...(session_id ? { session_id } : {}),
+  });
+  process.stdout.write(`${formatDenyOutput('deny', reason)}\n`);
+}
+
 /**
  *
  */
@@ -461,6 +594,24 @@ async function main() {
           session_id,
         });
         console.log(formatDenyOutput('deny', reason));
+        return;
+      }
+
+      const mergeCheck = checkMergeNoFfRequired(cmd, cwd);
+      if (mergeCheck.blocked) {
+        denyCustomCheck(mergeCheck, cmd, session_id, cwd);
+        return;
+      }
+
+      const mergeConcludeCheck = checkMergeConcludeBypass(cmd, cwd);
+      if (mergeConcludeCheck.blocked) {
+        denyCustomCheck(mergeConcludeCheck, cmd, session_id, cwd);
+        return;
+      }
+
+      const protectedDeleteCheck = checkProtectedBranchDelete(cmd);
+      if (protectedDeleteCheck.blocked) {
+        denyCustomCheck(protectedDeleteCheck, cmd, session_id, cwd);
         return;
       }
 

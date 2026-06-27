@@ -1,8 +1,22 @@
 import { describe, it, expect, afterEach } from 'bun:test';
 import { execSync } from 'child_process';
-import { runSemgrepStaged, evaluateSemgrepOutput } from '../checks/security-scan.js';
+import { runSemgrepStaged, evaluateSemgrepOutput, isSemgrepStagedTarget } from '../checks/security-scan.js';
 import { DECISION } from '../security-orchestrator.js';
 import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
+
+describe('isSemgrepStagedTarget', () => {
+  it('dataset/iterate_state JSON 应排除', () => {
+    expect(isSemgrepStagedTarget('code_exec_primary/dataset/iterate_state/20260626_iter_0003.json')).toBe(false);
+  });
+
+  it('package.json 仍应扫描', () => {
+    expect(isSemgrepStagedTarget('package.json')).toBe(true);
+  });
+
+  it('__tests__ 下 TS 应排除', () => {
+    expect(isSemgrepStagedTarget('.claude/hooks/__tests__/x.test.ts')).toBe(false);
+  });
+});
 
 describe('runSemgrepStaged', () => {
   let repoDir: string | undefined;
@@ -24,6 +38,14 @@ describe('runSemgrepStaged', () => {
   it('仅暂存 __tests__ 文件时应 SKIP（测试夹具被排除）', async () => {
     repoDir = createTempGitRepo('feature');
     writeFile(repoDir, '.claude/hooks/__tests__/x.test.ts', 'export const a = 1;\n');
+    execSync('git add .', { cwd: repoDir });
+    const result = await runSemgrepStaged(repoDir);
+    expect(result.decision).toBe(DECISION.SKIP);
+  });
+
+  it('仅暂存 dataset JSON 时应 SKIP', async () => {
+    repoDir = createTempGitRepo('feature');
+    writeFile(repoDir, 'code_exec_primary/dataset/iterate_state/run_0001.json', '{"ok":true}\n');
     execSync('git add .', { cwd: repoDir });
     const result = await runSemgrepStaged(repoDir);
     expect(result.decision).toBe(DECISION.SKIP);

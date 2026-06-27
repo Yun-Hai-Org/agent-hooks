@@ -16,6 +16,8 @@ import {
 import { hasUncommittedChanges } from '../checks/git-policy.js';
 import { formatStopContinueOutput } from '../hook-adapter.js';
 
+import { disableGlobalGitHooks } from './helpers.js';
+
 describe('auto-commit', () => {
   let tempDir;
   let repoPath;
@@ -30,6 +32,7 @@ describe('auto-commit', () => {
     execSync('git init -b feat/test', { cwd: repoPath, stdio: 'pipe' });
     execSync('git config user.email "test@test.com"', { cwd: repoPath, stdio: 'pipe' });
     execSync('git config user.name "Test"', { cwd: repoPath, stdio: 'pipe' });
+    disableGlobalGitHooks(repoPath);
     writeFileSync(join(repoPath, 'README.md'), '# test\n');
     execSync('git add README.md', { cwd: repoPath, stdio: 'pipe' });
     execSync('git commit -m "chore: init"', { cwd: repoPath, stdio: 'pipe' });

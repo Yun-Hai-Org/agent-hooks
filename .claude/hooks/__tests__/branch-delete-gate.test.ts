@@ -5,6 +5,8 @@ import { join } from 'path';
 import { DECISION } from '../security-orchestrator.js';
 import { evaluateBranchDeleteCommand } from '../checks/git-policy.js';
 
+import { disableGlobalGitHooks } from './helpers.js';
+
 describe('branch-delete-gate', () => {
   let tempDir: string;
   let repoPath: string;
@@ -16,6 +18,7 @@ describe('branch-delete-gate', () => {
     execSync('git init -b main', { cwd: repoPath, stdio: 'pipe' });
     execSync('git config user.email "test@test.com"', { cwd: repoPath, stdio: 'pipe' });
     execSync('git config user.name "Test"', { cwd: repoPath, stdio: 'pipe' });
+    disableGlobalGitHooks(repoPath);
     writeFileSync(join(repoPath, 'README.md'), '# main\n');
     execSync('git add README.md', { cwd: repoPath, stdio: 'pipe' });
     execSync('git commit -m "chore: init main"', { cwd: repoPath, stdio: 'pipe' });

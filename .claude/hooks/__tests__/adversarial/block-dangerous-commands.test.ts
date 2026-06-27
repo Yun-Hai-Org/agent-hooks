@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'bun:test';
-import { checkCommand } from '../../block-dangerous-commands.js';
+import { execSync } from 'child_process';
+import { checkCommand, checkMergeNoFfRequired } from '../../block-dangerous-commands.js';
+import { createTempGitRepo, cleanupTempGitRepo } from '../helpers.js';
 
 describe('block-dangerous-commands 对抗性：混淆/RCE/绕过', () => {
   const blockedCases: { name: string; cmd: string }[] = [
@@ -16,10 +18,23 @@ describe('block-dangerous-commands 对抗性：混淆/RCE/绕过', () => {
     { name: 'podman volume rm', cmd: 'podman volume rm myvol' },
     { name: 'podman exec env', cmd: 'podman exec mycontainer env' },
     { name: 'podman system prune', cmd: 'podman system prune -f' },
+    { name: 'main 上 FF merge', cmd: 'git merge feat/x' },
+    { name: 'main 上 squash merge', cmd: 'git merge --squash feat/x' },
+    { name: 'checkout main 后 FF merge', cmd: 'git checkout main && git merge feat/x' },
   ];
 
   for (const { name, cmd } of blockedCases) {
     it(`应阻止：${name}`, () => {
+      if (name.includes('main 上') || name.includes('checkout main')) {
+        const repo = createTempGitRepo('main');
+        try {
+          execSync('git branch -M main', { cwd: repo });
+          expect(checkMergeNoFfRequired(cmd, repo).blocked).toBe(true);
+        } finally {
+          cleanupTempGitRepo(repo);
+        }
+        return;
+      }
       expect(checkCommand(cmd).blocked).toBe(true);
     });
   }

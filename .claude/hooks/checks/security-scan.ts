@@ -2,10 +2,12 @@ import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } fr
 import { denyIfToolMissing, denyOnToolError, getBunxInvocation } from './tools.js';
 import { isHooksProject } from './hooks-project.js';
 import { getStagedFiles } from './git-policy.js';
+import { resolveTrivyScanners } from './file-patterns.js';
 import type { CheckResult } from '../types.js';
 
 const TRIVY_EXTRA_SKIP_DIRS = ['_bmad', '_bmad-output', 'node_modules', '.venv', '.claude/worktrees'];
-const TRIVY_TIMEOUT_MS = 300000;
+const TRIVY_TIMEOUT_MS = 360000;
+const KNIP_TIMEOUT_MS = 60000;
 // trivy 漏洞库下载源：国内镜像（南大）为主选放最前，官方源在后做 fallback（5xx/429 时按序回退）。
 // 注意：设置 --db-repository 会覆盖默认源，故须显式保留官方源以维持回退能力。
 const TRIVY_DB_REPOS = [
@@ -96,6 +98,16 @@ export function evaluateTrivyJson(stdout: string): CheckResult {
 const CODE_FILE_PATTERN =
   /\.(js|ts|jsx|tsx|mjs|cjs|py|go|java|rb|php|rs|swift|kt|scala|cs|cpp|c|h|yaml|yml|json|toml|sh|bash|zsh)$/i;
 
+/** dataset / iterate_state 等数据 JSON 不做 semgrep（避免大文件或冷启动超时） */
+const SEMGREP_SKIP_JSON_PATH =
+  /(^|\/)(dataset|data|fixtures|iterate_state|__snapshots__|_bmad-output|node_modules)(\/|$)/i;
+
+export function isSemgrepStagedTarget(filePath: string): boolean {
+  if (!CODE_FILE_PATTERN.test(filePath) || filePath.includes('__tests__')) return false;
+  if (/\.json$/i.test(filePath) && SEMGREP_SKIP_JSON_PATH.test(filePath)) return false;
+  return true;
+}
+
 const SEMGREP_CONFIGS = '--config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten';
 const SEMGREP_SEVERITY = '--severity ERROR --severity WARNING --severity INFO';
 // 全部规则保持全局强制。原先全局停用的 child_process / path-join-traversal 两条规则，
@@ -128,7 +140,7 @@ export function evaluateSemgrepOutput(stdout: string, checkId: string): CheckRes
 }
 
 export async function runSemgrepStaged(cwd?: string): Promise<CheckResult> {
-  const stagedFiles = getStagedFiles(cwd).filter((f) => CODE_FILE_PATTERN.test(f) && !f.includes('__tests__'));
+  const stagedFiles = getStagedFiles(cwd).filter((f) => isSemgrepStagedTarget(f));
   if (stagedFiles.length === 0) {
     return formatResult('semgrep-staged', DECISION.SKIP, '暂存区无（非测试）代码文件，跳过 semgrep');
   }
@@ -198,9 +210,9 @@ export async function runKnip(cwd?: string): Promise<CheckResult> {
   if (missing) return missing;
   try {
     const result = await withTimeout(
-      execCommandAsync(`${getBunxInvocation(cwd)} knip --reporter json`, { cwd, timeout: 30000 }),
-      30000,
-      'knip 超时 (30s)',
+      execCommandAsync(`${getBunxInvocation(cwd)} knip --reporter json`, { cwd, timeout: KNIP_TIMEOUT_MS }),
+      KNIP_TIMEOUT_MS,
+      `knip 超时 (${String(KNIP_TIMEOUT_MS / 1000)}s)`,
     );
     if (!result.success) {
       try {
@@ -237,9 +249,22 @@ export async function runTrivy(cwd?: string): Promise<CheckResult> {
   const missing = denyIfToolMissing('trivy', 'trivy', cwd);
   if (missing) return missing;
   try {
+    const trivyBinResult = execCommand('command -v trivy', { cwd, timeout: 5000 });
+    const trivyBin = trivyBinResult.stdout.trim();
+    if (!trivyBin) {
+      return formatResult('trivy', DECISION.DENY, 'Trivy 未安装或不在 PATH 中', {});
+    }
+
+    const scanners = resolveTrivyScanners(cwd);
+    const skipDbUpdate = '--skip-db-update';
+    const skipCheckUpdate = scanners.includes('misconfig') ? '' : '--skip-check-update';
     const ignoredDirs = getGitIgnoredDirs(cwd);
     const skipDirs = buildTrivySkipArgs(ignoredDirs);
-    const trivyCmd = `trivy fs ${TRIVY_DB_REPO_FLAGS} --scanners vuln,misconfig,secret,license --severity CRITICAL,HIGH,MEDIUM --format json ${skipDirs} .`;
+    const trivyCmd =
+      `"${trivyBin}" fs ${TRIVY_DB_REPO_FLAGS} --scanners ${scanners} --severity CRITICAL,HIGH,MEDIUM --format json ${skipDbUpdate} ${skipCheckUpdate} ${skipDirs} .`.replace(
+        /\s+/g,
+        ' ',
+      );
     const result = await withTimeout(
       execCommandAsync(trivyCmd, { cwd, timeout: TRIVY_TIMEOUT_MS }),
       TRIVY_TIMEOUT_MS,

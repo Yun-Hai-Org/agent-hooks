@@ -93,10 +93,15 @@ describe('checks/tools', () => {
     }
   });
 
-  it('resolveBunExecutable 应优先命中 vendored 或 ~/.cursor/bun', () => {
+  it('resolveBunExecutable 应优先命中当前解释器、vendored 或 ~/.cursor/.bun', () => {
     const resolved = resolveBunExecutable();
     expect(resolved).not.toBe('bun');
-    expect(resolved.includes('bun-darwin-x64') || resolved.includes('.cursor')).toBe(true);
+    const fromKnownInstall =
+      resolved === process.execPath ||
+      resolved.includes('bun-darwin-x64') ||
+      resolved.includes('.cursor') ||
+      resolved.includes('.bun/bin');
+    expect(fromKnownInstall).toBe(true);
   });
 
   it('parseBunVersion 应解析 semver', () => {

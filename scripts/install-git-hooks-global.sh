@@ -35,3 +35,5 @@ git config --global core.hooksPath "$DEST"
 echo "[install-git-hooks-global] core.hooksPath=$(git config --global core.hooksPath)"
 echo "[install-git-hooks-global] hooks deployed to $DEST"
 ls -la "$DEST"
+
+"$SCRIPT_DIR/configure-merge-no-ff-global.sh"
