@@ -126,7 +126,7 @@ async function runK8sChecks(files: string[], idPrefix: string, cwd?: string) {
         results.push(
           formatResult(
             `${idPrefix}-kube-linter`,
-            DECISION.WARN,
+            DECISION.DENY,
             `kube-linter 发现 ${String(warnings.length)} 个 warning: ${file}`,
             {
               output: formatKubeLinterDenyOutput(kubeLinterOutput),
@@ -144,13 +144,6 @@ async function runK8sChecks(files: string[], idPrefix: string, cwd?: string) {
 
   const failure = results.find((r) => r.decision === DECISION.DENY);
   if (failure) return failure;
-
-  const warnings = results.filter((r) => r.decision === DECISION.WARN);
-  if (warnings.length > 0) {
-    return formatResult(idPrefix, DECISION.WARN, `K8s lint 通过（${String(warnings.length)} 个 warning）`, {
-      warnings: warnings.map((w) => w.message),
-    });
-  }
 
   return formatResult(idPrefix, DECISION.ALLOW, 'K8s manifest 检查通过');
 }

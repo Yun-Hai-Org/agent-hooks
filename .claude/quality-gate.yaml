@@ -419,9 +419,11 @@ git:
       branch-check:
         enabled: true
       # 暂存区不得包含 .env、密钥等敏感文件
+      # controlIds: PIPL-Min, SOX-404
       sensitive-files:
         enabled: true
       # 暂存区依赖文件变更时 bun audit 审计
+      # controlIds: PCI-6.3.2, PCI-6.3.3
       dep-audit:
         enabled: true
       # 暂存区 TS/Python 类型检查（tsc/pyright）
@@ -453,9 +455,11 @@ git:
         enabled: true
         autoFix: true
       # 暂存区 gitleaks diff 密钥扫描
+      # controlIds: PCI-6.3.3, SOX-404
       gitleaks-staged:
         enabled: true
       # 暂存区 Semgrep 安全扫描
+      # controlIds: PCI-6.3.3, PCI-6.5
       semgrep-staged:
         enabled: true
       # 暂存区 AI code review（若配置）
@@ -578,21 +582,26 @@ git:
       hook-adversarial:
         enabled: true
       # 全仓 JS 依赖 bun audit
+      # controlIds: PCI-6.3.2, PCI-6.3.3
       dep-audit:
         enabled: true
       # Python 依赖 osv-scanner/pip-audit
+      # controlIds: PCI-6.3.2, PCI-6.3.3
       py-dep-audit:
         enabled: true
       # 全仓 gitleaks 扫描
+      # controlIds: PCI-6.3.3, SOX-404
       gitleaks:
         enabled: true
       # 全仓 Semgrep 安全扫描
+      # controlIds: PCI-6.3.3, PCI-6.5
       semgrep:
         enabled: true
       # 全仓 knip 死代码检测
       knip:
         enabled: true
       # 全仓 Trivy 漏洞/配置扫描
+      # controlIds: PCI-6.3.2, PCI-6.3.3
       trivy:
         enabled: true
       # 全仓 format 聚合门
@@ -745,21 +754,26 @@ git:
       hook-adversarial:
         enabled: true
       # 全仓 JS 依赖 bun audit
+      # controlIds: PCI-6.3.2, PCI-6.3.3
       dep-audit:
         enabled: true
       # Python 依赖 osv-scanner/pip-audit
+      # controlIds: PCI-6.3.2, PCI-6.3.3
       py-dep-audit:
         enabled: true
       # 全仓 gitleaks 扫描
+      # controlIds: PCI-6.3.3, SOX-404
       gitleaks:
         enabled: true
       # 全仓 Semgrep 安全扫描
+      # controlIds: PCI-6.3.3, PCI-6.5
       semgrep:
         enabled: true
       # 全仓 knip 死代码检测
       knip:
         enabled: true
       # 全仓 Trivy 漏洞/配置扫描
+      # controlIds: PCI-6.3.2, PCI-6.3.3
       trivy:
         enabled: true
       # 全仓 format 聚合门

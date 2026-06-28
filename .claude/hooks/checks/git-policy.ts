@@ -142,7 +142,7 @@ export function buildUncommittedWorktreeDenyReason(
 export function checkBranch(cwd?: string): CheckResult {
   const result = execCommand('git rev-parse --abbrev-ref HEAD', { cwd });
   const branch = result.success ? result.stdout.trim() : null;
-  if (!branch) return formatResult('branch-check', DECISION.WARN, '无法获取当前分支名');
+  if (!branch) return formatResult('branch-check', DECISION.DENY, '无法获取当前分支名');
   if (branch === 'main' || branch === 'master') {
     return formatResult('branch-check', DECISION.DENY, `禁止在 ${branch} 分支上直接提交，请创建 feature 分支`);
   }

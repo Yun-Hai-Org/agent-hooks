@@ -29,6 +29,11 @@ export const TOOL_INSTALL_HINTS: Record<string, string> = {
   markdownlint: 'bun add -d markdownlint-cli2',
   oasdiff: 'brew install oasdiff  # 或 go install github.com/oasdiff/oasdiff@latest',
   'osv-scanner': 'brew install osv-scanner  # 或 go install github.com/google/osv-scanner/cmd/osv-scanner@latest',
+  zap: 'brew install --cask zaproxy',
+  conftest: 'brew install conftest',
+  cosign: 'brew install cosign',
+  checkov: 'brew install checkov',
+  syft: 'brew install syft',
   'pip-audit': 'uv tool install pip-audit  # 或 pip install pip-audit',
 };
 

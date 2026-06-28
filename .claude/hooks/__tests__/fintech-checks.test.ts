@@ -41,9 +41,9 @@ describe('policy-conftest', () => {
     clearGateConfigCache();
   });
 
-  it('无 policy 目录时 SKIP', async () => {
+  it('无 policy 目录时 DENY (global strict)', async () => {
     const result = await runOpaConftest(repoDir);
-    expect(result.decision).toBe(DECISION.SKIP);
+    expect(result.decision).toBe(DECISION.DENY);
     expect(result.checkId).toBe('opa-conftest');
   });
 });

@@ -131,6 +131,12 @@ describe('quality-gate', () => {
   });
 
   describe('gate logging helpers', () => {
+    it('formatChecksForLog 应包含 controlIds', () => {
+      const results = [{ ...formatResult('sbom-archive', DECISION.ALLOW, 'ok'), controlIds: ['PCI-6.3.2'] }];
+      const logged = formatChecksForLog(results);
+      expect(logged[0].controlIds).toEqual(['PCI-6.3.2']);
+    });
+
     it('formatChecksForLog 应包含 details 摘要', () => {
       const results = [
         formatResult('type-check', DECISION.DENY, '类型检查失败', {

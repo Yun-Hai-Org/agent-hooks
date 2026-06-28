@@ -360,6 +360,8 @@ describe('block-dangerous-commands - protected branch delete', () => {
 
 describe('block-dangerous-commands - main 函数直接调用', () => {
   const { Readable } = require('stream');
+  const { execSync } = require('child_process');
+  const REPO_ROOT = execSync('git rev-parse --show-toplevel', { encoding: 'utf-8' }).trim();
   const fs = require('fs');
   const path = require('path');
 
@@ -370,11 +372,16 @@ describe('block-dangerous-commands - main 函数直接调用', () => {
     const originalStdin = process.stdin;
     process.stdin = Readable.from([input]);
 
-    // 捕获 console.log 输出
+    // 捕获 console.log / stdout 输出
     const originalLog = console.log;
+    const originalWrite = process.stdout.write.bind(process.stdout);
     let output = '';
     console.log = (msg) => {
       output += msg + '\n';
+    };
+    process.stdout.write = (chunk, ...args) => {
+      output += String(chunk);
+      return originalWrite(chunk, ...args);
     };
 
     try {
@@ -382,6 +389,7 @@ describe('block-dangerous-commands - main 函数直接调用', () => {
     } finally {
       process.stdin = originalStdin;
       console.log = originalLog;
+      process.stdout.write = originalWrite;
     }
 
     return output.trim();
@@ -392,7 +400,7 @@ describe('block-dangerous-commands - main 函数直接调用', () => {
       tool_name: 'Bash',
       tool_input: { command: 'rm -rf ~/' },
       session_id: 'test',
-      cwd: process.cwd(),
+      cwd: REPO_ROOT,
       permission_mode: 'default',
     });
 
@@ -407,7 +415,7 @@ describe('block-dangerous-commands - main 函数直接调用', () => {
       tool_name: 'Bash',
       tool_input: { command: 'ls -la' },
       session_id: 'test',
-      cwd: process.cwd(),
+      cwd: REPO_ROOT,
       permission_mode: 'default',
     });
 
@@ -420,7 +428,7 @@ describe('block-dangerous-commands - main 函数直接调用', () => {
       tool_name: 'Read',
       tool_input: { file_path: '/etc/passwd' },
       session_id: 'test',
-      cwd: process.cwd(),
+      cwd: REPO_ROOT,
       permission_mode: 'default',
     });
 
@@ -428,9 +436,10 @@ describe('block-dangerous-commands - main 函数直接调用', () => {
     expect(output).toBe('{}');
   });
 
-  it('应该处理无效 JSON 输入', async () => {
+  it('应该处理无效 JSON 输入 (fail-closed deny)', async () => {
     const output = await runMain('invalid json');
-    expect(output).toBe('{}');
+    const result = JSON.parse(output);
+    expect(result.hookSpecificOutput.permissionDecision).toBe('deny');
   });
 
   it('应该处理空 tool_input', async () => {
@@ -438,7 +447,7 @@ describe('block-dangerous-commands - main 函数直接调用', () => {
       tool_name: 'Bash',
       tool_input: null,
       session_id: 'test',
-      cwd: process.cwd(),
+      cwd: REPO_ROOT,
       permission_mode: 'default',
     });
 
@@ -451,7 +460,7 @@ describe('block-dangerous-commands - main 函数直接调用', () => {
       tool_name: 'Bash',
       tool_input: { command: 'rm -rf /' },
       session_id: 'test-logging',
-      cwd: process.cwd(),
+      cwd: REPO_ROOT,
       permission_mode: 'default',
     });
 
@@ -470,10 +479,11 @@ describe('block-dangerous-commands - main 函数直接调用', () => {
     expect(logContent).toContain('BLOCKED');
   });
 
-  it('应该处理 ERROR 级别的日志', async () => {
+  it('应该处理 ERROR 级别的日志 (fail-closed deny)', async () => {
     // 触发 JSON 解析错误，这会调用 log({ level: 'ERROR', ... })
     const output = await runMain('invalid json {{{');
-    expect(output).toBe('{}');
+    const result = JSON.parse(output);
+    expect(result.hookSpecificOutput.permissionDecision).toBe('deny');
 
     // 验证日志被记录
     const logDir = path.join(process.env.HOME || '', '.claude', 'hooks-logs');

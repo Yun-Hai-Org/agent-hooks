@@ -696,7 +696,7 @@ async function main() {
     console.log(formatAllowOutput());
   } catch (e) {
     log({ level: 'ERROR', error: e instanceof Error ? e.message : String(e) });
-    console.log(formatAllowOutput());
+    process.stdout.write(`${denyProtectSecrets('Hook 内部错误，按 fail-closed 拒绝')}\n`);
   }
 }
 
