@@ -177,9 +177,9 @@ export async function runSemgrep(cwd?: string): Promise<CheckResult> {
     const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
     const semgrepCmd = `semgrep ${SEMGREP_CONFIGS} ${SEMGREP_SEVERITY} ${SEMGREP_EXCLUDE_RULE_FLAGS} --error --json --exclude __tests__ ${excludeFlags} .`;
     const result = await withTimeout(
-      execCommandAsync(semgrepCmd, { cwd, timeout: FULL_GATE_TIMEOUT_MS }),
-      FULL_GATE_TIMEOUT_MS,
-      gateTimeoutMessage('semgrep', FULL_GATE_TIMEOUT_MS),
+      execCommandAsync(semgrepCmd, { cwd, timeout: timeoutMs }),
+      timeoutMs,
+      gateTimeoutMessage('semgrep', timeoutMs),
     );
     if (result.stdout) {
       const deny = evaluateSemgrepOutput(result.stdout, 'semgrep');

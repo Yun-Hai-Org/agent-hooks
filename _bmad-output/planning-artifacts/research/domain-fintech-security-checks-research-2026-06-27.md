@@ -1,8 +1,8 @@
 ---
-stepsCompleted: [1, 2]
+stepsCompleted: [1, 2, 3, 4, 5, 6]
 inputDocuments: []
 workflowType: 'research'
-lastStep: 3
+lastStep: 6
 research_type: 'domain'
 research_topic: 'Fintech 领域高安全金融开发 — 应引入的安全与合规检查'
 research_goals: '识别对安全高度要求的金融开发中，在现有 hooks 质量门体系之外还应引入的检查项；对照监管要求、行业实践与现有能力给出可落地的建议'
@@ -12,17 +12,69 @@ web_research_enabled: true
 source_verification: true
 ---
 
-# Research Report: domain
+# Fintech 高安全金融开发：应引入的安全与合规检查
 
-**Date:** 2026-06-27
-**Author:** Zhangwm
-**Research Type:** domain
+**Date:** 2026-06-27 | **Author:** Zhangwm | **Type:** domain research
+
+---
+
+## Executive Summary
+
+2025 年是金融开发安全合规的**分水岭**：PCI DSS 4.0 未来 dated 条款强制生效、欧盟 DORA 全面适用，
+DevSecOps 从「可选扫描」变为**审计就绪流水线**的硬性要求。本研究对照本项目 **quality-gate + hooks** 体系，得出核心结论：
+
+**已有能力覆盖 OSS-first 栈约 70%**（Semgrep、Gitleaks、Trivy、dep audit、k8s-lint、openapi-contract、commit/push/merge 三门），与 2026 行业推荐基线高度重合。
+
+**关键缺口集中在四类 P0 检查：** SBOM 发布归档（PCI 6.3.2）、Payment Page 脚本/SRI（PCI 6.4.3）、
+DAST/API 安全（PCI 11.3）、合规控制点 ID 映射（SOX/DORA 证据链）。
+**不应替换现有 SAST/SCA**，而应扩展 `security-scan.ts` / `quality-gate.ts` 编排层。
+
+**Top 5 建议：**
+
+1. merge full 增加 CycloneDX SBOM 生成与不可变归档
+2. Semgrep 启用 PCI/OWASP 金融规则包（commit + full）
+3. push/merge full 集成 OWASP ZAP API baseline（复用 openapi-contract）
+4. quality-gate JSON 日志增加 `controlIds` 映射 PCI/SOX 控制点
+5. 新增 `fintech` profile：Payment Page lint + OPA 策略（push/merge only）
+
+---
+
+## Table of Contents
+
+1. [Research Overview](#research-overview)
+2. [Domain Research Scope Confirmation](#domain-research-scope-confirmation)
+3. [Industry Analysis](#industry-analysis)
+4. [Competitive Landscape](#competitive-landscape)
+5. [Regulatory Requirements](#regulatory-requirements)
+6. [Technical Trends and Innovation](#technical-trends-and-innovation)
+7. [Recommendations](#recommendations)
+8. [Research Synthesis](#research-synthesis)
 
 ---
 
 ## Research Overview
 
-[Research overview and methodology will be appended here]
+### 研究意义
+
+金融科技开发正同时面临**攻击面扩大**（API-first、Open Banking、云原生）与**监管强制化**
+（PCI 4.0、DORA、等保/JR/T）双重压力。2025 年后，QSA 与等保测评 increasingly 要求 **CI/CD pipeline 日志**
+作为合规证据，而非年度手工清单。本研究回答：在现有 hooks 质量门之外，还应引入哪些检查、按何优先级、映射到哪道门。
+
+### 方法论
+
+- **数据来源：** PCI SSC 公开材料、EIOPA/DORA、JR/T 行业标准、DevSecOps 市场报告（Mordor、Market Research Future）、工具厂商与社区文档（2025–2026）
+- **验证方式：** 多源交叉验证，市场数据标注置信度
+- **对照对象：** 本项目 `.claude/hooks/quality-gate.ts` commit/full profile 现有检查项
+- **输出：** 检查清单 + 监管映射表 + 三阶段实施路线图
+
+### 研究目标达成
+
+| 目标 | 达成情况 |
+| --- | --- |
+| 识别应引入的额外检查项 | ✅ P0/P1/P2 清单 + 与现有 hooks 对照表 |
+| 对照监管要求 | ✅ PCI/DORA/SOX/等保/JR/T 映射到 commit/push/merge |
+| 对照行业实践 | ✅ OSS 栈 vs 商业平台竞争格局 |
+| 可落地建议 | ✅ Phase 1–3 路线图，扩展点明确到模块 |
 
 ---
 
@@ -366,4 +418,213 @@ FinTech 差异化应补 **DAST、SBOM 证据归档、OPA 合规策略、Payment 
 
 ---
 
-<!-- 后续步骤：监管聚焦 → 技术趋势 → 综合建议 -->
+## Regulatory Requirements
+
+> **分析目标：** 将监管条款映射到 **可嵌入 commit/push/merge 质量门** 的具体检查项，并标注与本项目 hooks 的覆盖/缺口。
+
+### Applicable Regulations
+
+| 法规/框架 | 生效/关键节点 | 开发阶段核心义务 | 推荐门禁检查 |
+| --- | --- | --- | --- |
+| **PCI DSS 4.0.1** | 2025-03-31 强制 | Req 6 安全开发、6.3.2 清单、6.4.3 脚本、11.6.1 篡改 | SBOM、SAST/SCA、脚本/SRI、DAST |
+| **DORA (EU 2022/2554)** | 2025-01-17 适用 | ICT 风险、第三方登记、韧性测试、SDLC | SBOM、full 渗透/TLPT、变更追溯 |
+| **SOX §404 ITGC** | 持续 | 变更授权、职责分离、测试、审计轨迹 | branch-gate、PR 审批、gate 日志 |
+| **等保 2.0 + JR/T 0071** | 持续 | 开发/测试环境隔离、代码安全检查 | 环境分离策略、SAST、恶意代码检测 |
+| **JR/T 0060 证券期货等保** | 2022 起 | 7.1.9.4 自行软件开发、7.1.9.5 外包软件 | 安全测试、交付前恶意代码检测 |
+| **证券期货业信息安全运营管理指南** | 2024 | 开发安全审计、软件成分管理、TOP 20 缺陷 | SCA/SBOM、Semgrep 金融规则 |
+| **GB/T 43698-2024 软件供应链安全** | 2024 | 组件识别、漏洞追踪 | Syft/Trivy SBOM、lockfile、dep audit |
+| **个人信息保护法 (PIPL)** | 2021 起 | 个人信息最小化、脱敏 | 敏感文件、Secrets、PII 静态规则 |
+
+**PCI DSS 4.0 开发要点（2025 起强制）：**
+
+- **6.3.2：** 定制软件 + 第三方组件清单，**每次发布刷新**（CI/CD 日志为典型证据）
+- **6.4.3：** 支付页浏览器端脚本须授权、完整性校验、书面业务理由
+- **11.6.1：** 支付页 HTTP 头与内容变更检测
+- **6.3.3 / 6.5：** 漏洞识别与变更安全——对应 SAST/SCA + 变更门禁
+
+**Sources:**
+
+- [Safeguard - PCI DSS 4.0 Software Security](https://safeguard.sh/resources/blog/pci-dss-4-0-software-security-requirements)
+- [Daydream - PCI 6.3.2](https://learn.daydream.ai/requirements/pci-dss-6-3-2)
+- [Daydream - PCI 6.4.3](https://learn.daydream.ai/requirements/pci-dss-6-4-3)
+- [EIOPA - DORA](https://www.eiopa.europa.eu/digital-operational-resilience-act-dora_en)
+
+### Industry Standards and Best Practices
+
+| 标准 | 与开发检查的关系 |
+| --- | --- |
+| **OWASP ASVS 4.0** | 应用安全验证级别，可映射 Semgrep 规则集 |
+| **OWASP Top 10 / API Top 10** | SAST/DAST 覆盖基准 |
+| **CWE/SANS Top 25** | Semgrep 规则优先级 |
+| **NIST SSDF (SP 800-218)** | 安全 SDLC，与 quality-gate profile 对齐 |
+| **SLSA / Sigstore** | 制品 provenance——push/merge full 扩展方向 |
+
+### Compliance Frameworks
+
+| Profile | 监管驱动 | 建议检查组合 |
+| --- | --- | --- |
+| **commit**（现有） | SOX 变更轨迹、PCI 增量 | branch + gitleaks + semgrep staged + dep audit + tests |
+| **push/merge full**（现有） | PCI 6.3 全量、DORA 韧性 | + trivy full + semgrep full + adversarial + k8s + openapi |
+| **fintech**（待增） | PCI 6.3.2/6.4.3、DORA 第三方 | + SBOM 归档、payment-page lint、OPA 策略 |
+| **audit-export**（待增） | SOX/等保审计 | gate JSONL → 不可变存储 + controlIds |
+
+### Data Protection and Privacy
+
+- **GDPR / PIPL：** Gitleaks + 暂存区敏感文件 + Semgrep PII 规则
+- **PCI CDE：** 禁止 PAN/CVV 硬编码——secrets + custom semgrep
+- **JR/T 0223-2021：** 测试环境禁止未脱敏生产数据
+
+### Licensing and Certification
+
+PCI QSA、等保测评、SOC 2、ISO 27001 均要求可提交的 **pipeline 扫描日志与 SBOM**；Trivy license scanner（已有）需与 SBOM 归档联动。
+
+### Implementation Considerations
+
+| 优先级 | 检查项 | 监管依据 | 本项目状态 |
+| --- | --- | --- | --- |
+| **P0** | SBOM merge 归档 | PCI 6.3.2 | ❌ 待增 |
+| **P0** | 支付页脚本/SRI | PCI 6.4.3 | ❌ 待增 |
+| **P0** | commit SCA/SAST/Secrets | PCI 6.3.3、SOX | ✅ 已有 |
+| **P1** | 变更不可篡改日志 | SOX | ⚠️ 部分 |
+| **P1** | DAST/API | PCI 11.3 | ❌ 待增 |
+| **P2** | OPA PCI-DORA 策略 | DORA Art.6 | ❌ 待增 |
+
+### Risk Assessment
+
+| 风险 | 等级 | 缓解 |
+| --- | --- | --- |
+| 无 SBOM → PCI 6.3.2 不合规 | 高 | merge full 生成 CycloneDX 并存档 |
+| 支付页脚本未授权 | 高 | 前端 CI：allowlist + SRI |
+| 供应链漏洞滞后 | 高 | commit dep audit + full Trivy |
+| SOX 无审批轨迹 | 中 | branch-gate + gate 日志 |
+| 无 DAST 覆盖 API | 中 | full gate 增 ZAP baseline |
+
+**Sources:**
+
+- [Harness - SOX Compliance for Software Delivery](https://www.harness.io/harness-devops-academy/sox-compliance-for-software-delivery-explained)
+- [证券期货业等保基本要求 (PDF)](https://www.beijing.gov.cn/zhengce/zhengcefagui/qtwj/202204/W020220530822959207005.pdf)
+
+---
+
+## Technical Trends and Innovation
+
+> **2025–2026 主旋律：** DevSecOps 转向 **供应链完整性 + 审计就绪流水线**。
+
+### Emerging Technologies
+
+| 技术 | 金融场景价值 | 与本项目关系 |
+| --- | --- | --- |
+| **SBOM (CycloneDX/SPDX)** | PCI 6.3.2、DORA 第三方 | Trivy `--format cyclonedx` 可扩展 |
+| **SLSA L3+ / Sigstore** | 制品 provenance | merge full 新检查 |
+| **Policy-as-Code (OPA)** | 部署/合并阻断不合规构建 | 新 checks 模块 |
+| **ZAP Automation Framework** | DAST/API、OpenAPI 驱动 | 与 openapi-contract 协同 |
+| **AI 安全代码审查** | PCI 映射、误报削减 | 补充 code-review，不替代 Semgrep |
+
+**Sources:**
+
+- [Safeguard - Supply Chain Security FS 2026](https://safeguard.sh/resources/blog/supply-chain-security-financial-services-2026)
+- [Uchit Vyas - DevSecOps is Supply Chain](https://hellouchit.com/writing/devsecops-is-supply-chain.html)
+
+### Digital Transformation
+
+- **审计就绪流水线：** 证据在 CI 运行时自动生成
+- **Git 即变更系统：** PR = SOX 变更工单（与本项目 branch-gate + commit-gate 一致）
+- **45% 组织 2024 年替换过漏洞构建组件**——SCA/SBOM 成 DevSecOps 基线
+
+### Innovation Patterns
+
+OSS 栈（Trivy+Semgrep+Gitleaks）+ 窄商业层；commit 增量 + merge 全量 + 定期 DAST；OpenAPI-first ZAP API scan。
+
+### Future Outlook
+
+2026–2027 DORA RTS 可能明确 SBOM；SLSA L3+ 成资金流转系统构建基准；Payment Page 安全成独立工具类。
+
+### Implementation Opportunities
+
+| 阶段 | 检查 | 工具 | Profile |
+| --- | --- | --- | --- |
+| 1 | SBOM 归档 | `trivy fs --format cyclonedx` / syft | merge full |
+| 2 | PCI Semgrep 规则 | `p/owasp-top-ten` + custom | commit + full |
+| 3 | OPA 策略 | Conftest | push/merge full |
+| 4 | ZAP API | `zaproxy/action-api-scan` | push full |
+| 5 | Payment Page lint | script allowlist + SRI | commit*（前端路径） |
+| 6 | controlIds 映射 | quality-gate JSON 扩展 | 全 profile |
+
+### Challenges and Risks
+
+DAST 误报/环境依赖 → 先 baseline + `.zap/rules.tsv`；SBOM 体积 → 仅 in-scope 路径；AI 审查 → 仅 WARN。
+
+## Recommendations
+
+### Technology Adoption Strategy
+
+**Phase 1（4–6 周）：** SBOM 归档、Semgrep PCI 规则、Payment Page lint  
+**Phase 2（6–10 周）：** ZAP API DAST、OPA/Conftest、controlIds 映射  
+**Phase 3（按需）：** SLSA/Cosign、DefectDojo SARIF 聚合
+
+### Innovation Roadmap
+
+```text
+现有 hooks          Phase 1           Phase 2            Phase 3
+Semgrep/Trivy   →  + SBOM 归档   →  + ZAP DAST     →  + SLSA/Cosign
+三门 profile    →  + PCI 规则    →  + OPA 策略     →  + GRC 导出
+openapi-contract → (feed ZAP)   →  + API gate     →  + 42Crunch 可选
+```
+
+### Risk Mitigation
+
+1. fail-closed 保留；2. 重检查仅 push/merge full；3. gate 日志含 commit SHA + controlIds；4. 扩展既有模块，避免平行 CLI。
+
+### 最终检查清单
+
+| 检查 | P | commit | push | merge | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| SAST (Semgrep) | P0 | ✅ | ✅ | ✅ | 已有 |
+| Secrets (Gitleaks) | P0 | ✅ | ✅ | ✅ | 已有 |
+| SCA (Trivy/dep audit) | P0 | ✅ | ✅ | ✅ | 已有 |
+| IaC/K8s lint | P1 | ✅ | ✅ | ✅ | 已有 |
+| OpenAPI contract | P1 | ✅ | ✅ | ✅ | 已有 |
+| **SBOM 归档** | P0 | — | — | ✅ | **待增** |
+| **PCI Semgrep 规则** | P0 | ✅ | ✅ | ✅ | **待增** |
+| **Payment Page lint** | P0 | ✅* | — | ✅ | **待增** |
+| **DAST (ZAP API)** | P1 | — | ✅ | ✅ | **待增** |
+| **OPA/Conftest** | P1 | — | ✅ | ✅ | **待增** |
+| **controlIds 映射** | P1 | ✅ | ✅ | ✅ | **待增** |
+| **SLSA/Cosign** | P2 | — | — | ✅ | **待增** |
+
+---
+
+## Research Synthesis
+
+### 跨章节核心洞察
+
+1. **市场与监管同向：** BFSI 占 AppSec 支出 ~25–29%，2025 PCI/DORA 强制条款与 DevSecOps 采购周期重合，「检查即证据」成为采购标准。
+2. **竞争格局验证 OSS 路线：** 2026 推荐零许可费栈 = Semgrep+Trivy+Gitleaks+Checkov，与本项目高度重合；商业工具价值在 GRC 证据而非检测深度。
+3. **监管映射清晰：** PCI 6.3.2→SBOM、6.4.3→Payment Page、SOX→PR+gate 日志、DORA→第三方 SBOM+变更追溯。
+4. **技术趋势指向编排层：** 供应链优先于单点 SAST；quality-gate 应做编排与 controlIds 聚合，而非替换引擎。
+
+### 对本项目的战略定位
+
+**quality-gate / hooks = FinTech Audit-Ready DevSecOps 的编排层**，职责是：
+
+- 在 commit/push/merge 正确阶段触发正确检查
+- 产出 QSA/等保可抽样的 JSON 证据链
+- fail-closed 阻断不合规变更
+
+### 下一步行动（实施顺序）
+
+1. `security-scan.ts` 增 `runSbomArchive(cwd)` → merge full
+2. `.semgrep/` 或 rules 目录增 PCI/fintech 规则包
+3. `quality-gate.ts` 结果 JSON 增 optional `controlIds`
+4. 评估 `runZapApiBaseline` 依赖 staging/kind 的可行性
+5. 文档化 `fintech` profile 于 `docs/hooks-responsibility-matrix.md`
+
+### 研究局限
+
+- 市场数据多源口径差异大，CAGR 标注「中」置信度
+- 国内监管细则以公开 JR/T/等保材料为准，具体测评以测评机构为准
+- DAST/TLPT 需运行时环境，本研究未做 PoC 验证耗时
+
+**Research Completed:** 2026-06-27 | **Steps:** 1–6 全部完成
+
+**Sources:** 见各章节 Sources；主要参考 PCI SSC、EIOPA、中国人民银行 JR/T、OWASP、Safeguard.sh、Mordor Intelligence。
