@@ -2,7 +2,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { execCommand, formatResult, DECISION } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
-import type { CheckResult } from '../types.js';
+import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 const FRESHNESS_TIMEOUT_MS = 30000;
 
@@ -11,8 +11,9 @@ const FRESHNESS_TIMEOUT_MS = 30000;
  * - commit profile（staged=true）：仅在依赖清单被暂存时触发。
  * - full profile（staged=false）：只要存在清单与 lockfile 即校验。
  */
-export function runLockfileFreshness(cwd: string = process.cwd(), options: { staged?: boolean } = {}): CheckResult {
+export function runLockfileFreshness(cwd: string = process.cwd(), options: GateCheckRunOptions = {}): CheckResult {
   const staged = options.staged === true;
+  const timeoutMs = options.timeoutMs ?? FRESHNESS_TIMEOUT_MS;
   const stagedFiles = staged ? getStagedFiles(cwd) : [];
   const isStaged = (name: string): boolean => stagedFiles.some((f) => f.endsWith(name));
 
@@ -26,7 +27,7 @@ export function runLockfileFreshness(cwd: string = process.cwd(), options: { sta
   const jsTrigger = staged ? isStaged('package.json') : hasPackageJson;
   if (jsTrigger && hasPackageJson && hasBunLock) {
     checked.push('bun');
-    const r = execCommand('bun install --frozen-lockfile --dry-run', { cwd, timeout: FRESHNESS_TIMEOUT_MS });
+    const r = execCommand('bun install --frozen-lockfile --dry-run', { cwd, timeout: timeoutMs });
     if (!r.success) {
       failures.push('package.json 与 bun.lock 不同步（请运行 bun install 并提交更新后的 bun.lock）');
     }
@@ -39,7 +40,7 @@ export function runLockfileFreshness(cwd: string = process.cwd(), options: { sta
   const pyTrigger = staged ? isStaged('pyproject.toml') : hasPyproject;
   if (pyTrigger && hasPyproject && hasUvLock) {
     checked.push('uv');
-    const r = execCommand('uv lock --check', { cwd, timeout: FRESHNESS_TIMEOUT_MS });
+    const r = execCommand('uv lock --check', { cwd, timeout: timeoutMs });
     if (!r.success) {
       failures.push('pyproject.toml 与 uv.lock 不同步（请运行 uv lock 并提交更新后的 uv.lock）');
     }

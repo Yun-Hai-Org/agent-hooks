@@ -18,6 +18,7 @@ import { getStagedFiles, hasUncommittedChanges, buildUncommittedWorktreeDenyReas
 import { summarizeResults } from './quality-gate.js';
 import type { CheckResult } from './types.js';
 import { getPlatform, formatStopContinueOutput, formatStopSuccessOutput } from './hook-adapter.js';
+import { isGateNodeEnabled } from './gate-config.js';
 
 const HOOK_NAME = 'auto-commit';
 const MAIN_BRANCHES = ['main', 'master'];
@@ -199,6 +200,12 @@ async function main() {
     const data = input.trim() ? (JSON.parse(input) as Record<string, unknown>) : {};
     const { cwd, sessionId, hookEvent, loopCount, status } = parseStopInput(data);
     const platform = getPlatform();
+
+    if (!isGateNodeEnabled('ide.auto-commit', cwd)) {
+      log(HOOK_NAME, { level: 'SKIP', reason: 'gate disabled', session_id: sessionId, cwd });
+      console.log('{}');
+      return;
+    }
 
     if (platform === 'cursor' && status !== 'completed') {
       log(HOOK_NAME, { level: 'SKIP', reason: `status=${status}`, session_id: sessionId, cwd });

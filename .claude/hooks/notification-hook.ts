@@ -5,6 +5,7 @@
 
 import { readStdin, safeMain } from './security-orchestrator.js';
 import { dispatchSecurityNotification } from './notification-core.js';
+import { isGateNodeEnabled } from './gate-config.js';
 
 export {
   isCoolingDown,
@@ -32,6 +33,10 @@ interface NotificationHookInput {
 export async function handleNotification(data: NotificationHookInput | null | undefined) {
   const message = data?.tool_input?.message ?? '';
   const session_id = data?.session_id ?? '';
+  const cwd = process.cwd();
+  if (!isGateNodeEnabled('ide.notification', cwd)) {
+    return { skipped: true, reason: 'gate disabled' };
+  }
   return dispatchSecurityNotification({ message, session_id }, HOOK_NAME);
 }
 

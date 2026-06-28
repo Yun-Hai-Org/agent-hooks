@@ -3,7 +3,7 @@ import { dirname, join } from 'path';
 import { execCommandAsync, formatResult, withTimeout, DECISION, getHookProcessEnv } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
 import { denyIfToolMissing, denyOnToolError, getBunAuditInvocation } from './tools.js';
-import type { CheckResult } from '../types.js';
+import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 const DEP_AUDIT_TIMEOUT_MS = 30000;
 const DEP_AUDIT_TRIGGER_FILES = ['package.json', 'bun.lock', 'bun.lockb', 'package-lock.json', 'yarn.lock'] as const;
@@ -157,6 +157,7 @@ export function evaluateBunAudit(severities: Record<string, number>): CheckResul
 async function runBunAuditAt(
   auditCwd: string,
   auditCmd: string,
+  timeoutMs: number = DEP_AUDIT_TIMEOUT_MS,
 ): Promise<{
   severities: Record<string, number> | null;
   registryError: boolean;
@@ -166,11 +167,11 @@ async function runBunAuditAt(
   const result = await withTimeout(
     execCommandAsync(auditCmd, {
       cwd: auditCwd,
-      timeout: DEP_AUDIT_TIMEOUT_MS,
+      timeout: timeoutMs,
       env: getDepAuditProcessEnv(),
     }),
-    DEP_AUDIT_TIMEOUT_MS,
-    `bun audit 超时 (${String(DEP_AUDIT_TIMEOUT_MS / 1000)}s)`,
+    timeoutMs,
+    `bun audit 超时 (${String(timeoutMs / 1000)}s)`,
   );
 
   if (isRegistryAuditFailure(result.stdout, result.stderr)) {
@@ -181,9 +182,10 @@ async function runBunAuditAt(
   return { severities, registryError: false, stdout: result.stdout, stderr: result.stderr };
 }
 
-export async function runDepAudit(cwd?: string, options: { staged?: boolean } = {}) {
+export async function runDepAudit(cwd?: string, options: GateCheckRunOptions = {}) {
   const repoCwd = cwd ?? process.cwd();
   const { staged = false } = options;
+  const auditTimeoutMs = options.timeoutMs ?? DEP_AUDIT_TIMEOUT_MS;
   let stagedFiles: string[] | undefined;
 
   if (staged) {
@@ -219,7 +221,7 @@ export async function runDepAudit(cwd?: string, options: { staged?: boolean } = 
     const severityLists: Record<string, number>[] = [];
 
     for (const auditCwd of auditRoots) {
-      const { severities, registryError, stdout, stderr } = await runBunAuditAt(auditCwd, auditCmd);
+      const { severities, registryError, stdout, stderr } = await runBunAuditAt(auditCwd, auditCmd, auditTimeoutMs);
       const output = (stderr || stdout).slice(0, 300);
       if (registryError) {
         return formatResult('dep-audit', DECISION.DENY, registryAuditFailureMessage(stdout, stderr), { output });

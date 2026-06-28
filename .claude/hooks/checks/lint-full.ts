@@ -8,9 +8,13 @@ import {
 } from './tools.js';
 import { isHooksProject } from './hooks-project.js';
 import { FULL_GATE_TIMEOUT_MS, gateTimeoutMessage } from '../gate-timeouts.js';
-import type { CheckResult } from '../types.js';
+import { buildGateCheckPath, runWithAutoFixRetry } from '../gate-autofix.js';
+import type { CheckResult, GateCheckRunOptions, GatePathPrefix } from '../types.js';
 
-export async function runLintFull(cwd?: string) {
+export async function runLintFull(cwd?: string, options?: GateCheckRunOptions) {
+  const timeoutMs = options?.timeoutMs ?? FULL_GATE_TIMEOUT_MS;
+  const gatePathPrefix: GatePathPrefix = options?.gatePathPrefix ?? 'git.pre-push';
+  const root = cwd ?? process.cwd();
   const results: CheckResult[] = [];
   const hasEslintConfig =
     execCommand('test -f eslint.config.ts', { cwd }).success ||
@@ -21,25 +25,24 @@ export async function runLintFull(cwd?: string) {
   if (hasEslintConfig && isHooksProject(cwd)) {
     const missing = denyIfToolMissing('bun', 'lint-eslint', cwd);
     if (missing) return missing;
+    const eslintPath = buildGateCheckPath(gatePathPrefix, 'lint-eslint');
     try {
-      const eslintResult = await withTimeout(
-        execCommandAsync(
-          `${getBunxInvocation(cwd)} eslint .claude/hooks --ignore-pattern "**/__tests__/**" --max-warnings 0 --report-unused-disable-directives`,
-          {
-            cwd,
-            timeout: FULL_GATE_TIMEOUT_MS,
-          },
-        ),
-        FULL_GATE_TIMEOUT_MS,
-        gateTimeoutMessage('eslint', FULL_GATE_TIMEOUT_MS),
-      );
-      results.push(
-        eslintResult.success
+      const eslintResult = await runWithAutoFixRetry(eslintPath, { cwd: root, timeoutMs }, async () => {
+        const result = await withTimeout(
+          execCommandAsync(
+            `${getBunxInvocation(cwd)} eslint .claude/hooks --ignore-pattern "**/__tests__/**" --max-warnings 0 --report-unused-disable-directives`,
+            { cwd, timeout: timeoutMs },
+          ),
+          timeoutMs,
+          gateTimeoutMessage('eslint', timeoutMs),
+        );
+        return result.success
           ? formatResult('lint-eslint', DECISION.ALLOW, 'ESLint 全量检查通过')
           : formatResult('lint-eslint', DECISION.DENY, 'ESLint 全量检查失败', {
-              output: (eslintResult.stderr || eslintResult.stdout).slice(0, 500),
-            }),
-      );
+              output: (result.stderr || result.stdout).slice(0, 500),
+            });
+      });
+      results.push(eslintResult);
     } catch (e) {
       results.push(denyOnToolError(e, 'lint-eslint', 'eslint'));
     }
@@ -49,19 +52,21 @@ export async function runLintFull(cwd?: string) {
     const missing = denyIfRuffMissing('lint-ruff', cwd);
     if (missing) return missing;
     const ruff = getRuffInvocation(cwd);
+    const ruffPath = buildGateCheckPath(gatePathPrefix, 'lint-ruff');
     try {
-      const ruffResult = await withTimeout(
-        execCommandAsync(`${ruff} check --preview .`, { cwd, timeout: 60000 }),
-        60000,
-        'ruff 超时 (60s)',
-      );
-      results.push(
-        ruffResult.success
+      const ruffResult = await runWithAutoFixRetry(ruffPath, { cwd: root, timeoutMs }, async () => {
+        const result = await withTimeout(
+          execCommandAsync(`${ruff} check --preview .`, { cwd, timeout: timeoutMs }),
+          timeoutMs,
+          gateTimeoutMessage('ruff', timeoutMs),
+        );
+        return result.success
           ? formatResult('lint-ruff', DECISION.ALLOW, 'Ruff 全量检查通过')
           : formatResult('lint-ruff', DECISION.DENY, 'Ruff 全量检查失败', {
-              output: (ruffResult.stderr || ruffResult.stdout).slice(0, 500),
-            }),
-      );
+              output: (result.stderr || result.stdout).slice(0, 500),
+            });
+      });
+      results.push(ruffResult);
     } catch (e) {
       results.push(denyOnToolError(e, 'lint-ruff', 'ruff'));
     }

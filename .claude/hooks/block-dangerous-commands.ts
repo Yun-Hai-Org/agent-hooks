@@ -16,6 +16,7 @@ import { join } from 'path';
 import { LOG_DIR, getCurrentBranch } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
 import { notifySecurityEventAsync } from './notify-security-event.js';
+import { isGateNodeEnabled } from './gate-config.js';
 import {
   isGitMergeCommand,
   isGitCommitCommand,
@@ -570,11 +571,22 @@ async function main() {
       }
 
       const cmd = tool_input.command ?? '';
+      const hookCwd = cwd || process.cwd();
+
+      if (!isGateNodeEnabled('ide.block-dangerous-commands', hookCwd)) {
+        console.log(formatAllowOutput());
+        return;
+      }
+
       const result = checkCommand(cmd);
 
       if (result.blocked) {
         const p = result.pattern;
         if (!p) {
+          console.log(formatAllowOutput());
+          return;
+        }
+        if (!isGateNodeEnabled(`ide.block-dangerous-commands.rules.${p.id}`, hookCwd)) {
           console.log(formatAllowOutput());
           return;
         }

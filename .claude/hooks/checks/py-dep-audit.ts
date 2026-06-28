@@ -1,6 +1,6 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
-import type { CheckResult } from '../types.js';
+import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 function hasPythonDependencies(cwd?: string): boolean {
   if (!execCommand('test -f pyproject.toml', { cwd }).success) return false;
@@ -49,7 +49,8 @@ export function pipAuditHasVulnerabilities(stdout: string): boolean | null {
   return deps.some((d) => (d.vulns?.length ?? 0) > 0);
 }
 
-export async function runPyDepAudit(cwd?: string): Promise<CheckResult> {
+export async function runPyDepAudit(cwd?: string, _options?: GateCheckRunOptions): Promise<CheckResult> {
+  void _options;
   const hasPyproject = execCommand('test -f pyproject.toml', { cwd }).success;
   if (!hasPyproject) {
     return formatResult('py-dep-audit', DECISION.SKIP, '无 pyproject.toml，跳过 Python 依赖审计');

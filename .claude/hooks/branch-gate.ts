@@ -17,6 +17,7 @@ import {
   getPlatform,
 } from './hook-adapter.js';
 import { notifySecurityEventAsync } from './notify-security-event.js';
+import { isGateNodeEnabled } from './gate-config.js';
 
 const MAIN_BRANCHES = ['main', 'master'];
 const ALLOWED_PATHS_ON_MAIN = ['_bmad-output/'];
@@ -156,6 +157,11 @@ async function main() {
     }
 
     const workingDir = cwd || process.cwd();
+
+    if (!isGateNodeEnabled('ide.branch-gate', workingDir)) {
+      console.log(allow());
+      return;
+    }
 
     if (!isGitRepo(workingDir)) {
       if (tool_name === 'Bash') {

@@ -15,6 +15,7 @@ import {
   buildGateRetryMergeFailureMessage,
 } from './gate-fix.js';
 import { getPlatform, formatStopContinueOutput, formatStopSuccessOutput } from './hook-adapter.js';
+import { isGateNodeEnabled } from './gate-config.js';
 import type { GatePendingEntry } from './types.js';
 
 const HOOK_NAME = 'gate-retry-stop';
@@ -59,6 +60,11 @@ export function executePendingMerge(pending: GatePendingEntry) {
  * @param {{ loopCount?: number; cwd?: string }} [options]
  */
 export async function runGateRetryStop(sessionId: string, options: { cwd?: string; loopCount?: number } = {}) {
+  const cwd = options.cwd ?? process.cwd();
+  if (!isGateNodeEnabled('ide.gate-retry-stop', cwd)) {
+    return { action: 'skip', reason: 'gate disabled' };
+  }
+
   if (!isGateRetryStopEnabled()) {
     return { action: 'skip', reason: 'GATE_RETRY_STOP disabled' };
   }

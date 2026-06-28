@@ -24,6 +24,7 @@ import {
 } from './hook-adapter.js';
 import { notifySecurityEventAsync } from './notify-security-event.js';
 import { asString } from './types.js';
+import { isGateNodeEnabled } from './gate-config.js';
 
 const SAFETY_LEVEL = 'strict';
 
@@ -665,6 +666,12 @@ async function main() {
     const { tool_name, tool_input, session_id, cwd, permission_mode } = data;
 
     if (!['Read', 'Edit', 'Write', 'Bash'].includes(tool_name)) {
+      console.log(formatAllowOutput());
+      return;
+    }
+
+    const workingDir = cwd || process.cwd();
+    if (!isGateNodeEnabled('ide.protect-secrets', workingDir)) {
       console.log(formatAllowOutput());
       return;
     }

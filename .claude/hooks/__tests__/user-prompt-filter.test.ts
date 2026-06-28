@@ -4,6 +4,7 @@ import { spawnSync } from 'child_process';
 import { join } from 'path';
 import { getHookProcessEnv } from '../security-orchestrator.js';
 import { resolveBunExecutable } from '../checks/tools.js';
+import { PROJECT_ROOT } from './helpers.js';
 
 const HOOK_PATH = join(import.meta.dir, '..', 'user-prompt-filter.ts');
 
@@ -158,7 +159,7 @@ describe('user-prompt-filter hook 集成', () => {
       tool_name: 'UserPromptSubmit',
       tool_input: { user_prompt: '请用 AKIAIOSFODNN7EXAMPLE 这个 key 调用 AWS' },
       session_id: 'test-001',
-      cwd: '/tmp',
+      cwd: PROJECT_ROOT,
       permission_mode: 'default',
     });
     expect(output.hookSpecificOutput?.permissionDecision).toBe('deny');
@@ -171,7 +172,7 @@ describe('user-prompt-filter hook 集成', () => {
       tool_name: 'UserPromptSubmit',
       tool_input: { user_prompt: '请帮我写一个排序算法' },
       session_id: 'test-002',
-      cwd: '/tmp',
+      cwd: PROJECT_ROOT,
       permission_mode: 'default',
     });
     expect(output).toEqual({});
@@ -182,7 +183,7 @@ describe('user-prompt-filter hook 集成', () => {
       tool_name: 'Bash',
       tool_input: { command: 'echo AKIAIOSFODNN7EXAMPLE' },
       session_id: 'test-003',
-      cwd: '/tmp',
+      cwd: PROJECT_ROOT,
       permission_mode: 'default',
     });
     expect(output).toEqual({});
@@ -193,7 +194,7 @@ describe('user-prompt-filter hook 集成', () => {
       tool_name: 'UserPromptSubmit',
       tool_input: {},
       session_id: 'test-004',
-      cwd: '/tmp',
+      cwd: PROJECT_ROOT,
       permission_mode: 'default',
     });
     expect(output).toEqual({});

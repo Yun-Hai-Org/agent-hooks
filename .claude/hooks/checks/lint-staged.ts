@@ -10,7 +10,8 @@ import {
   getRuffInvocation,
 } from './tools.js';
 import { COMMIT_GATE_TIMEOUT_MS, gateTimeoutMessage } from '../gate-timeouts.js';
-import type { CheckResult } from '../types.js';
+import { buildGateCheckPath, runWithAutoFixRetry } from '../gate-autofix.js';
+import type { CheckResult, GateCheckRunOptions, GatePathPrefix } from '../types.js';
 
 function filterExistingStagedFiles(files: string[], cwd?: string): string[] {
   const root = cwd ?? process.cwd();
@@ -18,7 +19,10 @@ function filterExistingStagedFiles(files: string[], cwd?: string): string[] {
   return files.filter((f) => existsSync(join(root, f)));
 }
 
-export async function runLintStaged(cwd?: string) {
+export async function runLintStaged(cwd?: string, options?: GateCheckRunOptions) {
+  const timeoutMs = options?.timeoutMs ?? COMMIT_GATE_TIMEOUT_MS;
+  const gatePathPrefix: GatePathPrefix = options?.gatePathPrefix ?? 'git.pre-commit';
+  const root = cwd ?? process.cwd();
   const stagedFiles = filterExistingStagedFiles(getStagedFiles(cwd), cwd);
   const jsFiles = stagedFiles.filter((f) => /\.(js|ts|jsx|tsx|mjs|cjs)$/i.test(f) && !f.includes('__tests__'));
   const pyFiles = stagedFiles.filter((f) => f.endsWith('.py'));
@@ -37,25 +41,24 @@ export async function runLintStaged(cwd?: string) {
     const missing = denyIfToolMissing('bun', 'lint-staged-eslint', cwd);
     if (missing) return missing;
     const files = jsFiles.map((f) => `"${f}"`).join(' ');
+    const eslintPath = buildGateCheckPath(gatePathPrefix, 'lint-staged-eslint');
     try {
-      const eslintResult = await withTimeout(
-        execCommandAsync(
-          `${getBunxInvocation(cwd)} eslint ${files} --max-warnings 0 --no-warn-ignored --report-unused-disable-directives`,
-          {
-            cwd,
-            timeout: COMMIT_GATE_TIMEOUT_MS,
-          },
-        ),
-        COMMIT_GATE_TIMEOUT_MS,
-        gateTimeoutMessage('eslint staged', COMMIT_GATE_TIMEOUT_MS),
-      );
-      results.push(
-        eslintResult.success
+      const eslintResult = await runWithAutoFixRetry(eslintPath, { cwd: root, files: jsFiles, timeoutMs }, async () => {
+        const result = await withTimeout(
+          execCommandAsync(
+            `${getBunxInvocation(cwd)} eslint ${files} --max-warnings 0 --no-warn-ignored --report-unused-disable-directives`,
+            { cwd, timeout: timeoutMs },
+          ),
+          timeoutMs,
+          gateTimeoutMessage('eslint staged', timeoutMs),
+        );
+        return result.success
           ? formatResult('lint-staged-eslint', DECISION.ALLOW, 'ESLint 暂存文件检查通过')
           : formatResult('lint-staged-eslint', DECISION.DENY, 'ESLint 暂存文件检查失败', {
-              output: (eslintResult.stderr || eslintResult.stdout).slice(0, 500),
-            }),
-      );
+              output: (result.stderr || result.stdout).slice(0, 500),
+            });
+      });
+      results.push(eslintResult);
     } catch (e) {
       results.push(denyOnToolError(e, 'lint-staged-eslint', 'eslint'));
     }
@@ -66,19 +69,21 @@ export async function runLintStaged(cwd?: string) {
     if (missing) return missing;
     const files = pyFiles.map((f) => `"${f}"`).join(' ');
     const ruff = getRuffInvocation(cwd);
+    const ruffPath = buildGateCheckPath(gatePathPrefix, 'lint-staged-ruff');
     try {
-      const ruffResult = await withTimeout(
-        execCommandAsync(`${ruff} check --preview ${files}`, { cwd, timeout: COMMIT_GATE_TIMEOUT_MS }),
-        COMMIT_GATE_TIMEOUT_MS,
-        gateTimeoutMessage('ruff staged', COMMIT_GATE_TIMEOUT_MS),
-      );
-      results.push(
-        ruffResult.success
+      const ruffResult = await runWithAutoFixRetry(ruffPath, { cwd: root, files: pyFiles, timeoutMs }, async () => {
+        const result = await withTimeout(
+          execCommandAsync(`${ruff} check --preview ${files}`, { cwd, timeout: timeoutMs }),
+          timeoutMs,
+          gateTimeoutMessage('ruff staged', timeoutMs),
+        );
+        return result.success
           ? formatResult('lint-staged-ruff', DECISION.ALLOW, 'Ruff 暂存文件检查通过')
           : formatResult('lint-staged-ruff', DECISION.DENY, 'Ruff 暂存文件检查失败', {
-              output: (ruffResult.stderr || ruffResult.stdout).slice(0, 500),
-            }),
-      );
+              output: (result.stderr || result.stdout).slice(0, 500),
+            });
+      });
+      results.push(ruffResult);
     } catch (e) {
       results.push(denyOnToolError(e, 'lint-staged-ruff', 'ruff'));
     }

@@ -32,6 +32,11 @@ done
 
 git config --global core.hooksPath "$DEST"
 
+if [ ! -f "$HOME/.claude/quality-gate.yaml" ] && [ -f "$HOOKS_REPO/.claude/quality-gate.example.yaml" ]; then
+	cp "$HOOKS_REPO/.claude/quality-gate.example.yaml" "$HOME/.claude/quality-gate.yaml"
+	echo "[install-git-hooks-global] bootstrapped ~/.claude/quality-gate.yaml"
+fi
+
 echo "[install-git-hooks-global] core.hooksPath=$(git config --global core.hooksPath)"
 echo "[install-git-hooks-global] hooks deployed to $DEST"
 ls -la "$DEST"

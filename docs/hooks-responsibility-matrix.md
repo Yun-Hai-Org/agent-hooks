@@ -127,6 +127,37 @@ IDE：`block-dangerous-commands` 拦截无 `--no-ff` 的 merge 与 `--squash`。
 - merge-gate source 分支 worktree 预扫
 - branch-gate worktree bypass
 
+## C. quality-gate.yaml 集中配置
+
+白名单语义：节点未出现在 `~/.claude/quality-gate.yaml` 或 `{repo}/.claude/quality-gate.yaml` 中则 **不执行**。
+
+| 字段                    | 说明                                                       |
+| ----------------------- | ---------------------------------------------------------- |
+| `enabled`               | 是否启用该 hook/check                                      |
+| `timeout` / `timeoutMs` | 超时（子项继承 hook 总项，受总项 cap）                     |
+| `autoFix`               | 仅 lint/format 类可 fix 节点；失败时 fix-then-recheck 一次 |
+
+安装时 bootstrap：`link-cursor-hooks-global.sh` / `install-git-hooks-global.sh`
+会在 `~/.claude/quality-gate.yaml` 不存在时从 example 复制。
+
+## D. Fintech 合规检查
+
+| checkId               | profile | controlIds            | autoFix                   |
+| --------------------- | ------- | --------------------- | ------------------------- |
+| `semgrep-pci-staged`  | commit  | PCI-6.3.3, PCI-6.5    | 否                        |
+| `payment-page-staged` | commit  | PCI-6.4.3             | 否                        |
+| `sbom-archive`        | full    | PCI-6.3.2, DORA-Art6  | 否                        |
+| `semgrep-pci`         | full    | PCI-6.3.3             | 否                        |
+| `payment-page-full`   | full    | PCI-6.4.3, PCI-11.6.1 | 否                        |
+| `zap-api-dast`        | full    | PCI-11.3              | 否（需 `ZAP_TARGET_URL`） |
+| `opa-conftest`        | full    | DORA-Art6, SOX-404    | 否                        |
+| `iac-checkov`         | full    | PCI-6.3.3             | 否                        |
+| `slsa-cosign`         | full    | PCI-6.3.2, SLSA-L3    | 否（需 `.hooks/cosign/`） |
+
+`CheckResult.controlIds` 由 registry SSOT 注入，供 JSON 审计日志映射 PCI/SOX/DORA 控制点。
+
+逻辑 **fintech profile** = full profile + 上述 fintech leaves 在 yaml 中 `enabled: true`。
+
 ## E. P3
 
 见 [hooks-security-roadmap.md](./hooks-security-roadmap.md) 与 `.github/workflows/dast.yml`（stub）。

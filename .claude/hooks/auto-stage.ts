@@ -9,6 +9,7 @@ import { join, dirname, isAbsolute } from 'path';
 import { execSync } from 'child_process';
 import { LOG_DIR } from './security-orchestrator.js';
 import { readFileEditInput, isFileEditTool } from './hook-adapter.js';
+import { isGateNodeEnabled } from './gate-config.js';
 
 function log(data: Record<string, unknown>) {
   try {
@@ -43,6 +44,12 @@ async function main() {
   try {
     const data = await readFileEditInput();
     const { tool_name, tool_input, session_id, cwd } = data;
+
+    if (!isGateNodeEnabled('ide.auto-stage', cwd)) {
+      log({ level: 'SKIP', reason: 'gate disabled', session_id });
+      console.log('{}');
+      return;
+    }
 
     if (!isFileEditTool(tool_name)) {
       log({ level: 'SKIP', reason: `unsupported tool: ${tool_name || '(empty)'}`, session_id });

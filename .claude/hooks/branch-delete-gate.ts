@@ -10,6 +10,7 @@ import { LOG_DIR, DECISION } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
 import { evaluateBranchDeleteCommand } from './checks/git-policy.js';
 import { notifySecurityEventAsync } from './notify-security-event.js';
+import { isGateNodeEnabled } from './gate-config.js';
 
 const HOOK_NAME = 'branch-delete-gate';
 
@@ -33,6 +34,12 @@ async function main() {
     }
 
     const cmd = tool_input.command ?? '';
+
+    if (!isGateNodeEnabled('ide.branch-delete-gate', workingDir)) {
+      console.log(formatAllowOutput());
+      return;
+    }
+
     const result = evaluateBranchDeleteCommand(cmd, workingDir);
 
     if (result?.decision === DECISION.DENY) {

@@ -4,7 +4,7 @@ import { execCommandAsync, formatResult, withTimeout, DECISION } from '../securi
 import { getStagedFiles, filterExistingStagedFiles } from './git-policy.js';
 import { classifyFiles, listTrackedFiles } from './file-patterns.js';
 import { denyIfToolMissing, denyOnToolError, getBunxInvocation } from './tools.js';
-import type { CheckResult } from '../types.js';
+import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 export function findSchemaFile(filePath: string, cwd?: string): string | null {
   // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 受信，filePath 为待检测的暂存/跟踪文件路径
@@ -174,13 +174,13 @@ async function runSchemaChecks(jsonFiles: string[], yamlFiles: string[], idPrefi
   return formatResult(`${idPrefix}-schema`, DECISION.ALLOW, 'JSON/YAML schema 与语法检查通过');
 }
 
-export async function runSchemaLintStaged(cwd?: string) {
+export async function runSchemaLintStaged(cwd?: string, _options?: GateCheckRunOptions) {
   const staged = filterExistingStagedFiles(getStagedFiles(cwd), cwd);
   const { json, yaml } = classifyFiles(staged, cwd);
   return runSchemaChecks(json, yaml, 'schema-staged', cwd);
 }
 
-export async function runSchemaLintFull(cwd?: string) {
+export async function runSchemaLintFull(cwd?: string, _options?: GateCheckRunOptions) {
   const json = listTrackedFiles((f) => f.endsWith('.json') && !f.endsWith('.schema.json'), cwd);
   const yaml = listTrackedFiles((f) => /\.(yaml|yml)$/i.test(f), cwd);
   return runSchemaChecks(json, yaml, 'schema-full', cwd);

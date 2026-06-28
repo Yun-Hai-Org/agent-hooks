@@ -7,9 +7,14 @@ import {
   getBunxInvocation,
   getRuffInvocation,
 } from './tools.js';
-import type { CheckResult } from '../types.js';
+import { buildGateCheckPath, runWithAutoFixRetry } from '../gate-autofix.js';
+import { COMMIT_GATE_TIMEOUT_MS, gateTimeoutMessage } from '../gate-timeouts.js';
+import type { CheckResult, GateCheckRunOptions, GatePathPrefix } from '../types.js';
 
-export async function runFormatStaged(cwd?: string) {
+export async function runFormatStaged(cwd?: string, options?: GateCheckRunOptions) {
+  const timeoutMs = options?.timeoutMs ?? COMMIT_GATE_TIMEOUT_MS;
+  const gatePathPrefix: GatePathPrefix = options?.gatePathPrefix ?? 'git.pre-commit';
+  const root = cwd ?? process.cwd();
   const stagedFiles = filterExistingStagedFiles(getStagedFiles(cwd), cwd);
   const jsFiles = stagedFiles.filter(
     (f) =>
@@ -29,19 +34,25 @@ export async function runFormatStaged(cwd?: string) {
     const missing = denyIfToolMissing('bun', 'format-staged-prettier', cwd);
     if (missing) return missing;
     const files = jsFiles.map((f) => `"${f}"`).join(' ');
+    const prettierPath = buildGateCheckPath(gatePathPrefix, 'format-staged-prettier');
     try {
-      const prettierResult = await withTimeout(
-        execCommandAsync(`${getBunxInvocation(cwd)} prettier --check ${files}`, { cwd, timeout: 30000 }),
-        30000,
-        'prettier staged 超时 (30s)',
+      const prettierResult = await runWithAutoFixRetry(
+        prettierPath,
+        { cwd: root, files: jsFiles, timeoutMs },
+        async () => {
+          const result = await withTimeout(
+            execCommandAsync(`${getBunxInvocation(cwd)} prettier --check ${files}`, { cwd, timeout: timeoutMs }),
+            timeoutMs,
+            gateTimeoutMessage('prettier staged', timeoutMs),
+          );
+          return result.success
+            ? formatResult('format-staged-prettier', DECISION.ALLOW, 'Prettier 暂存文件格式检查通过')
+            : formatResult('format-staged-prettier', DECISION.DENY, 'Prettier 暂存文件格式检查失败', {
+                output: (result.stderr || result.stdout).slice(0, 500),
+              });
+        },
       );
-      results.push(
-        prettierResult.success
-          ? formatResult('format-staged-prettier', DECISION.ALLOW, 'Prettier 暂存文件格式检查通过')
-          : formatResult('format-staged-prettier', DECISION.DENY, 'Prettier 暂存文件格式检查失败', {
-              output: (prettierResult.stderr || prettierResult.stdout).slice(0, 500),
-            }),
-      );
+      results.push(prettierResult);
     } catch (e) {
       results.push(denyOnToolError(e, 'format-staged-prettier', 'prettier'));
     }
@@ -52,19 +63,21 @@ export async function runFormatStaged(cwd?: string) {
     if (missing) return missing;
     const files = pyFiles.map((f) => `"${f}"`).join(' ');
     const ruff = getRuffInvocation(cwd);
+    const ruffPath = buildGateCheckPath(gatePathPrefix, 'format-staged-ruff');
     try {
-      const ruffFmtResult = await withTimeout(
-        execCommandAsync(`${ruff} format --check ${files}`, { cwd, timeout: 30000 }),
-        30000,
-        'ruff format staged 超时 (30s)',
-      );
-      results.push(
-        ruffFmtResult.success
+      const ruffFmtResult = await runWithAutoFixRetry(ruffPath, { cwd: root, files: pyFiles, timeoutMs }, async () => {
+        const result = await withTimeout(
+          execCommandAsync(`${ruff} format --check ${files}`, { cwd, timeout: timeoutMs }),
+          timeoutMs,
+          gateTimeoutMessage('ruff format staged', timeoutMs),
+        );
+        return result.success
           ? formatResult('format-staged-ruff', DECISION.ALLOW, 'Ruff format 暂存文件检查通过')
           : formatResult('format-staged-ruff', DECISION.DENY, 'Ruff format 暂存文件检查失败', {
-              output: (ruffFmtResult.stderr || ruffFmtResult.stdout).slice(0, 500),
-            }),
-      );
+              output: (result.stderr || result.stdout).slice(0, 500),
+            });
+      });
+      results.push(ruffFmtResult);
     } catch (e) {
       results.push(denyOnToolError(e, 'format-staged-ruff', 'ruff format'));
     }

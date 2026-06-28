@@ -40,6 +40,11 @@ ln -sf "$HOOKS_REPO/.cursor/hooks.json.example" "$HOME/.cursor/hooks.json"
 ln -sf "$HOOKS_REPO/.tools/bun-darwin-x64/bun" "$HOME/.cursor/bun"
 ln -sf "$HOME/.cursor/bun" "$HOME/.cursor/bunx"
 
+if [ ! -f "$HOME/.claude/quality-gate.yaml" ] && [ -f "$HOOKS_REPO/.claude/quality-gate.example.yaml" ]; then
+	cp "$HOOKS_REPO/.claude/quality-gate.example.yaml" "$HOME/.claude/quality-gate.yaml"
+	echo "bootstrapped ~/.claude/quality-gate.yaml from example"
+fi
+
 echo "linked ~/.claude/hooks -> $HOOKS_REPO/.claude/hooks"
 echo "linked ~/.cursor/hooks.json -> $HOOKS_REPO/.cursor/hooks.json.example"
 echo "linked ~/.cursor/bun -> $HOOKS_REPO/.tools/bun-darwin-x64/bun"

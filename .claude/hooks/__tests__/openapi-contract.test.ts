@@ -62,8 +62,8 @@ describe('openapi-contract', () => {
   describe('quality-gate wiring', () => {
     it('quality-gate 应接入 openapi-contract 检查', () => {
       const source = readFileSync(join(import.meta.dir, '..', 'quality-gate.ts'), 'utf-8');
-      expect(source).toContain('runOpenApiContractStaged(cwd)');
-      expect(source).toContain('runOpenApiContractFull(cwd)');
+      expect(source).toContain('runOpenApiContractStaged(cwd,');
+      expect(source).toContain('runOpenApiContractFull(cwd,');
     });
   });
 
