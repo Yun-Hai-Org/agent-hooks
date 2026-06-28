@@ -57,4 +57,6 @@ async function main() {
   process.exit(0);
 }
 
-void main();
+if (import.meta.main) {
+  void main();
+}
