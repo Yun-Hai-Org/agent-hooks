@@ -49,10 +49,10 @@ export async function runSbomArchive(cwd?: string, options?: GateCheckRunOptions
       return formatResult('sbom-archive', DECISION.DENY, 'SBOM 输出文件未生成');
     }
     const raw = readFileSync(outFile, 'utf-8');
-    writeFileSync(join(outDir, 'latest.json'), raw, 'utf-8');  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- outDir 派生自受信 root
+    writeFileSync(join(outDir, 'latest.json'), raw, 'utf-8'); // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- outDir 派生自受信 root
     const digest = createHash('sha256').update(raw).digest('hex');
     const outBase = outFile.split('/').pop() ?? 'sbom.json';
-    writeFileSync(`${outFile}.sha256`, `${digest}  ${outBase}\n`, 'utf-8');  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- outFile 派生自受信 root
+    writeFileSync(`${outFile}.sha256`, `${digest}  ${outBase}\n`, 'utf-8'); // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- outFile 派生自受信 root
     appendFileSync(
       join(outDir, 'index.jsonl'), // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- outDir 派生自受信 root
       JSON.stringify({ ts: new Date().toISOString(), sha, path: outFile, sha256: digest }) + '\n',
