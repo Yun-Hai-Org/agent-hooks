@@ -58,4 +58,6 @@ function main() {
   process.exit(0);
 }
 
-main();
+if (import.meta.main) {
+  void main();
+}

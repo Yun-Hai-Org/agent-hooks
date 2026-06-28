@@ -1,5 +1,6 @@
 GitHub/
 node_modules/
+.hooks/
 .claude/hooks/__tests__/fixtures/
 .tools/
 .claude/worktrees/
