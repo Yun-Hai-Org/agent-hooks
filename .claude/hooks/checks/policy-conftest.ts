@@ -38,7 +38,10 @@ export async function runOpaConftest(cwd?: string, options?: GateCheckRunOptions
 
   try {
     const result = await withTimeout(
-      execCommandAsync(`conftest test --policy "${policyDir}" --all-namespaces --ignore "node_modules" .`, { cwd: root, timeout: timeoutMs }),
+      execCommandAsync(`conftest test --policy "${policyDir}" --all-namespaces --ignore "node_modules" .`, {
+        cwd: root,
+        timeout: timeoutMs,
+      }),
       timeoutMs,
       gateTimeoutMessage('conftest', timeoutMs),
     );
