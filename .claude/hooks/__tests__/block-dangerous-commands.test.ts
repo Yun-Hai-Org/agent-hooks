@@ -428,9 +428,10 @@ describe('block-dangerous-commands - main 函数直接调用', () => {
     expect(output).toBe('{}');
   });
 
-  it('应该处理无效 JSON 输入', async () => {
+  it('应该处理无效 JSON 输入 (fail-closed deny)', async () => {
     const output = await runMain('invalid json');
-    expect(output).toBe('{}');
+    const result = JSON.parse(output);
+    expect(result.hookSpecificOutput.permissionDecision).toBe('deny');
   });
 
   it('应该处理空 tool_input', async () => {
