@@ -1,5 +1,6 @@
 GitHub/
 node_modules/
+.claude/hooks/__tests__/fixtures/
 .tools/
 .claude/worktrees/
 .claude/settings.backup.*.json

@@ -2,7 +2,7 @@ import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } fr
 import { getStagedFiles } from './git-policy.js';
 import { isOpenApiSpecPath, listTrackedFiles } from './file-patterns.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
-import type { CheckResult } from '../types.js';
+import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 const OASDIFF_STAGED_TIMEOUT_MS = 30000;
 const OASDIFF_FULL_TIMEOUT_MS = 60000;
@@ -78,7 +78,7 @@ async function runOpenApiChecks(files: string[], idPrefix: string, cwd?: string,
   return formatResult(idPrefix, DECISION.ALLOW, `OpenAPI 契约检查通过（${String(checked.length)} 个 spec）`);
 }
 
-export async function runOpenApiContractStaged(cwd?: string) {
+export async function runOpenApiContractStaged(cwd?: string, _options?: GateCheckRunOptions) {
   const staged = getStagedFiles(cwd);
   const openApiFiles = staged.filter((f) => isOpenApiSpecPath(f, cwd));
   if (openApiFiles.length === 0) {
@@ -104,7 +104,7 @@ export async function runOpenApiContractStaged(cwd?: string) {
   return formatResult('openapi-staged', DECISION.ALLOW, `OpenAPI 契约检查通过（${String(checked.length)} 个 spec）`);
 }
 
-export async function runOpenApiContractFull(cwd?: string) {
+export async function runOpenApiContractFull(cwd?: string, _options?: GateCheckRunOptions) {
   const openApiFiles = listTrackedFiles((f) => {
     if (f.startsWith('_bmad-output/') || f.startsWith('_bmad/')) return false;
     if (/\.github\/workflows\//i.test(f)) return false;

@@ -3,6 +3,7 @@ import { spawn, execSync } from 'child_process';
 import { join } from 'path';
 import { Readable } from 'stream';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { disableGlobalGitHooks, bootstrapQualityGateYaml } from './helpers.js';
 import { getHookProcessEnv } from '../security-orchestrator.js';
 import { resolveBunExecutable } from '../checks/tools.js';
 import {
@@ -615,6 +616,7 @@ describe('branch-gate', () => {
       const tempDir = '/tmp/test-worktree-branchgate';
       mkdirSync(tempDir, { recursive: true });
       execSync('git init -b feat/worktree-test', { cwd: tempDir, stdio: 'pipe' });
+      disableGlobalGitHooks(tempDir);
 
       const inputData = JSON.stringify({
         tool_name: 'Write',
@@ -636,6 +638,7 @@ describe('branch-gate', () => {
       const tempDir = '/tmp/test-worktree-edit-branchgate';
       mkdirSync(tempDir, { recursive: true });
       execSync('git init -b feat/worktree-edit', { cwd: tempDir, stdio: 'pipe' });
+      disableGlobalGitHooks(tempDir);
 
       const inputData = JSON.stringify({
         tool_name: 'Edit',
@@ -657,6 +660,7 @@ describe('branch-gate', () => {
       const tempDir = '/tmp/test-worktree-bash-branchgate';
       mkdirSync(tempDir, { recursive: true });
       execSync('git init -b feat/worktree-bash', { cwd: tempDir, stdio: 'pipe' });
+      disableGlobalGitHooks(tempDir);
 
       const inputData = JSON.stringify({
         tool_name: 'Bash',
@@ -678,6 +682,7 @@ describe('branch-gate', () => {
       const tempDir = '/tmp/test-worktree-bash-ro-branchgate';
       mkdirSync(tempDir, { recursive: true });
       execSync('git init -b feat/worktree-bash-ro', { cwd: tempDir, stdio: 'pipe' });
+      disableGlobalGitHooks(tempDir);
 
       const inputData = JSON.stringify({
         tool_name: 'Bash',
@@ -719,6 +724,7 @@ describe('branch-gate', () => {
     it('非 Git 仓库应该拒绝并要求 git init', async () => {
       const tempDir = '/tmp/test-no-git-branchgate';
       mkdirSync(tempDir, { recursive: true });
+      bootstrapQualityGateYaml(tempDir);
 
       const inputData = JSON.stringify({
         tool_name: 'Write',
@@ -741,6 +747,7 @@ describe('branch-gate', () => {
     it('非 Git 仓库的只读 Bash 命令也应该拒绝并要求 git init', async () => {
       const tempDir = '/tmp/test-no-git-bash-branchgate';
       mkdirSync(tempDir, { recursive: true });
+      bootstrapQualityGateYaml(tempDir);
 
       const inputData = JSON.stringify({
         tool_name: 'Bash',
@@ -906,6 +913,7 @@ describe('branch-gate', () => {
       mkdirSync(tempDir, { recursive: true });
       // 创建 git 仓库并切换到 main 分支
       execSync('git init -b main', { cwd: tempDir, stdio: 'pipe' });
+      disableGlobalGitHooks(tempDir);
 
       const inputData = JSON.stringify({
         tool_name: 'Write',
@@ -927,6 +935,7 @@ describe('branch-gate', () => {
       const tempDir = '/tmp/test-allowlist-edit-branchgate';
       mkdirSync(tempDir, { recursive: true });
       execSync('git init -b main', { cwd: tempDir, stdio: 'pipe' });
+      disableGlobalGitHooks(tempDir);
 
       const inputData = JSON.stringify({
         tool_name: 'Edit',
@@ -952,6 +961,7 @@ describe('branch-gate', () => {
       const tempDir = '/tmp/test-allowlist-bash-branchgate';
       mkdirSync(tempDir, { recursive: true });
       execSync('git init -b main', { cwd: tempDir, stdio: 'pipe' });
+      disableGlobalGitHooks(tempDir);
 
       const inputData = JSON.stringify({
         tool_name: 'Bash',
@@ -972,7 +982,9 @@ describe('branch-gate', () => {
     it('Write 工具写入非白名单目录在 main 分支应该拒绝', async () => {
       const tempDir = '/tmp/test-deny-write-branchgate';
       mkdirSync(tempDir, { recursive: true });
+      bootstrapQualityGateYaml(tempDir);
       execSync('git init -b main', { cwd: tempDir, stdio: 'pipe' });
+      disableGlobalGitHooks(tempDir);
 
       const inputData = JSON.stringify({
         tool_name: 'Write',

@@ -16,6 +16,7 @@ import { join } from 'path';
 import { LOG_DIR, getCurrentBranch } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
 import { notifySecurityEventAsync } from './notify-security-event.js';
+import { isGateNodeEnabled } from './gate-config.js';
 import {
   isGitMergeCommand,
   isGitCommitCommand,
@@ -503,7 +504,7 @@ export function checkMergeConcludeBypass(cmd: string, cwd?: string): MergeConclu
     blocked: true,
     id: 'merge-conclude-bypass',
     reason:
-      'git commit 会绕过 pre-merge-commit。请修复问题后执行 git merge --continue（重新触发 full 门），或 git merge --abort 取消合并',
+      'git commit 会绕过 pre-merge-commit。请在系统终端执行 git merge --continue（full 门已通过且 cache 命中时将跳过重复扫描），或 git merge --abort 取消合并',
   };
 }
 
@@ -570,11 +571,22 @@ async function main() {
       }
 
       const cmd = tool_input.command ?? '';
+      const hookCwd = cwd || process.cwd();
+
+      if (!isGateNodeEnabled('ide.block-dangerous-commands', hookCwd)) {
+        console.log(formatAllowOutput());
+        return;
+      }
+
       const result = checkCommand(cmd);
 
       if (result.blocked) {
         const p = result.pattern;
         if (!p) {
+          console.log(formatAllowOutput());
+          return;
+        }
+        if (!isGateNodeEnabled(`ide.block-dangerous-commands.rules.${p.id}`, hookCwd)) {
           console.log(formatAllowOutput());
           return;
         }

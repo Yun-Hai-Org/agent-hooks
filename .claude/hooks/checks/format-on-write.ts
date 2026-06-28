@@ -1,6 +1,7 @@
 import { existsSync } from 'fs';
 import { extname } from 'path';
 import { execCommand, execCommandAsync, withTimeout } from '../security-orchestrator.js';
+import { isGateNodeAutoFixEnabled } from '../gate-config.js';
 import { denyIfRuffMissing, getBunxInvocation, getRuffInvocation, isToolInstalled } from './tools.js';
 
 export interface FormatOnWriteResult {
@@ -35,6 +36,10 @@ export function classifyFormatOnWriteTarget(filePath: string): {
   };
 }
 
+function shouldAutoFixTool(tool: string, cwd: string): boolean {
+  return isGateNodeAutoFixEnabled(`ide.format-on-write.checks.${tool}`, cwd);
+}
+
 export async function formatFileOnWrite(filePath: string, cwd?: string): Promise<FormatOnWriteResult> {
   const result: FormatOnWriteResult = { formatted: false, tools: [], skipped: [], errors: [] };
   if (!filePath || !existsSync(filePath)) {
@@ -52,7 +57,9 @@ export async function formatFileOnWrite(filePath: string, cwd?: string): Promise
   const repoCwd = cwd ?? process.cwd();
 
   if (targets.prettier) {
-    if (!isToolInstalled('bun', repoCwd)) {
+    if (!shouldAutoFixTool('prettier', repoCwd)) {
+      result.skipped.push('prettier-autofix-disabled');
+    } else if (!isToolInstalled('bun', repoCwd)) {
       result.skipped.push('prettier-bun-missing');
     } else {
       try {
@@ -75,7 +82,9 @@ export async function formatFileOnWrite(filePath: string, cwd?: string): Promise
   }
 
   if (targets.markdownlint) {
-    if (!isToolInstalled('bun', repoCwd)) {
+    if (!shouldAutoFixTool('markdownlint', repoCwd)) {
+      result.skipped.push('markdownlint-autofix-disabled');
+    } else if (!isToolInstalled('bun', repoCwd)) {
       result.skipped.push('markdownlint-bun-missing');
     } else {
       try {
@@ -98,31 +107,37 @@ export async function formatFileOnWrite(filePath: string, cwd?: string): Promise
   }
 
   if (targets.ruff && execCommand('test -f pyproject.toml', { cwd: repoCwd }).success) {
-    const missing = denyIfRuffMissing('format-on-write-ruff', repoCwd);
-    if (missing) {
-      result.skipped.push('ruff-missing');
+    if (!shouldAutoFixTool('ruff', repoCwd)) {
+      result.skipped.push('ruff-autofix-disabled');
     } else {
-      try {
-        const ruff = getRuffInvocation(repoCwd);
-        const ruffResult = await withTimeout(
-          execCommandAsync(`${ruff} format "${filePath}"`, { cwd: repoCwd, timeout: 30000 }),
-          30000,
-          'ruff format 超时',
-        );
-        if (ruffResult.success) {
-          result.tools.push('ruff');
-          result.formatted = true;
-        } else {
-          result.errors.push((ruffResult.stderr || ruffResult.stdout).slice(0, 200));
+      const missing = denyIfRuffMissing('format-on-write-ruff', repoCwd);
+      if (missing) {
+        result.skipped.push('ruff-missing');
+      } else {
+        try {
+          const ruff = getRuffInvocation(repoCwd);
+          const ruffResult = await withTimeout(
+            execCommandAsync(`${ruff} format "${filePath}"`, { cwd: repoCwd, timeout: 30000 }),
+            30000,
+            'ruff format 超时',
+          );
+          if (ruffResult.success) {
+            result.tools.push('ruff');
+            result.formatted = true;
+          } else {
+            result.errors.push((ruffResult.stderr || ruffResult.stdout).slice(0, 200));
+          }
+        } catch (e) {
+          result.errors.push(e instanceof Error ? e.message : String(e));
         }
-      } catch (e) {
-        result.errors.push(e instanceof Error ? e.message : String(e));
       }
     }
   }
 
   if (targets.shfmt) {
-    if (!isToolInstalled('shfmt', repoCwd)) {
+    if (!shouldAutoFixTool('shfmt', repoCwd)) {
+      result.skipped.push('shfmt-autofix-disabled');
+    } else if (!isToolInstalled('shfmt', repoCwd)) {
       result.skipped.push('shfmt-missing');
     } else {
       try {
@@ -144,7 +159,9 @@ export async function formatFileOnWrite(filePath: string, cwd?: string): Promise
   }
 
   if (targets.taplo) {
-    if (!isToolInstalled('taplo', repoCwd)) {
+    if (!shouldAutoFixTool('taplo', repoCwd)) {
+      result.skipped.push('taplo-autofix-disabled');
+    } else if (!isToolInstalled('taplo', repoCwd)) {
       result.skipped.push('taplo-missing');
     } else {
       try {

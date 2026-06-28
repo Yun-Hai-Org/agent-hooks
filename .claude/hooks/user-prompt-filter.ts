@@ -8,6 +8,7 @@
 
 import { CONTENT_PATTERNS } from './protect-secrets.js';
 import { readStdin, log, safeMain } from './security-orchestrator.js';
+import { isGateNodeEnabled } from './gate-config.js';
 import { asString } from './types.js';
 
 const HOOK_NAME = 'user-prompt-filter';
@@ -42,6 +43,11 @@ async function main() {
   }
 
   const prompt = tool_input?.user_prompt ?? '';
+  if (!isGateNodeEnabled('ide.user-prompt-filter', cwd)) {
+    console.log('{}');
+    return;
+  }
+
   const result = scanPrompt(prompt);
 
   if (result.blocked && result.pattern) {

@@ -16,10 +16,16 @@ describe('scanDiffForFindings', () => {
   });
 
   it('console.log 应计入 warn 而非 deny', () => {
-    const diff = ["+  console.log('hello');"].join('\n');
+    const diff = ['+++ b/src/app.ts', "+  console.log('hello');"].join('\n');
     const { deny, warn } = scanDiffForFindings(diff);
     expect(deny.length).toBe(0);
     expect(warn.length).toBe(1);
+  });
+
+  it('hook 文件中的 console.log 不告警', () => {
+    const diff = ['+++ b/.claude/hooks/auto-stage.ts', "+      console.log('{}');"].join('\n');
+    const { warn } = scanDiffForFindings(diff);
+    expect(warn.length).toBe(0);
   });
 
   it('TODO/FIXME 应计入 warn', () => {

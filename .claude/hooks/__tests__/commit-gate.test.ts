@@ -13,8 +13,22 @@ import { getCurrentBranch, getHookProcessEnv } from '../security-orchestrator.js
 import { DECISION } from '../security-orchestrator.js';
 import { resolveBunExecutable } from '../checks/tools.js';
 import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
+import { clearGateConfigCache } from '../gate-config.js';
 
 import { PROJECT_ROOT } from './helpers.js';
+
+/** 仅启用 pre-commit 门控壳、不跑子检查，避免集成测试触发全量 quality-gate */
+function bootstrapFastCommitGate(repoDir: string): void {
+  writeFile(
+    repoDir,
+    '.claude/quality-gate.yaml',
+    `git:
+  pre-commit:
+    enabled: true
+`,
+  );
+  clearGateConfigCache();
+}
 
 // commit-gate 测试 - 测试真实函数和完整流程
 describe('commit-gate', () => {
@@ -113,15 +127,22 @@ describe('commit-gate', () => {
     });
 
     it('commit-gate hook 应对合法 message 返回输出', async () => {
-      const result = await runHook({
-        tool_name: 'Bash',
-        tool_input: { command: 'git commit -m "feat: 新增功能"' },
-        session_id: 'test',
-        cwd: PROJECT_ROOT,
-      });
-      const output = JSON.parse(result.stdout);
-      expect(output).toBeDefined();
-    }, 180000);
+      const repoDir = createTempGitRepo('feat/commit-gate-hook');
+      bootstrapFastCommitGate(repoDir);
+      try {
+        const result = await runHook({
+          tool_name: 'Bash',
+          tool_input: { command: 'git commit -m "feat: 新增功能"' },
+          session_id: 'test',
+          cwd: repoDir,
+        });
+        const output = JSON.parse(result.stdout);
+        expect(output).toBeDefined();
+      } finally {
+        cleanupTempGitRepo(repoDir);
+        clearGateConfigCache();
+      }
+    }, 30000);
 
     it('应该拒绝 "fix:x" (无空格)', async () => {
       const result = await runHook({
@@ -326,15 +347,21 @@ describe('commit-gate', () => {
     });
 
     it('git commit 命令应该触发检查', async () => {
-      const result = await runHook({
-        tool_name: 'Bash',
-        tool_input: { command: 'git commit -m "test: 测试提交"' },
-        session_id: 'test',
-        cwd: PROJECT_ROOT,
-      });
-      // 应该有输出（可能是 {} 或拒绝）
-      expect(result.stdout.length).toBeGreaterThan(0);
-    }, 180000);
+      const repoDir = createTempGitRepo('feat/commit-gate-flow');
+      bootstrapFastCommitGate(repoDir);
+      try {
+        const result = await runHook({
+          tool_name: 'Bash',
+          tool_input: { command: 'git commit -m "test: 测试提交"' },
+          session_id: 'test',
+          cwd: repoDir,
+        });
+        expect(result.stdout.length).toBeGreaterThan(0);
+      } finally {
+        cleanupTempGitRepo(repoDir);
+        clearGateConfigCache();
+      }
+    }, 30000);
 
     it('应该处理空 stdin', async () => {
       const result = await runHook({});

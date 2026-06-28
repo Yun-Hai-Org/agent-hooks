@@ -10,6 +10,7 @@ import { LOG_DIR, execCommand } from './security-orchestrator.js';
 import { readFileEditInput, isFileEditTool } from './hook-adapter.js';
 import { isInGitRepo } from './auto-stage.js';
 import { formatFileOnWrite } from './checks/format-on-write.js';
+import { isGateNodeEnabled } from './gate-config.js';
 
 function log(data: Record<string, unknown>) {
   try {
@@ -59,6 +60,12 @@ async function main() {
 
     const gitRootResult = execCommand('git rev-parse --show-toplevel', { cwd: absPath });
     const gitRoot = gitRootResult.success && gitRootResult.stdout.trim() ? gitRootResult.stdout.trim() : cwd;
+
+    if (!isGateNodeEnabled('ide.format-on-write', gitRoot)) {
+      log({ level: 'SKIP', reason: 'format-on-write 未在 quality-gate.yaml 中启用', file: absPath, session_id });
+      console.log('{}');
+      return;
+    }
 
     const result = await formatFileOnWrite(absPath, gitRoot);
     if (result.formatted) {

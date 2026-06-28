@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { parseCoveragePercent, BUSINESS_COVERAGE_THRESHOLD } from './coverage.js';
-import type { CheckResult } from '../types.js';
+import type { CheckResult, GateCheckRunOptions } from '../types.js';
 import {
   execCommand,
   execCommandAsync,
@@ -20,7 +20,7 @@ function bunTestCommand(args: string): string {
   return `"${resolveBunExecutable()}" test ${args}`;
 }
 
-export async function runRelatedTests(cwd?: string) {
+export async function runRelatedTests(cwd?: string, _options?: GateCheckRunOptions) {
   const stagedFiles = getStagedFiles(cwd);
   if (stagedFiles.length === 0) {
     return formatResult('related-tests', DECISION.SKIP, '无暂存文件，跳过关联测试');
@@ -124,7 +124,7 @@ export async function runRelatedTests(cwd?: string) {
   }
 }
 
-export async function runFullProjectTests(cwd?: string) {
+export async function runFullProjectTests(cwd?: string, _options?: GateCheckRunOptions) {
   const toolchain = detectToolchain(cwd);
   const results: CheckResult[] = [];
 
@@ -231,7 +231,8 @@ const HOOK_UNIT_TEST_TIMEOUT_MS = 1200000;
 const HOOK_UNIT_TEST_GLOB = './.claude/hooks/__tests__/*.test.ts';
 const HOOK_UNIT_TEST_EXEC_OPTS = { maxBuffer: 64 * 1024 * 1024, shell: '/bin/sh' as const };
 
-export async function runHookUnitTests(cwd?: string, options: { coverageThreshold?: number } = {}) {
+export async function runHookUnitTests(cwd?: string, options: GateCheckRunOptions = {}) {
+  const unitTestTimeoutMs = options.timeoutMs ?? HOOK_UNIT_TEST_TIMEOUT_MS;
   if (!isHooksProject(cwd)) {
     return formatResult('hook-unit-tests', DECISION.SKIP, '非 hooks 项目，跳过 Hook 单测');
   }
@@ -252,9 +253,9 @@ export async function runHookUnitTests(cwd?: string, options: { coverageThreshol
     const flags = withCoverage ? ' --coverage' : ' --dots';
     const cmd = bunTestCommand(`${HOOK_UNIT_TEST_GLOB}${flags}`);
     const result = await withTimeout(
-      execCommandAsync(cmd, { cwd, timeout: HOOK_UNIT_TEST_TIMEOUT_MS, ...HOOK_UNIT_TEST_EXEC_OPTS }),
-      HOOK_UNIT_TEST_TIMEOUT_MS,
-      `Hook 常规单测超时 (${String(HOOK_UNIT_TEST_TIMEOUT_MS / 1000)}s)`,
+      execCommandAsync(cmd, { cwd, timeout: unitTestTimeoutMs, ...HOOK_UNIT_TEST_EXEC_OPTS }),
+      unitTestTimeoutMs,
+      `Hook 常规单测超时 (${String(unitTestTimeoutMs / 1000)}s)`,
     );
     const combinedOutput = result.stdout + result.stderr;
     const success = result.success && !combinedOutput.includes('(fail)');
@@ -288,7 +289,7 @@ export async function runHookUnitTests(cwd?: string, options: { coverageThreshol
   }
 }
 
-export async function runHookAdversarialIfStaged(cwd?: string) {
+export async function runHookAdversarialIfStaged(cwd?: string, _options?: GateCheckRunOptions) {
   const stagedFiles = getStagedFiles(cwd);
   const touchesHooks = stagedFiles.some((f) => f.startsWith('.claude/hooks/'));
   if (!touchesHooks) {
@@ -297,7 +298,7 @@ export async function runHookAdversarialIfStaged(cwd?: string) {
   return runHookAdversarialTests(cwd);
 }
 
-export async function runHookAdversarialTests(cwd?: string) {
+export async function runHookAdversarialTests(cwd?: string, _options?: GateCheckRunOptions) {
   if (!isHooksProject(cwd)) {
     return formatResult('hook-adversarial', DECISION.SKIP, '非 hooks 项目，跳过对抗性测试');
   }

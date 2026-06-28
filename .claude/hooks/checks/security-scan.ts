@@ -3,11 +3,10 @@ import { denyIfToolMissing, denyOnToolError, getBunxInvocation } from './tools.j
 import { isHooksProject } from './hooks-project.js';
 import { getStagedFiles } from './git-policy.js';
 import { resolveTrivyScanners } from './file-patterns.js';
-import type { CheckResult } from '../types.js';
+import { COMMIT_GATE_TIMEOUT_MS, FULL_GATE_TIMEOUT_MS, gateTimeoutMessage } from '../gate-timeouts.js';
+import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 const TRIVY_EXTRA_SKIP_DIRS = ['_bmad', '_bmad-output', 'node_modules', '.venv', '.claude/worktrees'];
-const TRIVY_TIMEOUT_MS = 360000;
-const KNIP_TIMEOUT_MS = 60000;
 // trivy 漏洞库下载源：国内镜像（南大）为主选放最前，官方源在后做 fallback（5xx/429 时按序回退）。
 // 注意：设置 --db-repository 会覆盖默认源，故须显式保留官方源以维持回退能力。
 const TRIVY_DB_REPOS = [
@@ -109,14 +108,13 @@ export function isSemgrepStagedTarget(filePath: string): boolean {
 }
 
 const SEMGREP_CONFIGS = '--config auto --config p/security-audit --config p/secrets --config p/owasp-top-ten';
+export const SEMGREP_PCI_CONFIGS =
+  '--config auto --config p/owasp-top-ten --config p/security-audit --config p/secrets';
 const SEMGREP_SEVERITY = '--severity ERROR --severity WARNING --severity INFO';
 // 全部规则保持全局强制。原先全局停用的 child_process / path-join-traversal 两条规则，
 // 已改为在确属受信的调用点用行内 `// nosemgrep: <rule-id>` 精确豁免，避免全局停用掩盖真实风险。
 const SEMGREP_EXCLUDED_RULES: string[] = [];
 const SEMGREP_EXCLUDE_RULE_FLAGS = SEMGREP_EXCLUDED_RULES.map((r) => `--exclude-rule ${r}`).join(' ');
-const SEMGREP_STAGED_TIMEOUT_MS = 60000;
-// 全量扫描需遍历全仓库且与 trivy/全量测试等重负载并行，60s 在满载下不足，给 180s 余量。
-const SEMGREP_FULL_TIMEOUT_MS = 180000;
 
 export function evaluateSemgrepOutput(stdout: string, checkId: string): CheckResult | null {
   let json: { results?: SemgrepResult[] };
@@ -139,7 +137,8 @@ export function evaluateSemgrepOutput(stdout: string, checkId: string): CheckRes
   );
 }
 
-export async function runSemgrepStaged(cwd?: string): Promise<CheckResult> {
+export async function runSemgrepStaged(cwd?: string, options?: GateCheckRunOptions): Promise<CheckResult> {
+  const timeoutMs = options?.timeoutMs ?? COMMIT_GATE_TIMEOUT_MS;
   const stagedFiles = getStagedFiles(cwd).filter((f) => isSemgrepStagedTarget(f));
   if (stagedFiles.length === 0) {
     return formatResult('semgrep-staged', DECISION.SKIP, '暂存区无（非测试）代码文件，跳过 semgrep');
@@ -153,9 +152,9 @@ export async function runSemgrepStaged(cwd?: string): Promise<CheckResult> {
 
   try {
     const result = await withTimeout(
-      execCommandAsync(semgrepCmd, { cwd, timeout: SEMGREP_STAGED_TIMEOUT_MS }),
-      SEMGREP_STAGED_TIMEOUT_MS,
-      'semgrep staged 超时 (60s)',
+      execCommandAsync(semgrepCmd, { cwd, timeout: timeoutMs }),
+      timeoutMs,
+      gateTimeoutMessage('semgrep staged', timeoutMs),
     );
     if (result.stdout) {
       const deny = evaluateSemgrepOutput(result.stdout, 'semgrep-staged');
@@ -173,7 +172,8 @@ export async function runSemgrepStaged(cwd?: string): Promise<CheckResult> {
   }
 }
 
-export async function runSemgrep(cwd?: string): Promise<CheckResult> {
+export async function runSemgrep(cwd?: string, options?: GateCheckRunOptions): Promise<CheckResult> {
+  const timeoutMs = options?.timeoutMs ?? FULL_GATE_TIMEOUT_MS;
   const missing = denyIfToolMissing('semgrep', 'semgrep', cwd);
   if (missing) return missing;
   try {
@@ -181,9 +181,9 @@ export async function runSemgrep(cwd?: string): Promise<CheckResult> {
     const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
     const semgrepCmd = `semgrep ${SEMGREP_CONFIGS} ${SEMGREP_SEVERITY} ${SEMGREP_EXCLUDE_RULE_FLAGS} --error --json --exclude __tests__ ${excludeFlags} .`;
     const result = await withTimeout(
-      execCommandAsync(semgrepCmd, { cwd, timeout: SEMGREP_FULL_TIMEOUT_MS }),
-      SEMGREP_FULL_TIMEOUT_MS,
-      'semgrep 超时 (180s)',
+      execCommandAsync(semgrepCmd, { cwd, timeout: timeoutMs }),
+      timeoutMs,
+      gateTimeoutMessage('semgrep', timeoutMs),
     );
     if (result.stdout) {
       const deny = evaluateSemgrepOutput(result.stdout, 'semgrep');
@@ -201,7 +201,73 @@ export async function runSemgrep(cwd?: string): Promise<CheckResult> {
   }
 }
 
-export async function runKnip(cwd?: string): Promise<CheckResult> {
+export async function runSemgrepPciStaged(cwd?: string, options?: GateCheckRunOptions): Promise<CheckResult> {
+  const timeoutMs = options?.timeoutMs ?? COMMIT_GATE_TIMEOUT_MS;
+  const stagedFiles = getStagedFiles(cwd).filter((f) => isSemgrepStagedTarget(f));
+  if (stagedFiles.length === 0) {
+    return formatResult('semgrep-pci-staged', DECISION.SKIP, '暂存区无（非测试）代码文件，跳过 PCI semgrep');
+  }
+  const missing = denyIfToolMissing('semgrep', 'semgrep-pci-staged', cwd);
+  if (missing) return missing;
+  const pciConfig = execCommand('test -f .semgrep/pci.yaml', { cwd }).success
+    ? '--config .semgrep/pci.yaml'
+    : SEMGREP_PCI_CONFIGS;
+  const files = stagedFiles.map((f) => `"${f}"`).join(' ');
+  const semgrepCmd = `semgrep ${pciConfig} ${SEMGREP_SEVERITY} ${SEMGREP_EXCLUDE_RULE_FLAGS} --error --json ${files}`;
+  try {
+    const result = await withTimeout(
+      execCommandAsync(semgrepCmd, { cwd, timeout: timeoutMs }),
+      timeoutMs,
+      gateTimeoutMessage('semgrep pci staged', timeoutMs),
+    );
+    if (result.stdout) {
+      const deny = evaluateSemgrepOutput(result.stdout, 'semgrep-pci-staged');
+      if (deny) return deny;
+    }
+    if (!result.success && !result.stdout) {
+      return formatResult('semgrep-pci-staged', DECISION.DENY, 'PCI Semgrep 执行失败', {
+        output: result.stderr.slice(0, 500),
+      });
+    }
+    return formatResult('semgrep-pci-staged', DECISION.ALLOW, 'PCI Semgrep 暂存扫描通过');
+  } catch (e) {
+    return denyOnToolError(e, 'semgrep-pci-staged', 'semgrep');
+  }
+}
+
+export async function runSemgrepPciFull(cwd?: string, options?: GateCheckRunOptions): Promise<CheckResult> {
+  const timeoutMs = options?.timeoutMs ?? FULL_GATE_TIMEOUT_MS;
+  const missing = denyIfToolMissing('semgrep', 'semgrep-pci', cwd);
+  if (missing) return missing;
+  const pciConfig = execCommand('test -f .semgrep/pci.yaml', { cwd }).success
+    ? '--config .semgrep/pci.yaml'
+    : SEMGREP_PCI_CONFIGS;
+  try {
+    const ignoredDirs = getGitIgnoredDirs(cwd);
+    const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
+    const semgrepCmd = `semgrep ${pciConfig} ${SEMGREP_SEVERITY} ${SEMGREP_EXCLUDE_RULE_FLAGS} --error --json --exclude __tests__ ${excludeFlags} .`;
+    const result = await withTimeout(
+      execCommandAsync(semgrepCmd, { cwd, timeout: timeoutMs }),
+      timeoutMs,
+      gateTimeoutMessage('semgrep pci', timeoutMs),
+    );
+    if (result.stdout) {
+      const deny = evaluateSemgrepOutput(result.stdout, 'semgrep-pci');
+      if (deny) return deny;
+    }
+    if (!result.success && !result.stdout) {
+      return formatResult('semgrep-pci', DECISION.DENY, 'PCI Semgrep 执行失败', {
+        output: result.stderr.slice(0, 500),
+      });
+    }
+    return formatResult('semgrep-pci', DECISION.ALLOW, 'PCI Semgrep 全量扫描通过');
+  } catch (e) {
+    return denyOnToolError(e, 'semgrep-pci', 'semgrep');
+  }
+}
+
+export async function runKnip(cwd?: string, options?: GateCheckRunOptions): Promise<CheckResult> {
+  const timeoutMs = options?.timeoutMs ?? FULL_GATE_TIMEOUT_MS;
   if (!isHooksProject(cwd)) {
     return formatResult('knip', DECISION.SKIP, '非 hooks 项目，跳过 knip');
   }
@@ -210,9 +276,9 @@ export async function runKnip(cwd?: string): Promise<CheckResult> {
   if (missing) return missing;
   try {
     const result = await withTimeout(
-      execCommandAsync(`${getBunxInvocation(cwd)} knip --reporter json`, { cwd, timeout: KNIP_TIMEOUT_MS }),
-      KNIP_TIMEOUT_MS,
-      `knip 超时 (${String(KNIP_TIMEOUT_MS / 1000)}s)`,
+      execCommandAsync(`${getBunxInvocation(cwd)} knip --reporter json`, { cwd, timeout: timeoutMs }),
+      timeoutMs,
+      gateTimeoutMessage('knip', timeoutMs),
     );
     if (!result.success) {
       try {
@@ -245,7 +311,8 @@ export async function runKnip(cwd?: string): Promise<CheckResult> {
   }
 }
 
-export async function runTrivy(cwd?: string): Promise<CheckResult> {
+export async function runTrivy(cwd?: string, options?: GateCheckRunOptions): Promise<CheckResult> {
+  const timeoutMs = options?.timeoutMs ?? FULL_GATE_TIMEOUT_MS;
   const missing = denyIfToolMissing('trivy', 'trivy', cwd);
   if (missing) return missing;
   try {
@@ -266,9 +333,9 @@ export async function runTrivy(cwd?: string): Promise<CheckResult> {
         ' ',
       );
     const result = await withTimeout(
-      execCommandAsync(trivyCmd, { cwd, timeout: TRIVY_TIMEOUT_MS }),
-      TRIVY_TIMEOUT_MS,
-      `trivy 超时 (${String(TRIVY_TIMEOUT_MS / 1000)}s)`,
+      execCommandAsync(trivyCmd, { cwd, timeout: timeoutMs }),
+      timeoutMs,
+      gateTimeoutMessage('trivy', timeoutMs),
     );
     if (result.stdout) {
       return evaluateTrivyJson(result.stdout);
@@ -284,15 +351,16 @@ export async function runTrivy(cwd?: string): Promise<CheckResult> {
   }
 }
 
-export async function runGitleaksStaged(cwd?: string): Promise<CheckResult> {
+export async function runGitleaksStaged(cwd?: string, options?: GateCheckRunOptions): Promise<CheckResult> {
+  const timeoutMs = options?.timeoutMs ?? COMMIT_GATE_TIMEOUT_MS;
   const missing = denyIfToolMissing('gitleaks', 'gitleaks-staged', cwd);
   if (missing) return missing;
   const configArg = getGitleaksConfigArg(cwd);
   try {
     const result = await withTimeout(
-      execCommandAsync(`gitleaks protect --staged --no-banner --redact${configArg}`, { cwd, timeout: 30000 }),
-      30000,
-      'gitleaks staged 超时 (30s)',
+      execCommandAsync(`gitleaks protect --staged --no-banner --redact${configArg}`, { cwd, timeout: timeoutMs }),
+      timeoutMs,
+      gateTimeoutMessage('gitleaks staged', timeoutMs),
     );
     if (!result.success && (result.stderr || result.stdout)) {
       return formatResult('gitleaks-staged', DECISION.DENY, 'gitleaks 在暂存 diff 中发现潜在密钥泄露', {
@@ -305,15 +373,16 @@ export async function runGitleaksStaged(cwd?: string): Promise<CheckResult> {
   }
 }
 
-export async function runGitleaks(cwd?: string): Promise<CheckResult> {
+export async function runGitleaks(cwd?: string, options?: GateCheckRunOptions): Promise<CheckResult> {
+  const timeoutMs = options?.timeoutMs ?? FULL_GATE_TIMEOUT_MS;
   const missing = denyIfToolMissing('gitleaks', 'gitleaks', cwd);
   if (missing) return missing;
   const configArg = getGitleaksConfigArg(cwd);
   try {
     const result = await withTimeout(
-      execCommandAsync(`gitleaks detect --source . --no-banner --redact${configArg}`, { cwd, timeout: 60000 }),
-      60000,
-      'gitleaks 超时 (60s)',
+      execCommandAsync(`gitleaks detect --source . --no-banner --redact${configArg}`, { cwd, timeout: timeoutMs }),
+      timeoutMs,
+      gateTimeoutMessage('gitleaks', timeoutMs),
     );
     if (!result.success && (result.stderr || result.stdout)) {
       return formatResult('gitleaks', DECISION.DENY, 'gitleaks 发现潜在密钥泄露', {

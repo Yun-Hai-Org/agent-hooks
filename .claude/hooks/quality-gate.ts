@@ -23,11 +23,19 @@ import {
 import {
   runSemgrep,
   runSemgrepStaged,
+  runSemgrepPciStaged,
+  runSemgrepPciFull,
   runKnip,
   runTrivy,
   runGitleaks,
   runGitleaksStaged,
 } from './checks/security-scan.js';
+import { runSbomArchive } from './checks/fintech-sbom.js';
+import { runPaymentPageStaged, runPaymentPageFull } from './checks/payment-page-lint.js';
+import { runZapApiDast } from './checks/zap-api-dast.js';
+import { runOpaConftest } from './checks/policy-conftest.js';
+import { runIacCheckov } from './checks/iac-checkov.js';
+import { runSlsaCosign } from './checks/slsa-cosign.js';
 import { runPyDepAudit } from './checks/py-dep-audit.js';
 import { runLockfileFreshness } from './checks/lockfile.js';
 import { runLintFull } from './checks/lint-full.js';
@@ -41,8 +49,60 @@ import { runK8sLintStaged, runK8sLintFull } from './checks/k8s-lint.js';
 import { runK8sKindSmokeFull } from './checks/k8s-kind-smoke.js';
 import { DEFAULT_COVERAGE_THRESHOLD } from './checks/coverage.js';
 import { runOpenApiContractStaged, runOpenApiContractFull } from './checks/openapi-contract.js';
+import { getIndexTreeSha, recordFullPass } from './gate-cache.js';
+import { resolveGateNode } from './gate-config.js';
+import { getRegistryControlIds } from './gate-registry.js';
 
-import type { QualityGateParseOptions, CheckResult, QualityGateResult, GateTiming, GateTimingEntry } from './types.js';
+import type {
+  QualityGateParseOptions,
+  CheckResult,
+  QualityGateResult,
+  GateTiming,
+  GateTimingEntry,
+  GatePathPrefix,
+} from './types.js';
+
+export interface RunConfiguredCheckOptions {
+  gatePathPrefix: GatePathPrefix;
+  checkId: string;
+  cwd: string;
+  runner: (timeoutMs?: number) => Promise<CheckResult> | CheckResult;
+}
+
+export function attachControlIds(result: CheckResult, gatePath: string): CheckResult {
+  const controlIds = getRegistryControlIds(gatePath);
+  if (!controlIds || controlIds.length === 0) return result;
+  return { ...result, controlIds };
+}
+
+export function runConfiguredSyncCheck(
+  options: Omit<RunConfiguredCheckOptions, 'runner'> & {
+    runner: () => CheckResult;
+  },
+): CheckResult {
+  const path = `${options.gatePathPrefix}.checks.${options.checkId}`;
+  const node = resolveGateNode(path, options.cwd);
+  if (!node.configured || !node.enabled) {
+    return formatResult(options.checkId, DECISION.SKIP, `未配置或已关闭 (${path})`);
+  }
+  return attachControlIds(options.runner(), path);
+}
+
+export async function runConfiguredCheck(options: RunConfiguredCheckOptions): Promise<CheckResult> {
+  const path = `${options.gatePathPrefix}.checks.${options.checkId}`;
+  const node = resolveGateNode(path, options.cwd);
+  if (!node.configured || !node.enabled) {
+    return formatResult(options.checkId, DECISION.SKIP, `未配置或已关闭 (${path})`);
+  }
+  const result = await options.runner(node.timeoutMs);
+  return attachControlIds(result, path);
+}
+
+function skipHookResult(hookPath: string): QualityGateResult {
+  const skip = formatResult('quality-gate', DECISION.SKIP, `${hookPath} 未在 quality-gate.yaml 中启用`);
+  const decision = decide([skip]);
+  return { passed: true, results: [skip], decision, timing: computeTiming([skip]) };
+}
 
 interface CheckFailureDetail {
   tool?: string;
@@ -98,19 +158,41 @@ export async function runQualityGate(
   options: Pick<QualityGateParseOptions, 'profile' | 'cwd'> & {
     commitCmd?: string;
     commitMsgFile?: string;
+    gatePathPrefix?: GatePathPrefix;
   },
 ): Promise<QualityGateResult> {
   const { profile, cwd, commitCmd, commitMsgFile } = options;
+  const gatePathPrefix = options.gatePathPrefix ?? (profile === 'commit' ? 'git.pre-commit' : 'git.pre-push');
+
+  const hookNode = resolveGateNode(gatePathPrefix, cwd);
+  if (!hookNode.configured || !hookNode.enabled) {
+    return skipHookResult(gatePathPrefix);
+  }
+
+  const checkOpts = { gatePathPrefix, cwd };
 
   if (profile === 'commit') {
     const syncResults = [
-      checkBranch(cwd),
-      commitMsgFile
-        ? checkCommitMessageFromFile(commitMsgFile)
-        : commitCmd
-          ? checkCommitMessage(commitCmd)
-          : formatResult('commit-msg', DECISION.SKIP, '无 commit message'),
-      checkSensitiveStagedFiles(cwd),
+      runConfiguredSyncCheck({
+        ...checkOpts,
+        checkId: 'branch-check',
+        runner: () => checkBranch(cwd),
+      }),
+      (() => {
+        const commitMsgPath = 'git.commit-msg.checks.commit-msg';
+        const commitMsgNode = resolveGateNode(commitMsgPath, cwd);
+        if (!commitMsgNode.configured || !commitMsgNode.enabled) {
+          return formatResult('commit-msg', DECISION.SKIP, `未配置或已关闭 (${commitMsgPath})`);
+        }
+        if (commitMsgFile) return checkCommitMessageFromFile(commitMsgFile);
+        if (commitCmd) return checkCommitMessage(commitCmd);
+        return formatResult('commit-msg', DECISION.SKIP, '无 commit message');
+      })(),
+      runConfiguredSyncCheck({
+        ...checkOpts,
+        checkId: 'sensitive-files',
+        runner: () => checkSensitiveStagedFiles(cwd),
+      }),
     ];
     const syncDecision = decide(syncResults);
     if (syncDecision.decision === DECISION.DENY) {
@@ -132,21 +214,121 @@ export async function runQualityGate(
       k8sLint,
       openApiContract,
       lockfileFreshness,
+      semgrepPciStaged,
+      paymentPageStaged,
     ] = await Promise.all([
-      timeCheck(runDepAudit(cwd, { staged: true })),
-      timeCheck(runStagedTypecheck(cwd)),
-      timeCheck(runRelatedTests(cwd)),
-      timeCheck(runLintStaged(cwd)),
-      timeCheck(runFormatStaged(cwd)),
-      timeCheck(runGitleaksStaged(cwd)),
-      timeCheck(runSemgrepStaged(cwd)),
-      timeCheck(runCodeReview(cwd, { staged: true })),
-      timeCheck(runHookAdversarialIfStaged(cwd)),
-      timeCheck(runExtendedLintStaged(cwd)),
-      timeCheck(runSchemaLintStaged(cwd)),
-      timeCheck(runK8sLintStaged(cwd)),
-      timeCheck(runOpenApiContractStaged(cwd)),
-      timeCheck(runLockfileFreshness(cwd, { staged: true })),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'dep-audit',
+          runner: (ms) => runDepAudit(cwd, { staged: true, timeoutMs: ms }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'type-check',
+          runner: (ms) => runStagedTypecheck(cwd, { timeoutMs: ms }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'related-tests',
+          runner: (ms) => runRelatedTests(cwd, { timeoutMs: ms }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'lint-staged',
+          runner: (ms) => runLintStaged(cwd, { timeoutMs: ms, gatePathPrefix }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'format-staged',
+          runner: (ms) => runFormatStaged(cwd, { timeoutMs: ms, gatePathPrefix }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'gitleaks-staged',
+          runner: (ms) => runGitleaksStaged(cwd, { timeoutMs: ms }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'semgrep-staged',
+          runner: (ms) => runSemgrepStaged(cwd, { timeoutMs: ms }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'code-review-staged',
+          runner: (ms) => runCodeReview(cwd, { staged: true, timeoutMs: ms }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'hook-adversarial',
+          runner: (ms) => runHookAdversarialIfStaged(cwd, { timeoutMs: ms }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'extended-staged',
+          runner: (ms) => runExtendedLintStaged(cwd, { timeoutMs: ms, gatePathPrefix }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'schema-staged',
+          runner: (ms) => runSchemaLintStaged(cwd, { timeoutMs: ms, gatePathPrefix }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'k8s-staged',
+          runner: (ms) => runK8sLintStaged(cwd, { timeoutMs: ms, gatePathPrefix }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'openapi-staged',
+          runner: (ms) => runOpenApiContractStaged(cwd, { timeoutMs: ms }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'lockfile-freshness',
+          runner: (ms) => runLockfileFreshness(cwd, { staged: true, timeoutMs: ms }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'semgrep-pci-staged',
+          runner: (ms) => runSemgrepPciStaged(cwd, { timeoutMs: ms }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredSyncCheck({
+          ...checkOpts,
+          checkId: 'payment-page-staged',
+          runner: () => runPaymentPageStaged(cwd),
+        }),
+      ),
     ]);
     const results = [
       ...syncResults,
@@ -164,6 +346,8 @@ export async function runQualityGate(
       k8sLint,
       openApiContract,
       lockfileFreshness,
+      semgrepPciStaged,
+      paymentPageStaged,
     ];
     const finalDecision = decide(results);
     return {
@@ -174,8 +358,18 @@ export async function runQualityGate(
     };
   }
 
-  const hookUnit = await timeCheck(runHookUnitTests(cwd, { coverageThreshold: DEFAULT_COVERAGE_THRESHOLD }));
-  const coverageResult = formatResult('coverage', DECISION.SKIP, '覆盖率已并入 hook-unit-tests（--coverage）');
+  const hookUnit = await timeCheck(
+    runConfiguredCheck({
+      ...checkOpts,
+      checkId: 'hook-unit-tests',
+      runner: (ms) => runHookUnitTests(cwd, { coverageThreshold: DEFAULT_COVERAGE_THRESHOLD, timeoutMs: ms }),
+    }),
+  );
+  const coverageResult = runConfiguredSyncCheck({
+    ...checkOpts,
+    checkId: 'coverage',
+    runner: () => formatResult('coverage', DECISION.SKIP, '覆盖率已并入 hook-unit-tests（--coverage）'),
+  });
 
   const [
     typeResult,
@@ -196,25 +390,165 @@ export async function runQualityGate(
     k8sKindSmoke,
     openApiContract,
     lockfileFreshness,
+    sbomArchive,
+    semgrepPci,
+    paymentPageFull,
+    zapApiDast,
+    opaConftest,
+    iacCheckov,
+    slsaCosign,
   ] = await Promise.all([
-    timeCheck(runFullTypecheck(cwd)),
-    timeCheck(runLintFull(cwd)),
-    timeCheck(runFullProjectTests(cwd)),
-    timeCheck(runHookAdversarialTests(cwd)),
-    timeCheck(runDepAudit(cwd, { staged: false })),
-    timeCheck(runPyDepAudit(cwd)),
-    timeCheck(runGitleaks(cwd)),
-    timeCheck(runSemgrep(cwd)),
-    timeCheck(runKnip(cwd)),
-    timeCheck(runTrivy(cwd)),
-    timeCheck(runFormatFull(cwd)),
-    timeCheck(runCodeReview(cwd)),
-    timeCheck(runExtendedLintFull(cwd)),
-    timeCheck(runSchemaLintFull(cwd)),
-    timeCheck(runK8sLintFull(cwd)),
-    timeCheck(runK8sKindSmokeFull(cwd)),
-    timeCheck(runOpenApiContractFull(cwd)),
-    timeCheck(runLockfileFreshness(cwd)),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'type-check',
+        runner: (ms) => runFullTypecheck(cwd, { timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'lint-full',
+        runner: (ms) => runLintFull(cwd, { timeoutMs: ms, gatePathPrefix }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'full-tests',
+        runner: (ms) => runFullProjectTests(cwd, { timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'hook-adversarial',
+        runner: (ms) => runHookAdversarialTests(cwd, { timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'dep-audit',
+        runner: (ms) => runDepAudit(cwd, { staged: false, timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'py-dep-audit',
+        runner: (ms) => runPyDepAudit(cwd, { timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({ ...checkOpts, checkId: 'gitleaks', runner: (ms) => runGitleaks(cwd, { timeoutMs: ms }) }),
+    ),
+    timeCheck(
+      runConfiguredCheck({ ...checkOpts, checkId: 'semgrep', runner: (ms) => runSemgrep(cwd, { timeoutMs: ms }) }),
+    ),
+    timeCheck(runConfiguredCheck({ ...checkOpts, checkId: 'knip', runner: (ms) => runKnip(cwd, { timeoutMs: ms }) })),
+    timeCheck(runConfiguredCheck({ ...checkOpts, checkId: 'trivy', runner: (ms) => runTrivy(cwd, { timeoutMs: ms }) })),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'format-full',
+        runner: (ms) => runFormatFull(cwd, { timeoutMs: ms, gatePathPrefix }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'code-review',
+        runner: (ms) => runCodeReview(cwd, { timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'extended-full',
+        runner: (ms) => runExtendedLintFull(cwd, { timeoutMs: ms, gatePathPrefix }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'schema-full',
+        runner: (ms) => runSchemaLintFull(cwd, { timeoutMs: ms, gatePathPrefix }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'k8s-full',
+        runner: (ms) => runK8sLintFull(cwd, { timeoutMs: ms, gatePathPrefix }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'k8s-kind-smoke',
+        runner: (ms) => runK8sKindSmokeFull(cwd, { timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'openapi-full',
+        runner: (ms) => runOpenApiContractFull(cwd, { timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'lockfile-freshness',
+        runner: (ms) => runLockfileFreshness(cwd, { timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'sbom-archive',
+        runner: (ms) => runSbomArchive(cwd, { timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'semgrep-pci',
+        runner: (ms) => runSemgrepPciFull(cwd, { timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredSyncCheck({ ...checkOpts, checkId: 'payment-page-full', runner: () => runPaymentPageFull(cwd) }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'zap-api-dast',
+        runner: (ms) => runZapApiDast(cwd, { timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'opa-conftest',
+        runner: (ms) => runOpaConftest(cwd, { timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'iac-checkov',
+        runner: (ms) => runIacCheckov(cwd, { timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
+        checkId: 'slsa-cosign',
+        runner: (ms) => runSlsaCosign(cwd, { timeoutMs: ms }),
+      }),
+    ),
   ]);
 
   const results = [
@@ -238,6 +572,13 @@ export async function runQualityGate(
     k8sKindSmoke,
     openApiContract,
     lockfileFreshness,
+    sbomArchive,
+    semgrepPci,
+    paymentPageFull,
+    zapApiDast,
+    opaConftest,
+    iacCheckov,
+    slsaCosign,
   ];
   const finalDecision = decide(results);
   return {
@@ -360,6 +701,13 @@ async function main() {
   } else {
     console.log(summarizeResults(gateResult.results));
     console.log(formatTimingSummary(gateResult.timing));
+  }
+
+  if (gateResult.passed && options.profile === 'full') {
+    const indexTree = getIndexTreeSha(options.cwd);
+    if (indexTree) {
+      recordFullPass(options.cwd, indexTree);
+    }
   }
 
   process.exit(gateResult.passed ? 0 : 1);

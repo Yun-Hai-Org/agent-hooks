@@ -1,8 +1,10 @@
 // 测试基础设施 - 输入构造器、输出断言器、Mock CLI
 
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
+import { tmpdir } from 'os';
 import { join, dirname } from 'path';
+import { clearGateConfigCache } from '../gate-config.js';
 
 /** 仓库根目录（tests 从 .claude/hooks 运行时 cwd 不是根） */
 export const PROJECT_ROOT = join(import.meta.dir, '..', '..', '..');
@@ -42,13 +44,26 @@ export function expectAllow(output) {
   return !parsed?.hookSpecificOutput || parsed.hookSpecificOutput.permissionDecision !== 'deny';
 }
 
-const FIXTURE_DIR = join(dirname(new URL(import.meta.url).pathname), 'fixtures');
+const FIXTURE_DIR = join(tmpdir(), `hook-tests-${process.pid}`);
 
 export function disableGlobalGitHooks(cwd: string) {
   execSync('git config --local core.hooksPath .git/hooks', { cwd, stdio: 'pipe' });
 }
 
+/** 为测试仓库写入 quality-gate 白名单（从项目 example 复制） */
+export function bootstrapQualityGateYaml(repoDir: string): void {
+  const src = join(PROJECT_ROOT, '.claude', 'quality-gate.yaml');
+  const destDir = join(repoDir, '.claude');
+  mkdirSync(destDir, { recursive: true });
+  const content = existsSync(src)
+    ? readFileSync(src, 'utf-8')
+    : 'ide:\n  branch-gate:\n    enabled: true\n  block-dangerous-commands:\n    enabled: true\n';
+  writeFileSync(join(destDir, 'quality-gate.yaml'), content, 'utf-8');
+  clearGateConfigCache();
+}
+
 export function createTempGitRepo(branch = 'feat/test') {
+  mkdirSync(FIXTURE_DIR, { recursive: true });
   const repoName = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const repoPath = join(FIXTURE_DIR, repoName);
   mkdirSync(repoPath, { recursive: true });

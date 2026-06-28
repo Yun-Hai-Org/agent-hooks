@@ -4,7 +4,7 @@ import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } fr
 import { isDockerfilePath, isK8sManifestPath, listTrackedFiles } from './file-patterns.js';
 import { resolveContainerRuntime } from './container-runtime.js';
 import { isToolInstalled } from './tools.js';
-import type { CheckResult } from '../types.js';
+import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 const KIND_SMOKE_SCRIPT = 'scripts/kind-smoke.sh';
 const KIND_SMOKE_TIMEOUT_MS = 300000;
@@ -40,7 +40,7 @@ export function getKindSmokeScriptPath(cwd?: string): string {
   return join(cwd ?? process.cwd(), KIND_SMOKE_SCRIPT);
 }
 
-export async function runK8sKindSmokeFull(cwd?: string): Promise<CheckResult> {
+export async function runK8sKindSmokeFull(cwd?: string, _options?: GateCheckRunOptions): Promise<CheckResult> {
   const checkId = 'k8s-kind-smoke';
 
   if (!hasKindSmokeOptIn(cwd)) {

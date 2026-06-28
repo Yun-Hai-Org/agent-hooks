@@ -28,6 +28,7 @@ export interface CheckResult {
   timestamp?: string;
   details?: Record<string, unknown>;
   durationMs?: number;
+  controlIds?: string[];
 }
 
 export interface DecideResult {
@@ -150,6 +151,24 @@ export interface HadolintIssue {
   severity: string;
   ruleId: string;
   message: string;
+}
+
+export type GatePathPrefix = 'git.pre-commit' | 'git.pre-push' | 'git.pre-merge-commit';
+
+export interface GateCheckRunOptions {
+  timeoutMs?: number | undefined;
+  gatePathPrefix?: GatePathPrefix | undefined;
+  staged?: boolean | undefined;
+  base?: string | undefined;
+  coverageThreshold?: number | undefined;
+}
+
+export function spreadTimeoutMs(timeoutMs?: number): Pick<GateCheckRunOptions, 'timeoutMs'> {
+  return timeoutMs !== undefined ? { timeoutMs } : {};
+}
+
+export function spreadGateCheckOptions(timeoutMs?: number, gatePathPrefix?: GatePathPrefix): GateCheckRunOptions {
+  return { ...spreadTimeoutMs(timeoutMs), ...(gatePathPrefix !== undefined ? { gatePathPrefix } : {}) };
 }
 
 export interface QualityGateParseOptions {

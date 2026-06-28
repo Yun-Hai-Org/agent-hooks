@@ -1,5 +1,5 @@
 import { execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
-import type { CheckResult, HadolintIssue } from '../types.js';
+import type { CheckResult, HadolintIssue, GateCheckRunOptions } from '../types.js';
 import { getStagedFiles } from './git-policy.js';
 import {
   classifyFiles,
@@ -318,7 +318,7 @@ async function runExtendedChecks(classified: ReturnType<typeof classifyFiles>, i
   );
 }
 
-export async function runExtendedLintStaged(cwd?: string) {
+export async function runExtendedLintStaged(cwd?: string, _options?: GateCheckRunOptions) {
   const staged = getStagedFiles(cwd);
   const classified = classifyFiles(staged, cwd);
   const hasTargets =
@@ -338,7 +338,7 @@ export async function runExtendedLintStaged(cwd?: string) {
   return runExtendedChecks(classified, 'extended-staged', cwd);
 }
 
-export async function runExtendedLintFull(cwd?: string) {
+export async function runExtendedLintFull(cwd?: string, _options?: GateCheckRunOptions) {
   const classified = classifyFiles(
     listTrackedFiles((f) => {
       if (f.startsWith('_bmad-output/') || f.startsWith('_bmad/') || f.startsWith('GitHub/')) return false;

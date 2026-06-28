@@ -23,14 +23,31 @@
 
 ## B. 本地质量三门（Git native only）
 
-| 操作           | Native Hook      | profile                            | 失败                  |
-| -------------- | ---------------- | ---------------------------------- | --------------------- |
-| git commit     | pre-commit       | commit；merge 结论 → full 或 cache | exit 1                |
-| commit message | commit-msg       | message 规则                       | exit 1                |
-| git push       | pre-push         | full                               | exit 1 + gate-pending |
-| git merge      | pre-merge-commit | full @ 合并树                      | exit 1 abort merge    |
+| 操作           | Native Hook      | profile                            | 失败                   |
+| -------------- | ---------------- | ---------------------------------- | ---------------------- |
+| git commit     | pre-commit       | commit；merge 结论 → full 或 cache | exit 1                 |
+| commit message | commit-msg       | message 规则                       | exit 1                 |
+| git push       | pre-push         | full                               | exit 1 + gate-pending  |
+| git merge      | pre-merge-commit | full @ 合并树                      | exit 1（保留合并状态） |
 
-**merge 结论**：`pre-merge-commit` 失败时自动 `git merge --abort`；IDE 禁止 `git commit` 收尾（须 `git merge --continue` 或 `--abort`）。
+**merge 结论**：`pre-merge-commit` 失败时 exit 1（保留 MERGE_HEAD，不自动 abort）。
+
+IDE 禁止 `git commit` 收尾（须 `git merge --continue` 或 `--abort`）。
+
+**Agent / IDE 合并限制**：`block-dangerous-commands` 在有 `MERGE_HEAD` 时会拦截 `git commit`（`--amend` 除外）。
+
+合并收尾必须在**系统终端**执行 `git merge --continue`，不要依赖 IDE 内 Agent 执行 `git commit`。
+
+**推荐合并工作流**（IDE 内 merge 易失败，或需先验 full 门时）：
+
+```bash
+# 在目标分支（如 master）上
+git merge --no-ff --no-commit <branch>   # 不触发 pre-merge-commit
+bun run .claude/hooks/quality-gate.ts --profile=full   # 通过后自动写入 gate cache
+git merge --continue                      # 终端执行；cache 命中时跳过重复 full 扫描
+```
+
+若 full 门失败：修复问题后重新跑 full 门，再 `git merge --continue`；或 `git merge --abort` 取消合并。
 
 **main/master 须 `--no-ff`**：Fast-forward 与 `--squash` 均不触发 `pre-merge-commit`。
 终端：`branch.main/master.mergeoptions`（`configure-merge-no-ff-global.sh`）；
@@ -109,6 +126,37 @@ IDE：`block-dangerous-commands` 拦截无 `--no-ff` 的 merge 与 `--squash`。
 - IDE commit-gate / push-gate / merge-gate（质量检查改由 `.githooks`）
 - merge-gate source 分支 worktree 预扫
 - branch-gate worktree bypass
+
+## C. quality-gate.yaml 集中配置
+
+白名单语义：节点未出现在 `~/.claude/quality-gate.yaml` 或 `{repo}/.claude/quality-gate.yaml` 中则 **不执行**。
+
+| 字段                    | 说明                                                       |
+| ----------------------- | ---------------------------------------------------------- |
+| `enabled`               | 是否启用该 hook/check                                      |
+| `timeout` / `timeoutMs` | 超时（子项继承 hook 总项，受总项 cap）                     |
+| `autoFix`               | 仅 lint/format 类可 fix 节点；失败时 fix-then-recheck 一次 |
+
+安装时 bootstrap：`link-cursor-hooks-global.sh` / `install-git-hooks-global.sh`
+会在 `~/.claude/quality-gate.yaml` 不存在时从 example 复制。
+
+## D. Fintech 合规检查
+
+| checkId               | profile | controlIds            | autoFix                   |
+| --------------------- | ------- | --------------------- | ------------------------- |
+| `semgrep-pci-staged`  | commit  | PCI-6.3.3, PCI-6.5    | 否                        |
+| `payment-page-staged` | commit  | PCI-6.4.3             | 否                        |
+| `sbom-archive`        | full    | PCI-6.3.2, DORA-Art6  | 否                        |
+| `semgrep-pci`         | full    | PCI-6.3.3             | 否                        |
+| `payment-page-full`   | full    | PCI-6.4.3, PCI-11.6.1 | 否                        |
+| `zap-api-dast`        | full    | PCI-11.3              | 否（需 `ZAP_TARGET_URL`） |
+| `opa-conftest`        | full    | DORA-Art6, SOX-404    | 否                        |
+| `iac-checkov`         | full    | PCI-6.3.3             | 否                        |
+| `slsa-cosign`         | full    | PCI-6.3.2, SLSA-L3    | 否（需 `.hooks/cosign/`） |
+
+`CheckResult.controlIds` 由 registry SSOT 注入，供 JSON 审计日志映射 PCI/SOX/DORA 控制点。
+
+逻辑 **fintech profile** = full profile + 上述 fintech leaves 在 yaml 中 `enabled: true`。
 
 ## E. P3
 

@@ -2,7 +2,7 @@ import { execCommandAsync, formatResult, withTimeout, DECISION } from '../securi
 import { getStagedFiles } from './git-policy.js';
 import { isK8sManifestPath, listTrackedFiles } from './file-patterns.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
-import type { CheckResult } from '../types.js';
+import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 const KUBECONFORM_TIMEOUT_MS = 30000;
 const KUBE_LINTER_TIMEOUT_MS = 60000;
@@ -155,7 +155,7 @@ async function runK8sChecks(files: string[], idPrefix: string, cwd?: string) {
   return formatResult(idPrefix, DECISION.ALLOW, 'K8s manifest 检查通过');
 }
 
-export async function runK8sLintStaged(cwd?: string) {
+export async function runK8sLintStaged(cwd?: string, _options?: GateCheckRunOptions) {
   const staged = getStagedFiles(cwd);
   const k8sFiles = staged.filter((f) => isK8sManifestPath(f, cwd));
   if (k8sFiles.length === 0) {
@@ -164,7 +164,7 @@ export async function runK8sLintStaged(cwd?: string) {
   return runK8sChecks(k8sFiles, 'k8s-staged', cwd);
 }
 
-export async function runK8sLintFull(cwd?: string) {
+export async function runK8sLintFull(cwd?: string, _options?: GateCheckRunOptions) {
   const k8sFiles = listTrackedFiles((f) => {
     if (f.startsWith('_bmad-output/') || f.startsWith('_bmad/')) return false;
     return isK8sManifestPath(f, cwd);

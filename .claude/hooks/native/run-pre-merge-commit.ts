@@ -7,7 +7,7 @@ import { execCommand, log } from '../security-orchestrator.js';
 import { runQualityGate, logGateResult } from '../quality-gate.js';
 import { setPendingGateFailure, clearPendingGateFailure } from '../gate-pending.js';
 import { getIndexTreeSha, hasFreshFullPass, recordFullPass } from '../gate-cache.js';
-import { exitIfQualityGateExcluded } from './native-common.js';
+import { exitIfQualityGateExcluded, exitIfGateHookDisabled } from './native-common.js';
 
 const HOOK_NAME = 'native-pre-merge-commit';
 
@@ -23,6 +23,7 @@ function getRepoRoot() {
 async function main() {
   const cwd = getRepoRoot();
   exitIfQualityGateExcluded(HOOK_NAME, cwd);
+  exitIfGateHookDisabled(HOOK_NAME, 'git.pre-merge-commit', cwd);
 
   const indexTree = getIndexTreeSha(cwd);
   if (indexTree && hasFreshFullPass(cwd, indexTree)) {
@@ -36,7 +37,7 @@ async function main() {
     process.exit(0);
   }
 
-  const gateResult = await runQualityGate({ profile: 'full', cwd });
+  const gateResult = await runQualityGate({ profile: 'full', cwd, gatePathPrefix: 'git.pre-merge-commit' });
   logGateResult(HOOK_NAME, gateResult, { profile: 'full', cwd, hook: 'pre-merge-commit' });
 
   if (!gateResult.passed) {
@@ -45,7 +46,6 @@ async function main() {
       command: 'git merge',
       cwd,
     });
-    execCommand('git merge --abort', { cwd });
     console.error(gateResult.decision.reason ?? 'pre-merge-commit quality gate failed');
     process.exit(1);
   }

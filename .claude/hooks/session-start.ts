@@ -18,6 +18,7 @@ import { getPlatform } from './hook-adapter.js';
 import { resolveContainerRuntime } from './checks/container-runtime.js';
 import { isToolInstalled, getBunxInvocation, resolveBunExecutable } from './checks/tools.js';
 import type { ToolStatus } from './types.js';
+import { isGateNodeEnabled } from './gate-config.js';
 const HOOK_NAME = 'session-start';
 const GLOBAL_TIMEOUT_MS = 2000;
 const PER_TOOL_TIMEOUT_MS = 500;
@@ -124,6 +125,11 @@ const TOOLS: { name: string; binary: string; versionCmd?: string }[] = [
   { name: 'trivy', binary: 'trivy', versionCmd: 'trivy --version' },
   { name: 'osv-scanner', binary: 'osv-scanner', versionCmd: 'osv-scanner --version' },
   { name: 'pip-audit', binary: 'pip-audit', versionCmd: 'pip-audit --version' },
+  { name: 'syft', binary: 'syft', versionCmd: 'syft version' },
+  { name: 'zap', binary: 'zap', versionCmd: 'zap -version' },
+  { name: 'conftest', binary: 'conftest', versionCmd: 'conftest --version' },
+  { name: 'cosign', binary: 'cosign', versionCmd: 'cosign version' },
+  { name: 'checkov', binary: 'checkov', versionCmd: 'checkov --version' },
   // 死代码检测
   { name: 'knip', binary: 'knip', versionCmd: 'bunx knip --version' },
   // 包管理器
@@ -218,6 +224,15 @@ function main() {
   const startTime = Date.now();
 
   try {
+    if (!isGateNodeEnabled('ide.session-start', process.cwd())) {
+      if (getPlatform() === 'cursor') {
+        console.log('{}');
+      } else {
+        console.log('{"skipped":true}');
+      }
+      return;
+    }
+
     const results = checkAllTools();
     const elapsed = Date.now() - startTime;
 

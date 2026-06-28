@@ -1,4 +1,5 @@
 import { execCommand, formatResult, DECISION } from '../security-orchestrator.js';
+import type { GateCheckRunOptions } from '../types.js';
 
 interface DiffPattern {
   id: string;
@@ -25,11 +26,20 @@ const DIFF_PATTERNS: DiffPattern[] = [
 ];
 
 export function scanDiffForFindings(diff: string): { deny: string[]; warn: string[] } {
-  const addedLines = diff.split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'));
   const deny: string[] = [];
   const warn: string[] = [];
-  for (const line of addedLines) {
+  let currentFile = '';
+
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('+++ b/')) {
+      currentFile = line.slice('+++ b/'.length);
+      continue;
+    }
+    if (!line.startsWith('+') || line.startsWith('+++')) continue;
+
+    const isHookFile = currentFile.startsWith('.claude/hooks/');
     for (const pattern of DIFF_PATTERNS) {
+      if (pattern.id === 'console-log' && isHookFile) continue;
       if (pattern.regex.test(line)) {
         (pattern.severity === DECISION.DENY ? deny : warn).push(pattern.message);
         break;
@@ -39,11 +49,12 @@ export function scanDiffForFindings(diff: string): { deny: string[]; warn: strin
   return { deny, warn };
 }
 
-export function runCodeReview(cwd?: string, options: { base?: string; staged?: boolean } = {}) {
+export function runCodeReview(cwd?: string, options: GateCheckRunOptions = {}) {
   const staged = options.staged === true;
   const checkId = staged ? 'code-review-staged' : 'code-review';
+  const timeoutMs = options.timeoutMs ?? 30000;
   const diffCmd = staged ? 'git diff --cached --unified=0' : `git diff ${options.base ?? 'HEAD~1'}..HEAD --unified=0`;
-  const diffResult = execCommand(diffCmd, { cwd, timeout: 30000 });
+  const diffResult = execCommand(diffCmd, { cwd, timeout: timeoutMs });
   if (!diffResult.success || !diffResult.stdout.trim()) {
     return formatResult(checkId, DECISION.SKIP, staged ? '暂存区无 diff 可审查，跳过' : '无 diff 可审查，跳过');
   }

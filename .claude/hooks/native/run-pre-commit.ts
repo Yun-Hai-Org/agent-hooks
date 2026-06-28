@@ -9,7 +9,7 @@ import { execCommand, log } from '../security-orchestrator.js';
 import { runQualityGate, logGateResult } from '../quality-gate.js';
 import { getIndexTreeSha, hasFreshFullPass, recordFullPass } from '../gate-cache.js';
 import { clearPendingGateFailure } from '../gate-pending.js';
-import { exitIfQualityGateExcluded } from './native-common.js';
+import { exitIfQualityGateExcluded, exitIfGateHookDisabled } from './native-common.js';
 
 const HOOK_NAME = 'native-pre-commit';
 
@@ -58,6 +58,7 @@ async function runMergeConcludeGate(cwd: string): Promise<void> {
 async function main() {
   const cwd = getRepoRoot();
   exitIfQualityGateExcluded(HOOK_NAME, cwd);
+  exitIfGateHookDisabled(HOOK_NAME, 'git.pre-commit', cwd);
 
   if (isMergeConclude(cwd)) {
     await runMergeConcludeGate(cwd);
