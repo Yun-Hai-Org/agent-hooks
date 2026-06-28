@@ -7,6 +7,7 @@ import {
   getRuffInvocation,
 } from './tools.js';
 import { isHooksProject } from './hooks-project.js';
+import { FULL_GATE_TIMEOUT_MS, gateTimeoutMessage } from '../gate-timeouts.js';
 import type { CheckResult } from '../types.js';
 
 export async function runLintFull(cwd?: string) {
@@ -26,11 +27,11 @@ export async function runLintFull(cwd?: string) {
           `${getBunxInvocation(cwd)} eslint .claude/hooks --ignore-pattern "**/__tests__/**" --max-warnings 0 --report-unused-disable-directives`,
           {
             cwd,
-            timeout: 120000,
+            timeout: FULL_GATE_TIMEOUT_MS,
           },
         ),
-        120000,
-        'eslint 超时 (120s)',
+        FULL_GATE_TIMEOUT_MS,
+        gateTimeoutMessage('eslint', FULL_GATE_TIMEOUT_MS),
       );
       results.push(
         eslintResult.success

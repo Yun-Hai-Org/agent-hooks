@@ -45,7 +45,6 @@ async function main() {
       command: 'git merge',
       cwd,
     });
-    execCommand('git merge --abort', { cwd });
     console.error(gateResult.decision.reason ?? 'pre-merge-commit quality gate failed');
     process.exit(1);
   }

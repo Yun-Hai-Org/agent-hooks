@@ -41,6 +41,7 @@ import { runK8sLintStaged, runK8sLintFull } from './checks/k8s-lint.js';
 import { runK8sKindSmokeFull } from './checks/k8s-kind-smoke.js';
 import { DEFAULT_COVERAGE_THRESHOLD } from './checks/coverage.js';
 import { runOpenApiContractStaged, runOpenApiContractFull } from './checks/openapi-contract.js';
+import { getIndexTreeSha, recordFullPass } from './gate-cache.js';
 
 import type { QualityGateParseOptions, CheckResult, QualityGateResult, GateTiming, GateTimingEntry } from './types.js';
 
@@ -360,6 +361,13 @@ async function main() {
   } else {
     console.log(summarizeResults(gateResult.results));
     console.log(formatTimingSummary(gateResult.timing));
+  }
+
+  if (gateResult.passed && options.profile === 'full') {
+    const indexTree = getIndexTreeSha(options.cwd);
+    if (indexTree) {
+      recordFullPass(options.cwd, indexTree);
+    }
   }
 
   process.exit(gateResult.passed ? 0 : 1);

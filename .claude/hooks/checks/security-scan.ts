@@ -3,11 +3,10 @@ import { denyIfToolMissing, denyOnToolError, getBunxInvocation } from './tools.j
 import { isHooksProject } from './hooks-project.js';
 import { getStagedFiles } from './git-policy.js';
 import { resolveTrivyScanners } from './file-patterns.js';
+import { COMMIT_GATE_TIMEOUT_MS, FULL_GATE_TIMEOUT_MS, gateTimeoutMessage } from '../gate-timeouts.js';
 import type { CheckResult } from '../types.js';
 
 const TRIVY_EXTRA_SKIP_DIRS = ['_bmad', '_bmad-output', 'node_modules', '.venv', '.claude/worktrees'];
-const TRIVY_TIMEOUT_MS = 360000;
-const KNIP_TIMEOUT_MS = 60000;
 // trivy 漏洞库下载源：国内镜像（南大）为主选放最前，官方源在后做 fallback（5xx/429 时按序回退）。
 // 注意：设置 --db-repository 会覆盖默认源，故须显式保留官方源以维持回退能力。
 const TRIVY_DB_REPOS = [
@@ -114,9 +113,6 @@ const SEMGREP_SEVERITY = '--severity ERROR --severity WARNING --severity INFO';
 // 已改为在确属受信的调用点用行内 `// nosemgrep: <rule-id>` 精确豁免，避免全局停用掩盖真实风险。
 const SEMGREP_EXCLUDED_RULES: string[] = [];
 const SEMGREP_EXCLUDE_RULE_FLAGS = SEMGREP_EXCLUDED_RULES.map((r) => `--exclude-rule ${r}`).join(' ');
-const SEMGREP_STAGED_TIMEOUT_MS = 60000;
-// 全量扫描需遍历全仓库且与 trivy/全量测试等重负载并行，60s 在满载下不足，给 180s 余量。
-const SEMGREP_FULL_TIMEOUT_MS = 180000;
 
 export function evaluateSemgrepOutput(stdout: string, checkId: string): CheckResult | null {
   let json: { results?: SemgrepResult[] };
@@ -153,9 +149,9 @@ export async function runSemgrepStaged(cwd?: string): Promise<CheckResult> {
 
   try {
     const result = await withTimeout(
-      execCommandAsync(semgrepCmd, { cwd, timeout: SEMGREP_STAGED_TIMEOUT_MS }),
-      SEMGREP_STAGED_TIMEOUT_MS,
-      'semgrep staged 超时 (60s)',
+      execCommandAsync(semgrepCmd, { cwd, timeout: COMMIT_GATE_TIMEOUT_MS }),
+      COMMIT_GATE_TIMEOUT_MS,
+      gateTimeoutMessage('semgrep staged', COMMIT_GATE_TIMEOUT_MS),
     );
     if (result.stdout) {
       const deny = evaluateSemgrepOutput(result.stdout, 'semgrep-staged');
@@ -181,9 +177,9 @@ export async function runSemgrep(cwd?: string): Promise<CheckResult> {
     const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
     const semgrepCmd = `semgrep ${SEMGREP_CONFIGS} ${SEMGREP_SEVERITY} ${SEMGREP_EXCLUDE_RULE_FLAGS} --error --json --exclude __tests__ ${excludeFlags} .`;
     const result = await withTimeout(
-      execCommandAsync(semgrepCmd, { cwd, timeout: SEMGREP_FULL_TIMEOUT_MS }),
-      SEMGREP_FULL_TIMEOUT_MS,
-      'semgrep 超时 (180s)',
+      execCommandAsync(semgrepCmd, { cwd, timeout: FULL_GATE_TIMEOUT_MS }),
+      FULL_GATE_TIMEOUT_MS,
+      gateTimeoutMessage('semgrep', FULL_GATE_TIMEOUT_MS),
     );
     if (result.stdout) {
       const deny = evaluateSemgrepOutput(result.stdout, 'semgrep');
@@ -210,9 +206,9 @@ export async function runKnip(cwd?: string): Promise<CheckResult> {
   if (missing) return missing;
   try {
     const result = await withTimeout(
-      execCommandAsync(`${getBunxInvocation(cwd)} knip --reporter json`, { cwd, timeout: KNIP_TIMEOUT_MS }),
-      KNIP_TIMEOUT_MS,
-      `knip 超时 (${String(KNIP_TIMEOUT_MS / 1000)}s)`,
+      execCommandAsync(`${getBunxInvocation(cwd)} knip --reporter json`, { cwd, timeout: FULL_GATE_TIMEOUT_MS }),
+      FULL_GATE_TIMEOUT_MS,
+      gateTimeoutMessage('knip', FULL_GATE_TIMEOUT_MS),
     );
     if (!result.success) {
       try {
@@ -266,9 +262,9 @@ export async function runTrivy(cwd?: string): Promise<CheckResult> {
         ' ',
       );
     const result = await withTimeout(
-      execCommandAsync(trivyCmd, { cwd, timeout: TRIVY_TIMEOUT_MS }),
-      TRIVY_TIMEOUT_MS,
-      `trivy 超时 (${String(TRIVY_TIMEOUT_MS / 1000)}s)`,
+      execCommandAsync(trivyCmd, { cwd, timeout: FULL_GATE_TIMEOUT_MS }),
+      FULL_GATE_TIMEOUT_MS,
+      gateTimeoutMessage('trivy', FULL_GATE_TIMEOUT_MS),
     );
     if (result.stdout) {
       return evaluateTrivyJson(result.stdout);

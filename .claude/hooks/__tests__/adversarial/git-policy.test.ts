@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { execSync } from 'child_process';
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
+import { disableGlobalGitHooks } from '../helpers.js';
 import {
   isGitPushCommand,
   isGitCommitCommand,
@@ -66,9 +67,10 @@ describe('adversarial: git-policy uncommitted worktree', () => {
     execSync('git init -b feat/test', { cwd: repoPath, stdio: 'pipe' });
     execSync('git config user.email "test@test.com"', { cwd: repoPath, stdio: 'pipe' });
     execSync('git config user.name "Test"', { cwd: repoPath, stdio: 'pipe' });
+    disableGlobalGitHooks(repoPath);
     writeFileSync(join(repoPath, 'README.md'), '# test\n');
     execSync('git add README.md', { cwd: repoPath, stdio: 'pipe' });
-    execSync('git -c core.hooksPath=.git/hooks commit -m "chore: init"', { cwd: repoPath, stdio: 'pipe' });
+    execSync('git commit -m "chore: init"', { cwd: repoPath, stdio: 'pipe' });
   });
 
   afterEach(() => {

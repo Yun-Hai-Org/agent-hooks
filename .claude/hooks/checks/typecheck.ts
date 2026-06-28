@@ -58,11 +58,11 @@ export async function runStagedTypecheck(cwd?: string) {
     }
     if (execCommand('which pyright', { cwd }).success) {
       const files = stagedPyFiles.map((f) => `"${f}"`).join(' ');
-      resolve({ tool: 'pyright', ...execCommand(`pyright ${files}`, { cwd, timeout: 30000 }) });
+      resolve({ tool: 'pyright', ...execCommand(`pyright ${files}`, { cwd, timeout: 90000 }) });
       return;
     }
     const files = stagedPyFiles.map((f) => `"${f}"`).join(' ');
-    resolve({ tool: 'pyright (uv)', ...execCommand(`uv run pyright ${files}`, { cwd, timeout: 30000 }) });
+    resolve({ tool: 'pyright (uv)', ...execCommand(`uv run pyright ${files}`, { cwd, timeout: 90000 }) });
   });
 
   const tscPromise = new Promise((resolve) => {
@@ -74,13 +74,13 @@ export async function runStagedTypecheck(cwd?: string) {
       resolve({ tool: 'tsc', success: true, stdout: 'no tsconfig.json, skip', stderr: '' });
       return;
     }
-    resolve({ tool: 'tsc', ...execCommand(`${getBunxInvocation(cwd)} tsc --noEmit`, { cwd, timeout: 30000 }) });
+    resolve({ tool: 'tsc', ...execCommand(`${getBunxInvocation(cwd)} tsc --noEmit`, { cwd, timeout: 90000 }) });
   });
 
   try {
     const results = await Promise.allSettled([
-      withTimeout(pyrightPromise, 30000, 'pyright 超时 (30s)'),
-      withTimeout(tscPromise, 30000, 'tsc 超时 (30s)'),
+      withTimeout(pyrightPromise, 90000, 'pyright 超时 (90s)'),
+      withTimeout(tscPromise, 90000, 'tsc 超时 (90s)'),
     ]);
     const failures = fulfilledToolResults(results as PromiseSettledResult<TypecheckToolResult>[]).filter(
       (v) => !v.success,

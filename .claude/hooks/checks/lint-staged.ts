@@ -9,6 +9,7 @@ import {
   getBunxInvocation,
   getRuffInvocation,
 } from './tools.js';
+import { COMMIT_GATE_TIMEOUT_MS, gateTimeoutMessage } from '../gate-timeouts.js';
 import type { CheckResult } from '../types.js';
 
 function filterExistingStagedFiles(files: string[], cwd?: string): string[] {
@@ -42,11 +43,11 @@ export async function runLintStaged(cwd?: string) {
           `${getBunxInvocation(cwd)} eslint ${files} --max-warnings 0 --no-warn-ignored --report-unused-disable-directives`,
           {
             cwd,
-            timeout: 60000,
+            timeout: COMMIT_GATE_TIMEOUT_MS,
           },
         ),
-        60000,
-        'eslint staged 超时 (60s)',
+        COMMIT_GATE_TIMEOUT_MS,
+        gateTimeoutMessage('eslint staged', COMMIT_GATE_TIMEOUT_MS),
       );
       results.push(
         eslintResult.success
@@ -67,9 +68,9 @@ export async function runLintStaged(cwd?: string) {
     const ruff = getRuffInvocation(cwd);
     try {
       const ruffResult = await withTimeout(
-        execCommandAsync(`${ruff} check --preview ${files}`, { cwd, timeout: 30000 }),
-        30000,
-        'ruff staged 超时 (30s)',
+        execCommandAsync(`${ruff} check --preview ${files}`, { cwd, timeout: COMMIT_GATE_TIMEOUT_MS }),
+        COMMIT_GATE_TIMEOUT_MS,
+        gateTimeoutMessage('ruff staged', COMMIT_GATE_TIMEOUT_MS),
       );
       results.push(
         ruffResult.success

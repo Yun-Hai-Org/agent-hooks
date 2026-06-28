@@ -23,14 +23,31 @@
 
 ## B. 本地质量三门（Git native only）
 
-| 操作           | Native Hook      | profile                            | 失败                  |
-| -------------- | ---------------- | ---------------------------------- | --------------------- |
-| git commit     | pre-commit       | commit；merge 结论 → full 或 cache | exit 1                |
-| commit message | commit-msg       | message 规则                       | exit 1                |
-| git push       | pre-push         | full                               | exit 1 + gate-pending |
-| git merge      | pre-merge-commit | full @ 合并树                      | exit 1 abort merge    |
+| 操作           | Native Hook      | profile                            | 失败                   |
+| -------------- | ---------------- | ---------------------------------- | ---------------------- |
+| git commit     | pre-commit       | commit；merge 结论 → full 或 cache | exit 1                 |
+| commit message | commit-msg       | message 规则                       | exit 1                 |
+| git push       | pre-push         | full                               | exit 1 + gate-pending  |
+| git merge      | pre-merge-commit | full @ 合并树                      | exit 1（保留合并状态） |
 
-**merge 结论**：`pre-merge-commit` 失败时自动 `git merge --abort`；IDE 禁止 `git commit` 收尾（须 `git merge --continue` 或 `--abort`）。
+**merge 结论**：`pre-merge-commit` 失败时 exit 1（保留 MERGE_HEAD，不自动 abort）。
+
+IDE 禁止 `git commit` 收尾（须 `git merge --continue` 或 `--abort`）。
+
+**Agent / IDE 合并限制**：`block-dangerous-commands` 在有 `MERGE_HEAD` 时会拦截 `git commit`（`--amend` 除外）。
+
+合并收尾必须在**系统终端**执行 `git merge --continue`，不要依赖 IDE 内 Agent 执行 `git commit`。
+
+**推荐合并工作流**（IDE 内 merge 易失败，或需先验 full 门时）：
+
+```bash
+# 在目标分支（如 master）上
+git merge --no-ff --no-commit <branch>   # 不触发 pre-merge-commit
+bun run .claude/hooks/quality-gate.ts --profile=full   # 通过后自动写入 gate cache
+git merge --continue                      # 终端执行；cache 命中时跳过重复 full 扫描
+```
+
+若 full 门失败：修复问题后重新跑 full 门，再 `git merge --continue`；或 `git merge --abort` 取消合并。
 
 **main/master 须 `--no-ff`**：Fast-forward 与 `--squash` 均不触发 `pre-merge-commit`。
 终端：`branch.main/master.mergeoptions`（`configure-merge-no-ff-global.sh`）；

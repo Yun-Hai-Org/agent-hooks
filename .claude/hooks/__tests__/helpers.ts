@@ -2,6 +2,7 @@
 
 import { execSync } from 'child_process';
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import { join, dirname } from 'path';
 
 /** 仓库根目录（tests 从 .claude/hooks 运行时 cwd 不是根） */
@@ -42,13 +43,14 @@ export function expectAllow(output) {
   return !parsed?.hookSpecificOutput || parsed.hookSpecificOutput.permissionDecision !== 'deny';
 }
 
-const FIXTURE_DIR = join(dirname(new URL(import.meta.url).pathname), 'fixtures');
+const FIXTURE_DIR = join(tmpdir(), `hook-tests-${process.pid}`);
 
 export function disableGlobalGitHooks(cwd: string) {
   execSync('git config --local core.hooksPath .git/hooks', { cwd, stdio: 'pipe' });
 }
 
 export function createTempGitRepo(branch = 'feat/test') {
+  mkdirSync(FIXTURE_DIR, { recursive: true });
   const repoName = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const repoPath = join(FIXTURE_DIR, repoName);
   mkdirSync(repoPath, { recursive: true });
