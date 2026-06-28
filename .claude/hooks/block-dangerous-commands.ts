@@ -630,7 +630,7 @@ async function main() {
       console.log(formatAllowOutput());
     } catch (/** @type {unknown} */ e) {
       log({ level: 'ERROR', error: e instanceof Error ? e.message : String(e) });
-      console.log(formatAllowOutput());
+      process.stdout.write(`${formatDenyOutput('deny', 'Hook 内部错误，按 fail-closed 拒绝')}\n`);
     }
   })();
 }

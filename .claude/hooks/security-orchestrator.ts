@@ -57,6 +57,13 @@ export function log(hookName: string, data: Record<string, unknown>): void {
   }
 }
 
+export function getRepoHeadSha(cwd: string, short = false): string | undefined {
+  const result = execCommand('git rev-parse HEAD', { cwd, timeout: 5000 });
+  const sha = result.success ? result.stdout.trim() : '';
+  if (!sha) return undefined;
+  return short ? sha.slice(0, 12) : sha;
+}
+
 type ExecCommandOptions = ExecSyncOptions & { timeout?: number };
 
 export function execCommand(command: string, options: ExecCommandOptions = {}): ExecResult {

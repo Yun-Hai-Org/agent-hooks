@@ -38,6 +38,23 @@ if [ ! -f "$HOME/.claude/quality-gate.yaml" ] && [ -f "$HOOKS_REPO/.claude/quali
 fi
 
 echo "[install-git-hooks-global] core.hooksPath=$(git config --global core.hooksPath)"
+
+BOOT="$HOOKS_REPO/templates/global-bootstrap"
+mkdir -p "$HOME/.claude/policy" "$HOME/.claude/cosign"
+if [ -d "$BOOT/policy" ]; then
+	for f in "$BOOT/policy"/*.rego; do
+		[ -f "$f" ] || continue
+		dest="$HOME/.claude/policy/$(basename "$f")"
+		[ -f "$dest" ] || install -m 644 "$f" "$dest"
+	done
+fi
+if [ ! -x "$HOME/.claude/cosign/verify.sh" ] && [ -f "$BOOT/cosign/verify.sh" ]; then
+	install -m 755 "$BOOT/cosign/verify.sh" "$HOME/.claude/cosign/verify.sh"
+fi
+if [ ! -f "$HOME/.claude/zap.env.example" ] && [ -f "$BOOT/zap.env.example" ]; then
+	install -m 644 "$BOOT/zap.env.example" "$HOME/.claude/zap.env.example"
+fi
+echo "[install-git-hooks-global] bootstrapped ~/.claude fintech templates (if missing)"
 echo "[install-git-hooks-global] hooks deployed to $DEST"
 ls -la "$DEST"
 

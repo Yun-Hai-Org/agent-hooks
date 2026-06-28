@@ -6,6 +6,7 @@ import { gateTimeoutMessage } from '../gate-timeouts.js';
 import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+const ZAP_BIN_CANDIDATES = ['zap.sh', 'zaproxy', 'zap'] as const;
 
 function findOpenApiSpec(cwd: string): string | null {
   const candidates = ['openapi.yaml', 'openapi.yml', 'openapi.json', 'docs/openapi.yaml', 'api/openapi.yaml'];
@@ -17,32 +18,44 @@ function findOpenApiSpec(cwd: string): string | null {
   return result.success && result.stdout.trim() ? result.stdout.trim() : null;
 }
 
+export function resolveZapBinary(cwd?: string): string | null {
+  for (const candidate of ZAP_BIN_CANDIDATES) {
+    const result = execCommand(`command -v ${candidate}`, { cwd, timeout: 5000 });
+    const resolved = result.stdout.trim();
+    if (result.success && resolved) return resolved;
+  }
+  return null;
+}
+
 export async function runZapApiDast(cwd?: string, options?: GateCheckRunOptions): Promise<CheckResult> {
   const root = cwd ?? process.cwd();
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const targetUrl = process.env['ZAP_TARGET_URL']?.trim();
-
-  if (!targetUrl) {
-    return formatResult('zap-api-dast', DECISION.SKIP, '未设置 ZAP_TARGET_URL，跳过 DAST');
-  }
-
   const spec = findOpenApiSpec(root);
+
   if (!spec) {
     return formatResult('zap-api-dast', DECISION.SKIP, '未找到 OpenAPI spec，跳过 ZAP API scan');
   }
 
-  const hasZap = execCommand('command -v zap.sh || command -v zaproxy', { cwd: root }).success;
-  if (!hasZap) {
-    const missing = denyIfToolMissing('zap', 'zap-api-dast', root);
-    return missing ?? formatResult('zap-api-dast', DECISION.SKIP, 'ZAP 未安装，跳过');
+  if (!targetUrl) {
+    return formatResult(
+      'zap-api-dast',
+      DECISION.DENY,
+      '存在 OpenAPI spec 但未设置 ZAP_TARGET_URL（见 .hooks/zap.env.example）',
+    );
   }
 
-  const zapBin = execCommand('command -v zap.sh', { cwd: root }).success ? 'zap.sh' : 'zaproxy';
-  const cmd = `${zapBin} -cmd -autorun /dev/stdin <<'EOF'
+  const zapBin = resolveZapBinary(root);
+  if (!zapBin) {
+    const missing = denyIfToolMissing('zap', 'zap-api-dast', root);
+    return missing ?? formatResult('zap-api-dast', DECISION.DENY, 'ZAP 未安装');
+  }
+
+  const cmd = `"${zapBin}" -cmd -autorun /dev/stdin <<'EOF'
 env:
   parameters:
     failOnError: true
-    failOnWarning: false
+    failOnWarning: true
 jobs:
   - type: openapi
     parameters:

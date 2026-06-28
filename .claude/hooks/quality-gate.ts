@@ -4,7 +4,15 @@
  * profiles: commit | full
  */
 
-import { decide, formatResult, log, timeCheck, DECISION, isGatePassed } from './security-orchestrator.js';
+import {
+  decide,
+  formatResult,
+  log,
+  timeCheck,
+  DECISION,
+  isGatePassed,
+  getRepoHeadSha,
+} from './security-orchestrator.js';
 import {
   checkBranch,
   checkCommitMessage,
@@ -85,6 +93,8 @@ export function runConfiguredSyncCheck(
   if (!node.configured || !node.enabled) {
     return formatResult(options.checkId, DECISION.SKIP, `未配置或已关闭 (${path})`);
   }
+  const mergeSkip = skipMergeOnlyCheck(options.checkId, options.gatePathPrefix);
+  if (mergeSkip) return attachControlIds(mergeSkip, path);
   return attachControlIds(options.runner(), path);
 }
 
@@ -94,6 +104,8 @@ export async function runConfiguredCheck(options: RunConfiguredCheckOptions): Pr
   if (!node.configured || !node.enabled) {
     return formatResult(options.checkId, DECISION.SKIP, `未配置或已关闭 (${path})`);
   }
+  const mergeSkip = skipMergeOnlyCheck(options.checkId, options.gatePathPrefix);
+  if (mergeSkip) return attachControlIds(mergeSkip, path);
   const result = await options.runner(node.timeoutMs);
   return attachControlIds(result, path);
 }
@@ -101,7 +113,17 @@ export async function runConfiguredCheck(options: RunConfiguredCheckOptions): Pr
 function skipHookResult(hookPath: string): QualityGateResult {
   const skip = formatResult('quality-gate', DECISION.SKIP, `${hookPath} 未在 quality-gate.yaml 中启用`);
   const decision = decide([skip]);
-  return { passed: true, results: [skip], decision, timing: computeTiming([skip]) };
+  const failClosed = hookPath === 'git.pre-push' || hookPath === 'git.pre-merge-commit';
+  return { passed: !failClosed, results: [skip], decision, timing: computeTiming([skip]) };
+}
+
+const MERGE_ONLY_CHECK_IDS = new Set(['sbom-archive', 'slsa-cosign', 'payment-page-full']);
+
+function skipMergeOnlyCheck(checkId: string, gatePathPrefix: GatePathPrefix): CheckResult | null {
+  if (MERGE_ONLY_CHECK_IDS.has(checkId) && gatePathPrefix !== 'git.pre-merge-commit') {
+    return formatResult(checkId, DECISION.SKIP, 'merge-only 检查，pre-push 跳过');
+  }
+  return null;
 }
 
 interface CheckFailureDetail {
@@ -624,11 +646,12 @@ export function summarizeCheckDetails(details: Record<string, unknown> | undefin
 
 export function formatChecksForLog(results: CheckResult[]) {
   return results.map((r) => {
-    const entry: { id: string; decision: string; message: string; details?: string } = {
+    const entry: { id: string; decision: string; message: string; details?: string; controlIds?: string[] } = {
       id: r.checkId,
       decision: r.decision,
       message: r.message,
     };
+    if (r.controlIds && r.controlIds.length > 0) entry.controlIds = r.controlIds;
     const details = summarizeCheckDetails(r.details);
     if (details) entry.details = details;
     return entry;
@@ -640,10 +663,13 @@ export function logGateResult(
   gateResult: { passed: boolean; results: CheckResult[]; decision?: { reason?: string }; timing?: GateTiming },
   extra: Record<string, unknown> = {},
 ): void {
+  const cwd = typeof extra['cwd'] === 'string' ? extra['cwd'] : process.cwd();
+  const commitSha = getRepoHeadSha(cwd);
   const payload: Record<string, unknown> = {
     level: gateResult.passed ? 'PASSED' : 'BLOCKED',
     checks: formatChecksForLog(gateResult.results),
     ...(gateResult.timing ? { timing: gateResult.timing } : {}),
+    ...(commitSha ? { commitSha } : {}),
     ...extra,
   };
   if (!gateResult.passed && gateResult.decision?.reason) {

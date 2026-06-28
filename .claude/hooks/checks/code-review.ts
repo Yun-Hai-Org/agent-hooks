@@ -13,13 +13,13 @@ const DIFF_PATTERNS: DiffPattern[] = [
   { id: 'debugger', severity: DECISION.DENY, regex: /^\+\s*debugger\s*;?\s*$/, message: 'diff 中包含 debugger 语句' },
   {
     id: 'console-log',
-    severity: DECISION.WARN,
+    severity: DECISION.DENY,
     regex: /^\+.*console\.log\(/,
     message: 'diff 中包含 console.log（建议移除）',
   },
   {
     id: 'todo-fixme',
-    severity: DECISION.WARN,
+    severity: DECISION.DENY,
     regex: /^\+.*\b(TODO|FIXME|HACK|XXX)\b/,
     message: 'diff 中包含 TODO/FIXME 标记',
   },
@@ -28,18 +28,12 @@ const DIFF_PATTERNS: DiffPattern[] = [
 export function scanDiffForFindings(diff: string): { deny: string[]; warn: string[] } {
   const deny: string[] = [];
   const warn: string[] = [];
-  let currentFile = '';
 
   for (const line of diff.split('\n')) {
-    if (line.startsWith('+++ b/')) {
-      currentFile = line.slice('+++ b/'.length);
-      continue;
-    }
+    if (line.startsWith('+++ b/')) continue;
     if (!line.startsWith('+') || line.startsWith('+++')) continue;
 
-    const isHookFile = currentFile.startsWith('.claude/hooks/');
     for (const pattern of DIFF_PATTERNS) {
-      if (pattern.id === 'console-log' && isHookFile) continue;
       if (pattern.regex.test(line)) {
         (pattern.severity === DECISION.DENY ? deny : warn).push(pattern.message);
         break;

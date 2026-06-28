@@ -71,11 +71,11 @@ describe('evaluateTrivyJson', () => {
     expect(r.message).toContain('license');
   });
 
-  it('仅 LOW license 不阻断，应 ALLOW', () => {
+  it('LOW severity license 应 DENY (strict)', () => {
     const json = JSON.stringify({
       Results: [{ Licenses: [{ Severity: 'LOW', Name: 'MIT', PkgName: 'bar' }] }],
     });
-    expect(evaluateTrivyJson(json).decision).toBe(DECISION.ALLOW);
+    expect(evaluateTrivyJson(json).decision).toBe(DECISION.DENY);
   });
 
   it('无漏洞无 license 问题应 ALLOW', () => {

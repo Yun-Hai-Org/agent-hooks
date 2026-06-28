@@ -61,9 +61,9 @@ describe('evaluateSemgrepOutput', () => {
     expect(r?.decision).toBe(DECISION.DENY);
   });
 
-  it('无 ERROR/WARNING（仅 INFO）应返回 null', () => {
+  it('仅 INFO 也应 DENY (strict)', () => {
     const stdout = JSON.stringify({ results: [{ extra: { severity: 'INFO' } }] });
-    expect(evaluateSemgrepOutput(stdout, 'semgrep')).toBeNull();
+    expect(evaluateSemgrepOutput(stdout, 'semgrep')?.decision).toBe(DECISION.DENY);
   });
 
   it('输出无法解析应 fail-closed DENY', () => {

@@ -158,6 +158,23 @@ IDE：`block-dangerous-commands` 拦截无 `--no-ff` 的 merge 与 `--squash`。
 
 逻辑 **fintech profile** = full profile + 上述 fintech leaves 在 yaml 中 `enabled: true`。
 
+### 全局 strict（默认）
+
+| 场景                                  | 行为                |
+| ------------------------------------- | ------------------- |
+| 无 OpenAPI                            | `zap-api-dast` SKIP |
+| 有 OpenAPI 无 `ZAP_TARGET_URL`        | DENY                |
+| 无 `policy/` 且无 `~/.claude/policy/` | `opa-conftest` DENY |
+| 无 cosign 目录                        | `slsa-cosign` DENY  |
+| 无 syft/trivy                         | `sbom-archive` DENY |
+| pre-push/pre-merge hook 被禁用        | **不通过**          |
+
+Bootstrap：`install-git-hooks-global.sh` 安装 `~/.claude/policy/`、`~/.claude/cosign/verify.sh`、`~/.claude/zap.env.example`。
+
+merge-only（仅 `pre-merge-commit`）：`sbom-archive`、`slsa-cosign`、`payment-page-full`。
+
+JSONL 日志含 `commitSha` 与 per-check `controlIds`；merge 成功写入 `.hooks/audit/`。
+
 ## E. P3
 
 见 [hooks-security-roadmap.md](./hooks-security-roadmap.md) 与 `.github/workflows/dast.yml`（stub）。

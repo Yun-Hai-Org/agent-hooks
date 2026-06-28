@@ -57,7 +57,7 @@ interface TrivyResultEntry {
 }
 
 function isBlockingSeverity(severity?: string): boolean {
-  return severity === 'CRITICAL' || severity === 'HIGH' || severity === 'MEDIUM';
+  return severity === 'CRITICAL' || severity === 'HIGH' || severity === 'MEDIUM' || severity === 'LOW';
 }
 
 export function evaluateTrivyJson(stdout: string): CheckResult {
@@ -114,6 +114,11 @@ const SEMGREP_SEVERITY = '--severity ERROR --severity WARNING --severity INFO';
 // 全部规则保持全局强制。原先全局停用的 child_process / path-join-traversal 两条规则，
 // 已改为在确属受信的调用点用行内 `// nosemgrep: <rule-id>` 精确豁免，避免全局停用掩盖真实风险。
 const SEMGREP_EXCLUDED_RULES: string[] = [];
+function resolvePciSemgrepConfig(cwd: string, checkId: string): string | CheckResult {
+  if (execCommand('test -f .semgrep/pci.yaml', { cwd }).success) return SEMGREP_PCI_CONFIGS;
+  return formatResult(checkId, DECISION.DENY, '缺少 .semgrep/pci.yaml，PCI Semgrep 检查失败（fail-closed）');
+}
+
 const SEMGREP_EXCLUDE_RULE_FLAGS = SEMGREP_EXCLUDED_RULES.map((r) => `--exclude-rule ${r}`).join(' ');
 
 export function evaluateSemgrepOutput(stdout: string, checkId: string): CheckResult | null {
@@ -125,14 +130,19 @@ export function evaluateSemgrepOutput(stdout: string, checkId: string): CheckRes
       output: stdout.slice(0, 500),
     });
   }
-  const blocking = json.results?.filter((r) => r.extra?.severity === 'ERROR' || r.extra?.severity === 'WARNING') ?? [];
+  const blocking =
+    json.results?.filter((r) => {
+      const s = r.extra?.severity;
+      return s === 'ERROR' || s === 'WARNING' || s === 'INFO';
+    }) ?? [];
   if (blocking.length === 0) return null;
   const errors = blocking.filter((r) => r.extra?.severity === 'ERROR');
   const warnings = blocking.filter((r) => r.extra?.severity === 'WARNING');
+  const infos = blocking.filter((r) => r.extra?.severity === 'INFO');
   return formatResult(
     checkId,
     DECISION.DENY,
-    `Semgrep 发现 ${String(errors.length)} ERROR, ${String(warnings.length)} WARNING`,
+    `Semgrep 发现 ${String(errors.length)} ERROR, ${String(warnings.length)} WARNING, ${String(infos.length)} INFO`,
     { count: blocking.length, errors: errors.length, warnings: warnings.length },
   );
 }
@@ -209,9 +219,9 @@ export async function runSemgrepPciStaged(cwd?: string, options?: GateCheckRunOp
   }
   const missing = denyIfToolMissing('semgrep', 'semgrep-pci-staged', cwd);
   if (missing) return missing;
-  const pciConfig = execCommand('test -f .semgrep/pci.yaml', { cwd }).success
-    ? '--config .semgrep/pci.yaml'
-    : SEMGREP_PCI_CONFIGS;
+  const pciConfigResult = resolvePciSemgrepConfig(cwd ?? process.cwd(), 'semgrep-pci-staged');
+  if (typeof pciConfigResult !== 'string') return pciConfigResult;
+  const pciConfig = pciConfigResult;
   const files = stagedFiles.map((f) => `"${f}"`).join(' ');
   const semgrepCmd = `semgrep ${pciConfig} ${SEMGREP_SEVERITY} ${SEMGREP_EXCLUDE_RULE_FLAGS} --error --json ${files}`;
   try {
@@ -239,9 +249,9 @@ export async function runSemgrepPciFull(cwd?: string, options?: GateCheckRunOpti
   const timeoutMs = options?.timeoutMs ?? FULL_GATE_TIMEOUT_MS;
   const missing = denyIfToolMissing('semgrep', 'semgrep-pci', cwd);
   if (missing) return missing;
-  const pciConfig = execCommand('test -f .semgrep/pci.yaml', { cwd }).success
-    ? '--config .semgrep/pci.yaml'
-    : SEMGREP_PCI_CONFIGS;
+  const pciConfigResult = resolvePciSemgrepConfig(cwd ?? process.cwd(), 'semgrep-pci');
+  if (typeof pciConfigResult !== 'string') return pciConfigResult;
+  const pciConfig = pciConfigResult;
   try {
     const ignoredDirs = getGitIgnoredDirs(cwd);
     const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
@@ -328,7 +338,7 @@ export async function runTrivy(cwd?: string, options?: GateCheckRunOptions): Pro
     const ignoredDirs = getGitIgnoredDirs(cwd);
     const skipDirs = buildTrivySkipArgs(ignoredDirs);
     const trivyCmd =
-      `"${trivyBin}" fs ${TRIVY_DB_REPO_FLAGS} --scanners ${scanners} --severity CRITICAL,HIGH,MEDIUM --format json ${skipDbUpdate} ${skipCheckUpdate} ${skipDirs} .`.replace(
+      `"${trivyBin}" fs ${TRIVY_DB_REPO_FLAGS} --scanners ${scanners} --severity CRITICAL,HIGH,MEDIUM,LOW --format json ${skipDbUpdate} ${skipCheckUpdate} ${skipDirs} .`.replace(
         /\s+/g,
         ' ',
       );

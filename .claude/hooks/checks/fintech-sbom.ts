@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { createHash } from 'crypto';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
@@ -47,10 +48,20 @@ export async function runSbomArchive(cwd?: string, options?: GateCheckRunOptions
     if (!existsSync(outFile)) {
       return formatResult('sbom-archive', DECISION.DENY, 'SBOM 输出文件未生成');
     }
-    writeFileSync(join(outDir, 'latest.json'), readFileSync(outFile, 'utf-8'), 'utf-8'); // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- outDir 派生自受信 root
+    const raw = readFileSync(outFile, 'utf-8');
+    writeFileSync(join(outDir, 'latest.json'), raw, 'utf-8');  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- outDir 派生自受信 root
+    const digest = createHash('sha256').update(raw).digest('hex');
+    const outBase = outFile.split('/').pop() ?? 'sbom.json';
+    writeFileSync(`${outFile}.sha256`, `${digest}  ${outBase}\n`, 'utf-8');  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- outFile 派生自受信 root
+    appendFileSync(
+      join(outDir, 'index.jsonl'), // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- outDir 派生自受信 root
+      JSON.stringify({ ts: new Date().toISOString(), sha, path: outFile, sha256: digest }) + '\n',
+      'utf-8',
+    );
     return formatResult('sbom-archive', DECISION.ALLOW, `SBOM 已归档: ${SBOM_DIR}/sbom-${sha}.cyclonedx.json`, {
       path: outFile,
       sha,
+      sha256: digest,
     });
   } catch (e) {
     return denyOnToolError(e, 'sbom-archive', 'sbom');

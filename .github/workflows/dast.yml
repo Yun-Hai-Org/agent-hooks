@@ -1,11 +1,20 @@
-name: DAST (P3 stub)
+name: DAST
 
 on:
   workflow_dispatch:
 
 jobs:
-  dast:
-    if: false
+  zap-api:
     runs-on: ubuntu-latest
     steps:
-      - run: 'echo "P3 enable when staging URL exists (ZAP baseline / nuclei)"'
+      - uses: actions/checkout@v4
+      - name: ZAP API scan
+        if: ${{ secrets.ZAP_TARGET_URL != '' }}
+        uses: zaproxy/action-api-scan@v0.9.0
+        with:
+          target: ${{ secrets.ZAP_TARGET_URL }}
+          format: openapi
+          api_scan_file: openapi.yaml
+      - name: Skip when ZAP_TARGET_URL unset
+        if: ${{ secrets.ZAP_TARGET_URL == '' }}
+        run: echo "Set repository secret ZAP_TARGET_URL to enable DAST"

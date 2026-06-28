@@ -387,6 +387,11 @@ function buildSessionStartChecks(): Record<string, GateLeafNode> {
 
 function buildFullHookChecks(): Record<string, GateLeafNode> {
   const fintechOverrides: Record<string, LeafOptions> = {
+    'dep-audit': { controlIds: ['PCI-6.3.2', 'PCI-6.3.3'] },
+    'py-dep-audit': { controlIds: ['PCI-6.3.2', 'PCI-6.3.3'] },
+    gitleaks: { controlIds: ['PCI-6.3.3', 'SOX-404'] },
+    semgrep: { controlIds: ['PCI-6.3.3', 'PCI-6.5'] },
+    trivy: { controlIds: ['PCI-6.3.2', 'PCI-6.3.3'] },
     'sbom-archive': { defaultTimeoutMs: 5 * 60 * 1000, controlIds: ['PCI-6.3.2', 'DORA-Art6'] },
     'semgrep-pci': { controlIds: ['PCI-6.3.3'] },
     'payment-page-full': { defaultTimeoutMs: 3 * 60 * 1000, controlIds: ['PCI-6.4.3', 'PCI-11.6.1'] },
@@ -402,6 +407,10 @@ function buildFullHookChecks(): Record<string, GateLeafNode> {
 
 function buildPreCommitChecks(): Record<string, GateLeafNode> {
   const fintechOverrides: Record<string, LeafOptions> = {
+    'sensitive-files': { controlIds: ['PIPL-Min', 'SOX-404'] },
+    'dep-audit': { controlIds: ['PCI-6.3.2', 'PCI-6.3.3'] },
+    'gitleaks-staged': { controlIds: ['PCI-6.3.3', 'SOX-404'] },
+    'semgrep-staged': { controlIds: ['PCI-6.3.3', 'PCI-6.5'] },
     'semgrep-pci-staged': { controlIds: ['PCI-6.3.3', 'PCI-6.5'] },
     'payment-page-staged': { controlIds: ['PCI-6.4.3'] },
   };

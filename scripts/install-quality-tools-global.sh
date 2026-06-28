@@ -7,7 +7,7 @@ set -euo pipefail
 
 echo "[install-quality-tools-global] Installing brew formulae (skip if unavailable)..."
 if command -v brew >/dev/null 2>&1; then
-	brew install gitleaks trivy semgrep shellcheck shfmt hadolint jq yq taplo kubeconform kube-linter oasdiff kind kubectl syft checkov cosign conftest 2>/dev/null || true
+	brew install gitleaks trivy semgrep zaproxy shellcheck shfmt hadolint jq yq taplo kubeconform kube-linter oasdiff kind kubectl syft checkov cosign conftest 2>/dev/null || true
 	brew install osv-scanner pip-audit markdownlint-cli2 sqlfluff 2>/dev/null || true
 else
 	echo "  brew not found — install Homebrew tools manually"
