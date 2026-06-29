@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test';
 import { formatResult, decide, DECISION } from '../security-orchestrator.js';
-import { extractMergeTarget, getCurrentBranch } from '../merge-gate.js';
+import { extractMergeTarget } from '../checks/git-policy.js';
+import { getCurrentBranch } from '../security-orchestrator.js';
 import { summarizeResults } from '../quality-gate.js';
 
 describe('merge-gate', () => {

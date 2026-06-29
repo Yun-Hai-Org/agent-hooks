@@ -230,6 +230,11 @@ export function isGitMergeCommand(cmd: string): boolean {
   return /\bgit\s+merge\b/.test(cmd);
 }
 
+export function isMergeConclude(cwd: string): boolean {
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 为 git 仓库根，拼接常量 MERGE_HEAD
+  return existsSync(join(cwd, '.git', 'MERGE_HEAD'));
+}
+
 const PROTECTED_BRANCHES = ['main', 'master'] as const;
 
 export function isProtectedBranch(branch: string): boolean {

@@ -41,6 +41,7 @@ import {
 import { runSbomArchive } from './checks/fintech-sbom.js';
 import { runPaymentPageStaged, runPaymentPageFull } from './checks/payment-page-lint.js';
 import { runZapApiDast } from './checks/zap-api-dast.js';
+import { runOpenApiAuthNegative } from './checks/openapi-auth-negative.js';
 import { runOpaConftest } from './checks/policy-conftest.js';
 import { runIacCheckov } from './checks/iac-checkov.js';
 import { runSlsaCosign } from './checks/slsa-cosign.js';
@@ -55,10 +56,9 @@ import { runExtendedLintStaged, runExtendedLintFull } from './checks/extended-li
 import { runSchemaLintStaged, runSchemaLintFull } from './checks/schema-lint.js';
 import { runK8sLintStaged, runK8sLintFull } from './checks/k8s-lint.js';
 import { runK8sKindSmokeFull } from './checks/k8s-kind-smoke.js';
-import { DEFAULT_COVERAGE_THRESHOLD } from './checks/coverage.js';
+import { resolveCoverageThresholds, resolveGateNode } from './gate-config.js';
 import { runOpenApiContractStaged, runOpenApiContractFull } from './checks/openapi-contract.js';
 import { getIndexTreeSha, recordFullPass } from './gate-cache.js';
-import { resolveGateNode } from './gate-config.js';
 import { getRegistryControlIds } from './gate-registry.js';
 
 import type {
@@ -181,9 +181,11 @@ export async function runQualityGate(
     commitCmd?: string;
     commitMsgFile?: string;
     gatePathPrefix?: GatePathPrefix;
+    /** 测试专用：跳过指定 checkId（避免 hook-unit-tests 递归触发全量单测） */
+    skipCheckIds?: string[];
   },
 ): Promise<QualityGateResult> {
-  const { profile, cwd, commitCmd, commitMsgFile } = options;
+  const { profile, cwd, commitCmd, commitMsgFile, skipCheckIds = [] } = options;
   const gatePathPrefix = options.gatePathPrefix ?? (profile === 'commit' ? 'git.pre-commit' : 'git.pre-push');
 
   const hookNode = resolveGateNode(gatePathPrefix, cwd);
@@ -380,13 +382,15 @@ export async function runQualityGate(
     };
   }
 
-  const hookUnit = await timeCheck(
-    runConfiguredCheck({
-      ...checkOpts,
-      checkId: 'hook-unit-tests',
-      runner: (ms) => runHookUnitTests(cwd, { coverageThreshold: DEFAULT_COVERAGE_THRESHOLD, timeoutMs: ms }),
-    }),
-  );
+  const hookUnit = skipCheckIds.includes('hook-unit-tests')
+    ? formatResult('hook-unit-tests', DECISION.SKIP, '测试跳过 hook-unit-tests')
+    : await timeCheck(
+        runConfiguredCheck({
+          ...checkOpts,
+          checkId: 'hook-unit-tests',
+          runner: (ms) => runHookUnitTests(cwd, { coverageThreshold: resolveCoverageThresholds(cwd), timeoutMs: ms }),
+        }),
+      );
   const coverageResult = runConfiguredSyncCheck({
     ...checkOpts,
     checkId: 'coverage',
@@ -416,6 +420,7 @@ export async function runQualityGate(
     semgrepPci,
     paymentPageFull,
     zapApiDast,
+    openapiAuthNegative,
     opaConftest,
     iacCheckov,
     slsaCosign,
@@ -553,6 +558,13 @@ export async function runQualityGate(
     timeCheck(
       runConfiguredCheck({
         ...checkOpts,
+        checkId: 'openapi-auth-negative',
+        runner: (ms) => runOpenApiAuthNegative(cwd, { timeoutMs: ms }),
+      }),
+    ),
+    timeCheck(
+      runConfiguredCheck({
+        ...checkOpts,
         checkId: 'opa-conftest',
         runner: (ms) => runOpaConftest(cwd, { timeoutMs: ms }),
       }),
@@ -598,6 +610,7 @@ export async function runQualityGate(
     semgrepPci,
     paymentPageFull,
     zapApiDast,
+    openapiAuthNegative,
     opaConftest,
     iacCheckov,
     slsaCosign,

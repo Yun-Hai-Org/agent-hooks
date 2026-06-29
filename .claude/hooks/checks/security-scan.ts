@@ -4,6 +4,8 @@ import { isHooksProject } from './hooks-project.js';
 import { getStagedFiles } from './git-policy.js';
 import { resolveTrivyScanners } from './file-patterns.js';
 import { COMMIT_GATE_TIMEOUT_MS, FULL_GATE_TIMEOUT_MS, gateTimeoutMessage } from '../gate-timeouts.js';
+import { getScanScope, resolveScanTargets } from './scan-scope.js';
+import { resolveLicenseDenylist } from '../gate-config.js';
 import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 const TRIVY_EXTRA_SKIP_DIRS = ['_bmad', '_bmad-output', 'node_modules', '.venv', '.claude/worktrees'];
@@ -20,9 +22,17 @@ function getGitleaksConfigArg(cwd?: string): string {
   return execCommand('test -f .gitleaks.toml', { cwd }).success ? ' --config .gitleaks.toml' : '';
 }
 
-function buildTrivySkipArgs(ignoredDirs: string[]): string {
-  const dirs = [...new Set([...ignoredDirs, ...TRIVY_EXTRA_SKIP_DIRS])];
+function buildTrivySkipArgs(ignoredDirs: string[], cwd?: string): string {
+  const scope = getScanScope(cwd);
+  const dirs = [...new Set([...ignoredDirs, ...scope.exclude, ...TRIVY_EXTRA_SKIP_DIRS])];
   return dirs.map((d) => `--skip-dirs "${d}"`).join(' ');
+}
+
+function buildSemgrepExcludeArgs(cwd?: string): string {
+  const scope = getScanScope(cwd);
+  const ignoredDirs = getGitIgnoredDirs(cwd);
+  const excludes = [...new Set([...ignoredDirs, ...scope.exclude])];
+  return excludes.map((d) => `--exclude "${d}"`).join(' ');
 }
 
 export function getGitIgnoredDirs(cwd?: string): string[] {
@@ -60,7 +70,7 @@ function isBlockingSeverity(severity?: string): boolean {
   return severity === 'CRITICAL' || severity === 'HIGH' || severity === 'MEDIUM' || severity === 'LOW';
 }
 
-export function evaluateTrivyJson(stdout: string): CheckResult {
+export function evaluateTrivyJson(stdout: string, licenseDenylist: string[] = []): CheckResult {
   let json: { Results?: TrivyResultEntry[] };
   try {
     json = JSON.parse(stdout) as { Results?: TrivyResultEntry[] };
@@ -74,21 +84,35 @@ export function evaluateTrivyJson(stdout: string): CheckResult {
   const critical = vulns.filter((v) => v.Severity === 'CRITICAL').length;
   const high = vulns.filter((v) => v.Severity === 'HIGH').length;
   const medium = vulns.filter((v) => v.Severity === 'MEDIUM').length;
-  const licenses = results.flatMap((r) => r.Licenses ?? []).filter((l) => isBlockingSeverity(l.Severity));
+  const severityLicenses = results.flatMap((r) => r.Licenses ?? []).filter((l) => isBlockingSeverity(l.Severity));
+  const denylistHits =
+    licenseDenylist.length === 0
+      ? []
+      : results
+          .flatMap((r) => r.Licenses ?? [])
+          .filter((l) => {
+            const name = l.Name ?? '';
+            return licenseDenylist.some((d) => name.toLowerCase().includes(d.toLowerCase()));
+          });
 
-  if (critical + high + medium > 0 || licenses.length > 0) {
+  if (critical + high + medium > 0 || severityLicenses.length > 0 || denylistHits.length > 0) {
     const parts: string[] = [];
     if (critical + high + medium > 0) {
       parts.push(`${String(critical)} CRITICAL, ${String(high)} HIGH, ${String(medium)} MEDIUM 漏洞`);
     }
-    if (licenses.length > 0) {
-      parts.push(`${String(licenses.length)} 个不合规 license`);
+    if (severityLicenses.length > 0) {
+      parts.push(`${String(severityLicenses.length)} 个不合规 license`);
+    }
+    if (denylistHits.length > 0) {
+      parts.push(`${String(denylistHits.length)} 个 denylist license`);
     }
     return formatResult('trivy', DECISION.DENY, `Trivy 发现 ${parts.join('；')}`, {
       critical,
       high,
       medium,
-      licenses: licenses.slice(0, 10).map((l) => `${l.PkgName ?? '?'}:${l.Name ?? '?'}(${l.Severity ?? '?'})`),
+      licenses: [...severityLicenses, ...denylistHits]
+        .slice(0, 10)
+        .map((l) => `${l.PkgName ?? '?'}:${l.Name ?? '?'}(${l.Severity ?? '?'})`),
     });
   }
   return formatResult('trivy', DECISION.ALLOW, 'Trivy 扫描通过');
@@ -187,9 +211,9 @@ export async function runSemgrep(cwd?: string, options?: GateCheckRunOptions): P
   const missing = denyIfToolMissing('semgrep', 'semgrep', cwd);
   if (missing) return missing;
   try {
-    const ignoredDirs = getGitIgnoredDirs(cwd);
-    const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
-    const semgrepCmd = `semgrep ${SEMGREP_CONFIGS} ${SEMGREP_SEVERITY} ${SEMGREP_EXCLUDE_RULE_FLAGS} --error --json --exclude __tests__ ${excludeFlags} .`;
+    const excludeFlags = buildSemgrepExcludeArgs(cwd);
+    const scanTarget = resolveScanTargets(getScanScope(cwd));
+    const semgrepCmd = `semgrep ${SEMGREP_CONFIGS} ${SEMGREP_SEVERITY} ${SEMGREP_EXCLUDE_RULE_FLAGS} --error --json --exclude __tests__ ${excludeFlags} ${scanTarget}`;
     const result = await withTimeout(
       execCommandAsync(semgrepCmd, { cwd, timeout: timeoutMs }),
       timeoutMs,
@@ -253,9 +277,9 @@ export async function runSemgrepPciFull(cwd?: string, options?: GateCheckRunOpti
   if (typeof pciConfigResult !== 'string') return pciConfigResult;
   const pciConfig = pciConfigResult;
   try {
-    const ignoredDirs = getGitIgnoredDirs(cwd);
-    const excludeFlags = ignoredDirs.map((d) => `--exclude "${d}"`).join(' ');
-    const semgrepCmd = `semgrep ${pciConfig} ${SEMGREP_SEVERITY} ${SEMGREP_EXCLUDE_RULE_FLAGS} --error --json --exclude __tests__ ${excludeFlags} .`;
+    const excludeFlags = buildSemgrepExcludeArgs(cwd);
+    const scanTarget = resolveScanTargets(getScanScope(cwd));
+    const semgrepCmd = `semgrep ${pciConfig} ${SEMGREP_SEVERITY} ${SEMGREP_EXCLUDE_RULE_FLAGS} --error --json --exclude __tests__ ${excludeFlags} ${scanTarget}`;
     const result = await withTimeout(
       execCommandAsync(semgrepCmd, { cwd, timeout: timeoutMs }),
       timeoutMs,
@@ -336,9 +360,11 @@ export async function runTrivy(cwd?: string, options?: GateCheckRunOptions): Pro
     const skipDbUpdate = '--skip-db-update';
     const skipCheckUpdate = scanners.includes('misconfig') ? '' : '--skip-check-update';
     const ignoredDirs = getGitIgnoredDirs(cwd);
-    const skipDirs = buildTrivySkipArgs(ignoredDirs);
+    const skipDirs = buildTrivySkipArgs(ignoredDirs, cwd);
+    const scanTarget = resolveScanTargets(getScanScope(cwd));
+    const licenseDenylist = resolveLicenseDenylist(cwd);
     const trivyCmd =
-      `"${trivyBin}" fs ${TRIVY_DB_REPO_FLAGS} --scanners ${scanners} --severity CRITICAL,HIGH,MEDIUM,LOW --format json ${skipDbUpdate} ${skipCheckUpdate} ${skipDirs} .`.replace(
+      `"${trivyBin}" fs ${TRIVY_DB_REPO_FLAGS} --scanners ${scanners} --severity CRITICAL,HIGH,MEDIUM,LOW --format json ${skipDbUpdate} ${skipCheckUpdate} ${skipDirs} ${scanTarget}`.replace(
         /\s+/g,
         ' ',
       );
@@ -348,7 +374,7 @@ export async function runTrivy(cwd?: string, options?: GateCheckRunOptions): Pro
       gateTimeoutMessage('trivy', timeoutMs),
     );
     if (result.stdout) {
-      return evaluateTrivyJson(result.stdout);
+      return evaluateTrivyJson(result.stdout, licenseDenylist);
     }
     if (!result.success) {
       return formatResult('trivy', DECISION.DENY, 'Trivy 执行失败且无输出，按失败处理（fail-closed）', {

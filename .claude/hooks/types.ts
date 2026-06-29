@@ -155,12 +155,17 @@ export interface HadolintIssue {
 
 export type GatePathPrefix = 'git.pre-commit' | 'git.pre-push' | 'git.pre-merge-commit';
 
+export interface CoverageThresholdOptions {
+  lines: number;
+  functions: number;
+}
+
 export interface GateCheckRunOptions {
   timeoutMs?: number | undefined;
   gatePathPrefix?: GatePathPrefix | undefined;
   staged?: boolean | undefined;
   base?: string | undefined;
-  coverageThreshold?: number | undefined;
+  coverageThreshold?: CoverageThresholdOptions | undefined;
 }
 
 export function spreadTimeoutMs(timeoutMs?: number): Pick<GateCheckRunOptions, 'timeoutMs'> {

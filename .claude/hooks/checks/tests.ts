@@ -1,5 +1,6 @@
 import { join } from 'path';
-import { parseCoveragePercent, BUSINESS_COVERAGE_THRESHOLD } from './coverage.js';
+import { parseCoverageMetrics, evaluateCoverageAgainstThresholds } from './coverage.js';
+import { resolveCoverageThresholds } from '../gate-config.js';
 import type { CheckResult, GateCheckRunOptions } from '../types.js';
 import {
   execCommand,
@@ -193,24 +194,17 @@ export async function runFullProjectTests(cwd?: string, _options?: GateCheckRunO
               }),
             );
           } else {
-            const pct = parseCoveragePercent(output);
-            if (pct !== null && pct < BUSINESS_COVERAGE_THRESHOLD) {
+            const metrics = parseCoverageMetrics(output);
+            const thresholds = resolveCoverageThresholds(cwd);
+            const evaluation = evaluateCoverageAgainstThresholds(metrics, thresholds);
+            if (!evaluation.pass) {
               results.push(
-                formatResult(
-                  'full-test-js',
-                  DECISION.DENY,
-                  `业务 JS 测试通过但覆盖率 ${String(pct)}% 低于 ${String(BUSINESS_COVERAGE_THRESHOLD)}%`,
-                  { output: output.slice(0, 500) },
-                ),
+                formatResult('full-test-js', DECISION.DENY, evaluation.message, {
+                  output: output.slice(0, 500),
+                }),
               );
             } else {
-              results.push(
-                formatResult(
-                  'full-test-js',
-                  DECISION.ALLOW,
-                  pct === null ? 'JS 全量测试通过' : `JS 全量测试通过，覆盖率 ${String(pct)}%`,
-                ),
-              );
+              results.push(formatResult('full-test-js', DECISION.ALLOW, `JS 全量测试通过，${evaluation.message}`));
             }
           }
         }
@@ -228,7 +222,7 @@ export async function runFullProjectTests(cwd?: string, _options?: GateCheckRunO
 }
 
 const HOOK_UNIT_TEST_TIMEOUT_MS = 1200000;
-const HOOK_UNIT_TEST_GLOB = './.claude/hooks/__tests__/*.test.ts';
+const HOOK_UNIT_TEST_GLOB = process.env['HOOK_UNIT_TEST_GLOB'] ?? './.claude/hooks/__tests__/*.test.ts';
 const HOOK_UNIT_TEST_EXEC_OPTS = { maxBuffer: 64 * 1024 * 1024, shell: '/bin/sh' as const };
 
 export async function runHookUnitTests(cwd?: string, options: GateCheckRunOptions = {}) {
@@ -266,22 +260,18 @@ export async function runHookUnitTests(cwd?: string, options: GateCheckRunOption
       });
     }
     if (withCoverage) {
-      const threshold = options.coverageThreshold;
-      if (threshold === undefined) {
+      const thresholds = options.coverageThreshold;
+      if (thresholds === undefined) {
         return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 覆盖率阈值未配置');
       }
-      const pct = parseCoveragePercent(combinedOutput);
-      if (pct === null || pct < threshold) {
-        return formatResult(
-          'hook-unit-tests',
-          DECISION.DENY,
-          pct === null
-            ? `Hook 单测通过但无法解析覆盖率（要求 >= ${String(threshold)}%）`
-            : `Hook 单测通过但覆盖率 ${String(pct)}% 低于 ${String(threshold)}%`,
-          { output: combinedOutput.slice(0, 500) },
-        );
+      const metrics = parseCoverageMetrics(combinedOutput);
+      const evaluation = evaluateCoverageAgainstThresholds(metrics, thresholds);
+      if (!evaluation.pass) {
+        return formatResult('hook-unit-tests', DECISION.DENY, evaluation.message, {
+          output: combinedOutput.slice(0, 500),
+        });
       }
-      return formatResult('hook-unit-tests', DECISION.ALLOW, `Hook 常规单测通过，覆盖率 ${String(pct)}% 达标`);
+      return formatResult('hook-unit-tests', DECISION.ALLOW, `Hook 常规单测通过，${evaluation.message}`);
     }
     return formatResult('hook-unit-tests', DECISION.ALLOW, 'Hook 常规单测通过');
   } catch (e) {
