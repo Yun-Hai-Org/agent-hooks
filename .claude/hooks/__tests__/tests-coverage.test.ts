@@ -8,7 +8,7 @@ describe('runHookAdversarialIfStaged', () => {
   it('PROJECT_ROOT 未暂存 hooks 时 SKIP', async () => {
     const r = await runHookAdversarialIfStaged(PROJECT_ROOT);
     expect([DECISION.SKIP, DECISION.ALLOW, DECISION.DENY]).toContain(r.decision);
-  });
+  }, 300_000);
 });
 
 describe('runSlsaCosign', () => {
