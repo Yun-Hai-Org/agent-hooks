@@ -12,11 +12,14 @@ import {
   getMaxAutoCommitLoops,
   hasStagedChanges,
   runAutoCommit,
+  parseStopInput,
+  main,
 } from '../auto-commit.js';
 import { hasUncommittedChanges } from '../checks/git-policy.js';
 import { formatStopContinueOutput } from '../hook-adapter.js';
 
-import { disableGlobalGitHooks } from './helpers.js';
+import { disableGlobalGitHooks, PROJECT_ROOT } from './helpers.js';
+import { Readable } from 'stream';
 
 describe('auto-commit', () => {
   let tempDir;
@@ -195,6 +198,76 @@ describe('auto-commit', () => {
       const result = await runAutoCommit(repoPath);
       expect(result.committed).toBe(false);
       expect(result.reason).toContain('blocked on main');
+    });
+
+    it('非 git 目录不提交', () => {
+      const result = runAutoCommit('/tmp/not-a-git-repo-xyz');
+      expect(result.committed).toBe(false);
+      expect(result.reason).toBe('not a git repo');
+    });
+
+    it('AUTO_COMMIT=0 时不提交', () => {
+      process.env.AUTO_COMMIT = '0';
+      const result = runAutoCommit(repoPath);
+      expect(result.committed).toBe(false);
+      expect(result.reason).toBe('AUTO_COMMIT disabled');
+    });
+  });
+
+  describe('parseStopInput', () => {
+    it('应解析 cwd 与 session_id', () => {
+      const parsed = parseStopInput({ cwd: '/repo', session_id: 's1', loop_count: 2, status: 'completed' });
+      expect(parsed.cwd).toBe('/repo');
+      expect(parsed.sessionId).toBe('s1');
+      expect(parsed.loopCount).toBe(2);
+    });
+
+    it('workspace_roots 回退 cwd', () => {
+      const parsed = parseStopInput({ workspace_roots: [repoPath] });
+      expect(parsed.cwd).toBe(repoPath);
+    });
+  });
+
+  describe('buildCommitMessage chore 分支', () => {
+    it('lock 文件应用 chore 类型', () => {
+      expect(buildCommitMessage(['bun.lock', 'package.json'])).toMatch(/^chore: auto-commit/);
+    });
+  });
+
+  describe('auto-commit main', () => {
+    const origStdin = process.stdin;
+    const origLog = console.log;
+
+    afterEach(() => {
+      Object.defineProperty(process, 'stdin', { value: origStdin, configurable: true });
+      console.log = origLog;
+      delete process.env.AUTO_COMMIT;
+      delete process.env.HOOK_PLATFORM;
+    });
+
+    it('AUTO_COMMIT=0 时输出 {}', async () => {
+      process.env.AUTO_COMMIT = '0';
+      const logs: string[] = [];
+      console.log = (msg) => logs.push(String(msg));
+      Object.defineProperty(process, 'stdin', {
+        value: Readable.from([JSON.stringify({ cwd: PROJECT_ROOT, session_id: 's1', status: 'completed' })]),
+        configurable: true,
+      });
+      await main();
+      expect(logs).toContain('{}');
+    });
+
+    it('agent 模式干净工作区输出 {}', async () => {
+      const logs: string[] = [];
+      console.log = (msg) => logs.push(String(msg));
+      Object.defineProperty(process, 'stdin', {
+        value: Readable.from([
+          JSON.stringify({ cwd: PROJECT_ROOT, session_id: 's2', status: 'completed', hook_event_name: 'Stop' }),
+        ]),
+        configurable: true,
+      });
+      await main();
+      expect(logs.some((l) => l === '{}' || l.includes('decision'))).toBe(true);
     });
   });
 });

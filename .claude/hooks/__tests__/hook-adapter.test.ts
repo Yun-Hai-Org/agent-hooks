@@ -129,4 +129,38 @@ describe('hook-adapter', () => {
     if (prev) process.env.HOOK_PLATFORM = prev;
     else delete process.env.HOOK_PLATFORM;
   });
+
+  it('kiro 输入应归一化 file_path', () => {
+    const prev = process.env.HOOK_PLATFORM;
+    process.env.HOOK_PLATFORM = 'kiro';
+    const normalized = normalizeInput({
+      toolName: 'Write',
+      toolInput: { file_path: '/tmp/a.ts' },
+      sessionId: 'kiro-1',
+      cwd: '/tmp',
+    });
+    expect(normalized.tool_name).toBe('Write');
+    expect(normalized.tool_input.file_path).toBe('/tmp/a.ts');
+    expect(normalized.session_id).toBe('kiro-1');
+    if (prev) process.env.HOOK_PLATFORM = prev;
+    else delete process.env.HOOK_PLATFORM;
+  });
+
+  it('getPlatform 识别 kiro', () => {
+    const prev = process.env.HOOK_PLATFORM;
+    process.env.HOOK_PLATFORM = 'kiro';
+    expect(getPlatform()).toBe('kiro');
+    if (prev) process.env.HOOK_PLATFORM = prev;
+    else delete process.env.HOOK_PLATFORM;
+  });
+
+  it('Stop continue 非 cursor 输出 block decision', () => {
+    const prev = process.env.HOOK_PLATFORM;
+    process.env.HOOK_PLATFORM = 'kiro';
+    const out = JSON.parse(formatStopContinueOutput('fix it', 'Stop'));
+    expect(out.decision).toBe('block');
+    expect(out.reason).toBe('fix it');
+    if (prev) process.env.HOOK_PLATFORM = prev;
+    else delete process.env.HOOK_PLATFORM;
+  });
 });

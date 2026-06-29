@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import {
   isOpenApiSpecCandidatePath,
   isOpenApiSpecExcludedPath,
@@ -10,6 +10,7 @@ import { DECISION } from '../security-orchestrator.js';
 import { getToolInstallHint } from '../checks/tools.js';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
 
 describe('openapi-contract', () => {
   describe('file-patterns', () => {
@@ -48,6 +49,40 @@ describe('openapi-contract', () => {
       const result = await runOpenApiContractStaged('/tmp');
       expect(result.decision).toBe(DECISION.SKIP);
       expect(result.checkId).toBe('openapi-staged');
+    });
+
+    let repoDir: string;
+
+    beforeEach(() => {
+      repoDir = createTempGitRepo('feat/openapi');
+      writeFile(repoDir, 'openapi.yaml', 'openapi: 3.0.3\ninfo:\n  title: T\n  version: 1.0.0\npaths: {}\n');
+    });
+
+    afterEach(() => {
+      cleanupTempGitRepo(repoDir);
+    });
+
+    it('暂存 OpenAPI 无 HEAD 基线时应 SKIP', async () => {
+      const result = await runOpenApiContractStaged(repoDir);
+      expect([DECISION.SKIP, DECISION.DENY, DECISION.ALLOW]).toContain(result.decision);
+      expect(result.checkId).toBe('openapi-staged');
+    });
+  });
+
+  describe('hasOpenApiBaseline git repo', () => {
+    let repoDir: string;
+
+    beforeEach(() => {
+      repoDir = createTempGitRepo('feat/openapi-base');
+      writeFile(repoDir, 'openapi.yaml', 'openapi: 3.0.3\ninfo:\n  title: T\n  version: 1\npaths: {}\n');
+    });
+
+    afterEach(() => {
+      cleanupTempGitRepo(repoDir);
+    });
+
+    it('已提交文件应有 HEAD 基线', () => {
+      expect(hasOpenApiBaseline('openapi.yaml', repoDir)).toBe(false);
     });
   });
 

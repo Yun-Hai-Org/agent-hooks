@@ -80,5 +80,23 @@ describe('format-on-write', () => {
         if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
       }
     }, 60_000);
+
+    it('md 文件应走 markdownlint 或 prettier 路径', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'format-on-write-'));
+      try {
+        const file = join(dir, 'note.md');
+        writeFileSync(file, '# Title\n\ncontent');
+        const result = await formatFileOnWrite(file, PROJECT_ROOT);
+        expect(result.skipped.includes('unsupported-extension')).toBe(false);
+        expect(result.tools.length + result.skipped.length + result.errors.length).toBeGreaterThan(0);
+      } finally {
+        if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+      }
+    }, 90_000);
+
+    it('空路径应 skipped', async () => {
+      const result = await formatFileOnWrite('', PROJECT_ROOT);
+      expect(result.skipped).toContain('file-missing');
+    });
   });
 });

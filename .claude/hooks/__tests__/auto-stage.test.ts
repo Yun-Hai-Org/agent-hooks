@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { execSync } from 'child_process';
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
+import { handleAutoStage } from '../auto-stage.js';
+import { bootstrapQualityGateYaml } from './helpers.js';
 
 describe('auto-stage', () => {
   let tempDir;
@@ -30,6 +32,69 @@ describe('auto-stage', () => {
     if (existsSync(tempDir)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
+  });
+
+  describe('handleAutoStage', () => {
+    function captureStdout(fn: () => void | Promise<void>): Promise<string> {
+      return new Promise((resolve) => {
+        const chunks: string[] = [];
+        const orig = process.stdout.write.bind(process.stdout);
+        process.stdout.write = ((chunk: string | Uint8Array) => {
+          chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString());
+          return true;
+        }) as typeof process.stdout.write;
+        Promise.resolve(fn()).finally(() => {
+          process.stdout.write = orig;
+          resolve(chunks.join(''));
+        });
+      });
+    }
+
+    it('非文件编辑工具应 skip', async () => {
+      const out = await captureStdout(() => handleAutoStage({ tool_name: 'Bash', cwd: gitRepoDir, session_id: 's1' }));
+      expect(out.trim()).toBe('{}');
+    });
+
+    it('缺少 file_path 应 skip', async () => {
+      const out = await captureStdout(() =>
+        handleAutoStage({ tool_name: 'Write', tool_input: {}, cwd: gitRepoDir, session_id: 's2' }),
+      );
+      expect(out.trim()).toBe('{}');
+    });
+
+    it('Write 工具应暂存 git 仓库内文件', async () => {
+      bootstrapQualityGateYaml(gitRepoDir);
+      const testFile = join(gitRepoDir, 'handle-stage.txt');
+      writeFileSync(testFile, 'content');
+      delete process.env.CLAUDE_HOOK_AUTO_STAGED;
+      const out = await captureStdout(() =>
+        handleAutoStage({
+          tool_name: 'Write',
+          tool_input: { file_path: testFile },
+          cwd: gitRepoDir,
+          session_id: 's3',
+        }),
+      );
+      expect(out.trim()).toBe('{}');
+      expect(process.env.CLAUDE_HOOK_AUTO_STAGED).toBe('true');
+    });
+
+    it('CLAUDE_HOOK_PREVIOUS_DENIED 应 skip 暂存', async () => {
+      bootstrapQualityGateYaml(gitRepoDir);
+      const testFile = join(gitRepoDir, 'denied.txt');
+      writeFileSync(testFile, 'content');
+      process.env.CLAUDE_HOOK_PREVIOUS_DENIED = 'true';
+      const out = await captureStdout(() =>
+        handleAutoStage({
+          tool_name: 'Write',
+          tool_input: { file_path: testFile },
+          cwd: gitRepoDir,
+          session_id: 's4',
+        }),
+      );
+      expect(out.trim()).toBe('{}');
+      delete process.env.CLAUDE_HOOK_PREVIOUS_DENIED;
+    });
   });
 
   describe('Export verification', () => {
