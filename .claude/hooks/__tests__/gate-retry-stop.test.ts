@@ -40,6 +40,10 @@ describe('gate-retry-stop helpers', () => {
 });
 
 describe('runGateRetryStop', () => {
+  beforeEach(() => {
+    clearPendingGateFailure('', PROJECT_ROOT);
+  });
+
   afterEach(() => {
     clearPendingGateFailure('test-session', PROJECT_ROOT);
     delete process.env.GATE_RETRY_STOP;
