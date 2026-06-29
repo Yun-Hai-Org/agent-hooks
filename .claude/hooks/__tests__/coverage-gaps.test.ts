@@ -414,6 +414,21 @@ describe('CLI hook main entrypoints', () => {
   });
 });
 
+async function captureStdout(fn: () => void | Promise<void>): Promise<string> {
+  const chunks: string[] = [];
+  const orig = process.stdout.write.bind(process.stdout);
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString());
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    await fn();
+  } finally {
+    process.stdout.write = orig;
+  }
+  return chunks.join('');
+}
+
 describe('hook main in-process', () => {
   let repoDir: string;
 
@@ -441,35 +456,21 @@ describe('hook main in-process', () => {
   it('handleAutoStage Write 工具输出 {}', async () => {
     const testFile = join(repoDir, 'inproc.txt');
     writeFileSync(testFile, 'hello\n');
-    let captured = '';
-    const origLog = console.log;
-    console.log = (msg: string) => {
-      captured = msg;
-    };
-    try {
-      await handleAutoStage({
+    const captured = await captureStdout(() =>
+      handleAutoStage({
         tool_name: 'Write',
         tool_input: { file_path: testFile },
         session_id: 'main-as',
         cwd: repoDir,
-      });
-    } finally {
-      console.log = origLog;
-    }
+      }),
+    );
     expect(captured.trim()).toBe('{}');
   });
 
   it('handleAutoStage 非编辑工具 skip', async () => {
-    let captured = '';
-    const origLog = console.log;
-    console.log = (msg: string) => {
-      captured = msg;
-    };
-    try {
-      await handleAutoStage({ tool_name: 'Bash', tool_input: {}, session_id: 'main-as2', cwd: repoDir });
-    } finally {
-      console.log = origLog;
-    }
+    const captured = await captureStdout(() =>
+      handleAutoStage({ tool_name: 'Bash', tool_input: {}, session_id: 'main-as2', cwd: repoDir }),
+    );
     expect(captured.trim()).toBe('{}');
   });
 
@@ -477,22 +478,15 @@ describe('hook main in-process', () => {
     process.env.CLAUDE_HOOK_PREVIOUS_DENIED = 'true';
     const testFile = join(repoDir, 'denied.txt');
     writeFileSync(testFile, 'x\n');
-    let captured = '';
-    const origLog = console.log;
-    console.log = (msg: string) => {
-      captured = msg;
-    };
-    try {
-      await handleAutoStage({
+    const captured = await captureStdout(() =>
+      handleAutoStage({
         tool_name: 'Write',
         tool_input: { file_path: testFile },
         session_id: 'main-as3',
         cwd: repoDir,
-      });
-    } finally {
-      console.log = origLog;
-      delete process.env.CLAUDE_HOOK_PREVIOUS_DENIED;
-    }
+      }),
+    );
+    delete process.env.CLAUDE_HOOK_PREVIOUS_DENIED;
     expect(captured.trim()).toBe('{}');
   });
 
