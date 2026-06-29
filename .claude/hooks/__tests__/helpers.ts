@@ -4,7 +4,10 @@ import { execSync } from 'child_process';
 import { existsSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, dirname } from 'path';
+import { spawn } from 'child_process';
 import { clearGateConfigCache } from '../gate-config.js';
+import { getHookProcessEnv } from '../security-orchestrator.js';
+import { resolveBunExecutable } from '../checks/tools.js';
 
 /** 仓库根目录（tests 从 .claude/hooks 运行时 cwd 不是根） */
 export const PROJECT_ROOT = join(import.meta.dir, '..', '..', '..');
@@ -96,4 +99,35 @@ export function writeFile(repoPath, relativePath, content) {
 
 export function expectPerformance(durationMs, maxMs) {
   return durationMs <= maxMs;
+}
+
+/** 统一测试 hook 环境（Claude 平台 + 可选覆盖） */
+export function getTestHookEnv(envOverrides: Record<string, string> = {}): NodeJS.ProcessEnv {
+  return getHookProcessEnv({ HOOK_PLATFORM: 'claude', ...envOverrides });
+}
+
+/** 运行 hook 脚本并返回 stdout/stderr/exit code */
+export function runHookScript(
+  scriptPath: string,
+  input = '{}',
+  envOverrides: Record<string, string> = {},
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(resolveBunExecutable(), [scriptPath], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: getTestHookEnv(envOverrides),
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => {
+      stdout += d.toString();
+    });
+    child.stderr.on('data', (d) => {
+      stderr += d.toString();
+    });
+    child.on('close', (code) => resolve({ code, stdout, stderr }));
+    child.on('error', reject);
+    child.stdin.write(input);
+    child.stdin.end();
+  });
 }

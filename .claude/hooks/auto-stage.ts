@@ -43,54 +43,68 @@ function stageFile(filePath: string) {
 async function main() {
   try {
     const data = await readFileEditInput();
-    const { tool_name, tool_input, session_id, cwd } = data;
-
-    if (!isGateNodeEnabled('ide.auto-stage', cwd)) {
-      log({ level: 'SKIP', reason: 'gate disabled', session_id });
-      console.log('{}');
-      return;
-    }
-
-    if (!isFileEditTool(tool_name)) {
-      log({ level: 'SKIP', reason: `unsupported tool: ${tool_name || '(empty)'}`, session_id });
-      console.log('{}');
-      return;
-    }
-
-    const filePath = tool_input.file_path;
-    if (!filePath || typeof filePath !== 'string') {
-      log({ level: 'SKIP', reason: 'no file_path', tool: tool_name, session_id });
-      console.log('{}');
-      return;
-    }
-
-    const absPath = isAbsolute(filePath) ? filePath : join(cwd, filePath);
-
-    if (!isInGitRepo(absPath)) {
-      log({ level: 'SKIP', reason: 'not in git repo', file: absPath, session_id });
-      console.log('{}');
-      return;
-    }
-
-    if (process.env['CLAUDE_HOOK_PREVIOUS_DENIED'] === 'true') {
-      log({ level: 'SKIP', reason: 'previous hook denied', file: absPath, session_id });
-      console.log('{}');
-      return;
-    }
-
-    const result = stageFile(absPath);
-    if (result.success) {
-      process.env['CLAUDE_HOOK_AUTO_STAGED'] = 'true';
-      log({ level: 'STAGED', file: absPath, tool: tool_name, session_id });
-    } else {
-      log({ level: 'ERROR', file: absPath, error: result.error, session_id });
-    }
-
-    console.log('{}');
+    handleAutoStage(data);
   } catch (/** @type {unknown} */ e) {
     log({ level: 'ERROR', error: e instanceof Error ? e.message : String(e) });
-    console.log('{}');
+    writeEmptyOutput();
   }
+}
+
+function writeEmptyOutput(): void {
+  process.stdout.write('{}\n');
+}
+
+export function handleAutoStage(data: {
+  tool_name?: string;
+  tool_input?: { file_path?: string };
+  session_id?: string;
+  cwd?: string;
+}): void {
+  const { tool_name, tool_input, session_id, cwd = process.cwd() } = data;
+
+  if (!isGateNodeEnabled('ide.auto-stage', cwd)) {
+    log({ level: 'SKIP', reason: 'gate disabled', session_id });
+    writeEmptyOutput();
+    return;
+  }
+
+  if (!isFileEditTool(tool_name)) {
+    log({ level: 'SKIP', reason: `unsupported tool: ${tool_name ?? '(empty)'}`, session_id });
+    writeEmptyOutput();
+    return;
+  }
+
+  const filePath = tool_input?.file_path;
+  if (!filePath || typeof filePath !== 'string') {
+    log({ level: 'SKIP', reason: 'no file_path', tool: tool_name, session_id });
+    writeEmptyOutput();
+    return;
+  }
+
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 为受信工作目录，filePath 来自 hook 输入
+  const absPath = isAbsolute(filePath) ? filePath : join(cwd, filePath);
+
+  if (!isInGitRepo(absPath)) {
+    log({ level: 'SKIP', reason: 'not in git repo', file: absPath, session_id });
+    writeEmptyOutput();
+    return;
+  }
+
+  if (process.env['CLAUDE_HOOK_PREVIOUS_DENIED'] === 'true') {
+    log({ level: 'SKIP', reason: 'previous hook denied', file: absPath, session_id });
+    writeEmptyOutput();
+    return;
+  }
+
+  const result = stageFile(absPath);
+  if (result.success) {
+    process.env['CLAUDE_HOOK_AUTO_STAGED'] = 'true';
+    log({ level: 'STAGED', file: absPath, tool: tool_name, session_id });
+  } else {
+    log({ level: 'ERROR', file: absPath, error: result.error, session_id });
+  }
+
+  writeEmptyOutput();
 }
 
 if (import.meta.main) {

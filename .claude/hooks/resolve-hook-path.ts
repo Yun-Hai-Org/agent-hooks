@@ -59,34 +59,39 @@ export function resolveHookPath(hookFile: string, cwd?: string) {
 
 export { resolveBunExecutable } from './checks/tools.js';
 
-// ─── 主流程 ──────────────────────────────────────────────────────────────────
-
-function main() {
-  const hookFile = process.argv[2];
+export function runResolveHookPathCli(argv: string[]): number {
+  const hookFile = argv[2];
 
   if (!hookFile) {
     console.error(`🚫 [${HOOK_NAME}] 用法: bun resolve-hook-path.ts <hook-name>.ts`);
     console.log('{}');
-    process.exit(0);
+    return 0;
   }
 
   const resolved = resolveHookPath(hookFile);
 
   if (!resolved) {
     console.error(`🚫 [${HOOK_NAME}] 未找到钩子: ${hookFile}`);
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- 仅用于错误提示，hookFile 已校验为 .ts
     console.error(`  项目级: ${resolve(process.cwd(), PROJECT_HOOKS_DIR, hookFile)}`);
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- GLOBAL_HOOKS_DIR 为常量，hookFile 已校验为 .ts
     console.error(`  全局级: ${resolve(GLOBAL_HOOKS_DIR, hookFile)}`);
     console.log('{}');
-    process.exit(0);
+    return 0;
   }
 
-  // 使用 bun 执行解析后的钩子脚本，传递 stdin
   const result = spawnSync(resolveBunExecutable(), [resolved.path], {
     stdio: ['inherit', 'inherit', 'inherit'],
     env: getHookProcessEnv(),
   });
 
-  process.exit(result.status ?? 0);
+  return result.status ?? 0;
+}
+
+// ─── 主流程 ──────────────────────────────────────────────────────────────────
+
+function main() {
+  process.exit(runResolveHookPathCli(process.argv));
 }
 
 // 只在直接运行时执行 main()，导入时不执行

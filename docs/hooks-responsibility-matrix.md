@@ -110,6 +110,44 @@ IDE：`block-dangerous-commands` 拦截无 `--no-ff` 的 merge 与 `--squash`。
 
 **full profile 检查**：全仓库 lint/format/测试/semgrep/trivy/gitleaks 等（knip 仅 hooks 项目）。
 
+### settings.coverageThreshold（push/merge 双覆盖率门禁）
+
+`quality-gate.yaml` 顶层 `settings.coverageThreshold` 为 SSOT（**不在** `bunfig.toml` 设阈值）：
+
+```yaml
+settings:
+  coverageThreshold:
+    lines: 80 # 行覆盖率下限
+    functions: 80 # 函数覆盖率下限（与 lines 同等强制）
+  # 简写：coverageThreshold: 80 → lines/functions 均为 80
+```
+
+| 拦截点       | profile                   | 检查项            | 行为                                    |
+| ------------ | ------------------------- | ----------------- | --------------------------------------- |
+| `git push`   | full (`pre-push`)         | `hook-unit-tests` | 跑 coverage 单测；Lines/Funcs 均 ≥ 阈值 |
+|              |                           |                   | 未达标则 DENY exit 1                    |
+| `git merge`  | full (`pre-merge-commit`) | `hook-unit-tests` | 同上                                    |
+| `git commit` | commit                    | —                 | 不检查覆盖率（coverage 为 SKIP 占位）   |
+
+DENY 示例：`Hook 单测通过但覆盖率未达标：Lines 78% < 80%；Funcs 76% < 80%`
+
+非 hooks 项目（无 `.claude/hooks/quality-gate.ts`）对 `hook-unit-tests` **SKIP**。
+
+### settings.scanScope / licenseDenylist
+
+```yaml
+settings:
+  scanScope:
+    include: [] # 空 = 全仓（fallback `.`）
+    exclude:
+      - _bmad-output/
+  licenseDenylist:
+    - GPL-3.0
+    - AGPL-3.0
+```
+
+`scanScope` 接入 semgrep、trivy、sbom、payment-page-full、iac-checkov；内置 exclude 含 `_bmad`、`_bmad-output`、`node_modules` 等。
+
 ## C. Agent 防绕过（IDE only）
 
 | 规则                                        | Hook                     |
@@ -142,17 +180,18 @@ IDE：`block-dangerous-commands` 拦截无 `--no-ff` 的 merge 与 `--squash`。
 
 ## D. Fintech 合规检查
 
-| checkId               | profile | controlIds            | autoFix                   |
-| --------------------- | ------- | --------------------- | ------------------------- |
-| `semgrep-pci-staged`  | commit  | PCI-6.3.3, PCI-6.5    | 否                        |
-| `payment-page-staged` | commit  | PCI-6.4.3             | 否                        |
-| `sbom-archive`        | full    | PCI-6.3.2, DORA-Art6  | 否                        |
-| `semgrep-pci`         | full    | PCI-6.3.3             | 否                        |
-| `payment-page-full`   | full    | PCI-6.4.3, PCI-11.6.1 | 否                        |
-| `zap-api-dast`        | full    | PCI-11.3              | 否（需 `ZAP_TARGET_URL`） |
-| `opa-conftest`        | full    | DORA-Art6, SOX-404    | 否                        |
-| `iac-checkov`         | full    | PCI-6.3.3             | 否                        |
-| `slsa-cosign`         | full    | PCI-6.3.2, SLSA-L3    | 否（需 `.hooks/cosign/`） |
+| checkId                 | profile | controlIds            | autoFix                                     |
+| ----------------------- | ------- | --------------------- | ------------------------------------------- |
+| `semgrep-pci-staged`    | commit  | PCI-6.3.3, PCI-6.5    | 否                                          |
+| `payment-page-staged`   | commit  | PCI-6.4.3             | 否                                          |
+| `sbom-archive`          | full    | PCI-6.3.2, DORA-Art6  | 否                                          |
+| `semgrep-pci`           | full    | PCI-6.3.3             | 否                                          |
+| `payment-page-full`     | full    | PCI-6.4.3, PCI-11.6.1 | 否                                          |
+| `zap-api-dast`          | full    | PCI-11.3              | 否（需 `ZAP_TARGET_URL`）                   |
+| `openapi-auth-negative` | full    | PCI-6.5, PCI-7.1      | 否（需 `ZAP_TARGET_URL` 或 yaml `baseUrl`） |
+| `opa-conftest`          | full    | DORA-Art6, SOX-404    | 否                                          |
+| `iac-checkov`           | full    | PCI-6.3.3             | 否                                          |
+| `slsa-cosign`           | full    | PCI-6.3.2, SLSA-L3    | 否（需 `.hooks/cosign/`）                   |
 
 `CheckResult.controlIds` 由 registry SSOT 注入，供 JSON 审计日志映射 PCI/SOX/DORA 控制点。
 
@@ -173,11 +212,11 @@ Bootstrap：`install-git-hooks-global.sh` 安装 `~/.claude/policy/`、`~/.claud
 
 merge-only（仅 `pre-merge-commit`）：`sbom-archive`、`slsa-cosign`、`payment-page-full`。
 
-JSONL 日志含 `commitSha` 与 per-check `controlIds`；merge 成功写入 `.hooks/audit/`。
+JSONL 日志含 `commitSha` 与 per-check `controlIds`；merge 成功写入 `.hooks/audit/`（含 `{date}-{sha}.jsonl`、`.sarif.json`、`manifest.jsonl`）。
 
 ## E. P3
 
-见 [hooks-security-roadmap.md](./hooks-security-roadmap.md) 与 `.github/workflows/dast.yml`（stub）。
+见 [hooks-security-roadmap.md](./hooks-security-roadmap.md) 与 `.github/workflows/dast.yml`（ZAP + openapi-auth-negative）。
 
 ## F. 可选后续（未纳入当前实现）
 

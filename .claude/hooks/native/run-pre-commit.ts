@@ -3,20 +3,14 @@
  * Native pre-commit hook runner
  */
 
-import { existsSync } from 'fs';
-import { join } from 'path';
 import { execCommand, log } from '../security-orchestrator.js';
 import { runQualityGate, logGateResult } from '../quality-gate.js';
 import { getIndexTreeSha, hasFreshFullPass, recordFullPass } from '../gate-cache.js';
 import { clearPendingGateFailure } from '../gate-pending.js';
 import { exitIfQualityGateExcluded, exitIfGateHookDisabled } from './native-common.js';
+import { isMergeConclude } from '../checks/git-policy.js';
 
 const HOOK_NAME = 'native-pre-commit';
-
-export function isMergeConclude(cwd: string): boolean {
-  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 为 git 仓库根，拼接常量 MERGE_HEAD
-  return existsSync(join(cwd, '.git', 'MERGE_HEAD'));
-}
 
 function getRepoRoot() {
   const result = execCommand('git rev-parse --show-toplevel');

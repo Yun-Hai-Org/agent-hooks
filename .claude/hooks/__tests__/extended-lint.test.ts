@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'bun:test';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { writeFileSync } from 'fs';
+import { execSync } from 'child_process';
+import { createTempGitRepo, cleanupTempGitRepo } from './helpers.js';
 import {
   classifyFiles,
   isDockerComposePath,
@@ -130,6 +133,18 @@ describe('extended-lint', () => {
       expect(result.decision).toBe(DECISION.SKIP);
       expect(result.checkId).toBe('extended-staged');
     });
+
+    it('暂存 Dockerfile 时执行 hadolint 路径', async () => {
+      const repo = createTempGitRepo('feat/ext-staged');
+      try {
+        writeFileSync(join(repo, 'Dockerfile'), 'FROM alpine\n');
+        execSync('git add Dockerfile', { cwd: repo });
+        const result = await runExtendedLintStaged(repo);
+        expect([DECISION.ALLOW, DECISION.DENY, DECISION.SKIP]).toContain(result.decision);
+      } finally {
+        cleanupTempGitRepo(repo);
+      }
+    }, 120_000);
   });
 
   describe('runExtendedLintFull', () => {

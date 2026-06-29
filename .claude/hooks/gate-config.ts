@@ -10,6 +10,8 @@ import {
   REGISTRY_COMMIT_TIMEOUT_MS,
   REGISTRY_FULL_TIMEOUT_MS,
 } from './gate-registry.js';
+import type { CoverageThresholdOptions } from './types.js';
+import { DEFAULT_COVERAGE_THRESHOLDS } from './checks/coverage.js';
 
 export interface GateConfigEntry {
   enabled?: boolean;
@@ -20,7 +22,24 @@ export interface GateConfigEntry {
   rules?: Record<string, GateConfigEntry>;
 }
 
+export interface ScanScopeConfig {
+  include?: string[];
+  exclude?: string[];
+}
+
+export interface CoverageThresholdYaml {
+  lines?: number;
+  functions?: number;
+}
+
+export interface GateSettings {
+  coverageThreshold?: number | CoverageThresholdYaml;
+  scanScope?: ScanScopeConfig;
+  licenseDenylist?: string[];
+}
+
 export interface GateConfig {
+  settings?: GateSettings;
   ide?: Record<string, GateConfigEntry>;
   git?: Record<string, GateConfigEntry>;
 }
@@ -48,6 +67,9 @@ export function clearGateConfigCache(): void {
 
 function deepMergeConfig(base: GateConfig, override: GateConfig): GateConfig {
   const result: GateConfig = { ...base };
+  if (override.settings || base.settings) {
+    result.settings = mergeSettings(base.settings, override.settings);
+  }
   for (const section of ['ide', 'git'] as const) {
     const baseSection = base[section] ?? {};
     const overrideSection = override[section];
@@ -60,6 +82,45 @@ function deepMergeConfig(base: GateConfig, override: GateConfig): GateConfig {
     result[section] = sectionMap;
   }
   return result;
+}
+
+function mergeCoverageThresholdYaml(
+  base?: number | CoverageThresholdYaml,
+  override?: number | CoverageThresholdYaml,
+): number | CoverageThresholdYaml | undefined {
+  if (override === undefined) return base;
+  if (base === undefined) return override;
+  if (typeof base === 'number' && typeof override === 'number') return override;
+  if (typeof base === 'number') {
+    const o = typeof override === 'number' ? { lines: override, functions: override } : override;
+    return { lines: o.lines ?? base, functions: o.functions ?? base };
+  }
+  if (typeof override === 'number') {
+    return { lines: base.lines ?? override, functions: base.functions ?? override };
+  }
+  const lines = override.lines ?? base.lines;
+  const functions = override.functions ?? base.functions;
+  const merged: CoverageThresholdYaml = {};
+  if (lines !== undefined) merged.lines = lines;
+  if (functions !== undefined) merged.functions = functions;
+  return merged;
+}
+
+function mergeSettings(base?: GateSettings, override?: GateSettings): GateSettings {
+  if (!base) return structuredClone(override ?? {});
+  if (!override) return structuredClone(base);
+  const merged: GateSettings = { ...base, ...override };
+  const coverageThreshold = mergeCoverageThresholdYaml(base.coverageThreshold, override.coverageThreshold);
+  if (coverageThreshold !== undefined) merged.coverageThreshold = coverageThreshold;
+  if (base.scanScope || override.scanScope) {
+    const include = override.scanScope?.include ?? base.scanScope?.include;
+    const exclude = [...new Set([...(base.scanScope?.exclude ?? []), ...(override.scanScope?.exclude ?? [])])];
+    merged.scanScope = { ...(include !== undefined ? { include } : {}), ...(exclude.length > 0 ? { exclude } : {}) };
+  }
+  if (base.licenseDenylist || override.licenseDenylist) {
+    merged.licenseDenylist = [...new Set([...(base.licenseDenylist ?? []), ...(override.licenseDenylist ?? [])])];
+  }
+  return merged;
 }
 
 function mergeEntry(base: GateConfigEntry | undefined, override: GateConfigEntry): GateConfigEntry {
@@ -354,4 +415,41 @@ export const GLOBAL_QUALITY_GATE_CONFIG_PATH = GLOBAL_CONFIG_PATH;
 
 export function getRepoQualityGateConfigPath(cwd: string): string {
   return getRepoConfigPath(cwd);
+}
+
+function normalizeCoverageThresholdYaml(raw?: number | CoverageThresholdYaml): CoverageThresholdOptions {
+  if (typeof raw === 'number') {
+    return { lines: raw, functions: raw };
+  }
+  return {
+    lines: raw?.lines ?? DEFAULT_COVERAGE_THRESHOLDS.lines,
+    functions: raw?.functions ?? DEFAULT_COVERAGE_THRESHOLDS.functions,
+  };
+}
+
+export function resolveCoverageThresholds(cwd: string = process.cwd()): CoverageThresholdOptions {
+  const config = loadGateConfig(cwd);
+  return normalizeCoverageThresholdYaml(config.settings?.coverageThreshold);
+}
+
+export interface ResolvedScanScope {
+  include: string[];
+  exclude: string[];
+}
+
+const BUILTIN_SCAN_EXCLUDE = ['_bmad', '_bmad-output', 'node_modules', '.venv', '.claude/worktrees'];
+
+export function resolveScanScope(cwd: string = process.cwd()): ResolvedScanScope {
+  const config = loadGateConfig(cwd);
+  const yamlExclude = config.settings?.scanScope?.exclude ?? [];
+  const include = config.settings?.scanScope?.include ?? [];
+  return {
+    include: [...include],
+    exclude: [...new Set([...BUILTIN_SCAN_EXCLUDE, ...yamlExclude])],
+  };
+}
+
+export function resolveLicenseDenylist(cwd: string = process.cwd()): string[] {
+  const config = loadGateConfig(cwd);
+  return config.settings?.licenseDenylist ?? [];
 }

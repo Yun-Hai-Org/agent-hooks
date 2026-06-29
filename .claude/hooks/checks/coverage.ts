@@ -1,33 +1,64 @@
 import { execCommand, formatResult, DECISION, TESTS_DIR } from '../security-orchestrator.js';
 import { denyIfToolMissing } from './tools.js';
-import type { CheckResult } from '../types.js';
+import type { CoverageThresholdOptions, CheckResult } from '../types.js';
 
-/**
- * 实测全量 hook 单测行覆盖约 52.7%（2026-06，已 ratchet 至实测下限 52）。
- * 阈值只升不降；下一里程碑 60%，需对 lint-full/format-full/tests/typecheck/merge-gate
- * 等子进程密集模块补针对性单测后再上调。
- */
-export const DEFAULT_COVERAGE_THRESHOLD = 52;
+/** push/merge full 门默认双覆盖率下限（可被 quality-gate.yaml settings 覆盖） */
+export const DEFAULT_COVERAGE_THRESHOLDS: CoverageThresholdOptions = { lines: 80, functions: 80 };
 
-/** 业务代码（非 hook）测试的行覆盖率下限，仅在存在项目级测试时强制 */
-export const BUSINESS_COVERAGE_THRESHOLD = 50;
-
-export function parseCoveragePercent(output: string): number | null {
-  const allFilesMatch = /All files[^|\n]*\|\s*\d+(?:\.\d+)?\s*\|\s*(\d+(?:\.\d+)?)/i.exec(output);
-  if (allFilesMatch?.[1]) {
-    const pct = parseFloat(allFilesMatch[1]);
-    return Number.isFinite(pct) ? pct : null;
-  }
-  const fallbackMatch = /(\d+(?:\.\d+)?)\s*%\s*\|/.exec(output);
-  if (fallbackMatch?.[1]) {
-    const pct = parseFloat(fallbackMatch[1]);
-    return Number.isFinite(pct) ? pct : null;
-  }
-  return null;
+export interface CoverageMetrics {
+  lines: number | null;
+  functions: number | null;
 }
 
-export function runCoverage(cwd?: string, options: { threshold?: number } = {}): CheckResult {
-  const threshold = options.threshold ?? DEFAULT_COVERAGE_THRESHOLD;
+export function parseCoverageMetrics(output: string): CoverageMetrics {
+  const allFilesMatch = /All files[^|\n]*\|\s*(\d+(?:\.\d+)?)\s*\|\s*(\d+(?:\.\d+)?)/i.exec(output);
+  if (allFilesMatch?.[1] && allFilesMatch[2]) {
+    const functions = parseFloat(allFilesMatch[1]);
+    const lines = parseFloat(allFilesMatch[2]);
+    return {
+      functions: Number.isFinite(functions) ? functions : null,
+      lines: Number.isFinite(lines) ? lines : null,
+    };
+  }
+  const lineOnlyMatch = /All files[^|\n]*\|\s*(\d+(?:\.\d+)?)\s*\|/i.exec(output);
+  if (lineOnlyMatch?.[1]) {
+    const lines = parseFloat(lineOnlyMatch[1]);
+    return { lines: Number.isFinite(lines) ? lines : null, functions: null };
+  }
+  return { lines: null, functions: null };
+}
+
+/** @deprecated 使用 parseCoverageMetrics；保留 lines 别名 */
+export function parseCoveragePercent(output: string): number | null {
+  return parseCoverageMetrics(output).lines;
+}
+
+export function evaluateCoverageAgainstThresholds(
+  metrics: CoverageMetrics,
+  thresholds: CoverageThresholdOptions,
+): { pass: boolean; message: string } {
+  const failures: string[] = [];
+  if (metrics.lines === null) {
+    failures.push('无法解析 Lines 覆盖率');
+  } else if (metrics.lines < thresholds.lines) {
+    failures.push(`Lines ${String(metrics.lines)}% < ${String(thresholds.lines)}%`);
+  }
+  if (metrics.functions === null) {
+    failures.push('无法解析 Funcs 覆盖率');
+  } else if (metrics.functions < thresholds.functions) {
+    failures.push(`Funcs ${String(metrics.functions)}% < ${String(thresholds.functions)}%`);
+  }
+  if (failures.length === 0) {
+    return {
+      pass: true,
+      message: `覆盖率 Lines ${String(metrics.lines)}% / Funcs ${String(metrics.functions)}% 达标 (阈值 Lines ${String(thresholds.lines)}% / Funcs ${String(thresholds.functions)}%)`,
+    };
+  }
+  return { pass: false, message: `Hook 单测通过但覆盖率未达标：${failures.join('；')}` };
+}
+
+export function runCoverage(cwd?: string, options: { thresholds?: CoverageThresholdOptions } = {}): CheckResult {
+  const thresholds = options.thresholds ?? DEFAULT_COVERAGE_THRESHOLDS;
   const hasPackageJson = execCommand('test -f package.json', { cwd }).success;
 
   if (!hasPackageJson) {
@@ -55,18 +86,12 @@ export function runCoverage(cwd?: string, options: { threshold?: number } = {}):
     return formatResult('coverage', DECISION.DENY, '覆盖率测试失败', { output: output.slice(0, 500) });
   }
 
-  const pct = parseCoveragePercent(output);
+  const metrics = parseCoverageMetrics(output);
+  const evaluation = evaluateCoverageAgainstThresholds(metrics, thresholds);
 
-  if (pct === null || pct < threshold) {
-    return formatResult(
-      'coverage',
-      DECISION.DENY,
-      pct === null
-        ? `无法解析覆盖率，要求 >= ${String(threshold)}%`
-        : `覆盖率 ${String(pct)}% 低于阈值 ${String(threshold)}%`,
-      { output: output.slice(0, 500) },
-    );
+  if (!evaluation.pass) {
+    return formatResult('coverage', DECISION.DENY, evaluation.message, { output: output.slice(0, 500) });
   }
 
-  return formatResult('coverage', DECISION.ALLOW, `覆盖率 ${String(pct)}% 达标 (阈值 ${String(threshold)}%)`);
+  return formatResult('coverage', DECISION.ALLOW, evaluation.message);
 }

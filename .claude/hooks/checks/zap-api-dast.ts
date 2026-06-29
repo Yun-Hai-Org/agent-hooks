@@ -15,7 +15,10 @@ function findOpenApiSpec(cwd: string): string | null {
     if (existsSync(join(cwd, c))) return c;
   }
   const result = execCommand('git ls-files "*openapi*.yaml" "*openapi*.yml" "*openapi*.json" | head -1', { cwd });
-  return result.success && result.stdout.trim() ? result.stdout.trim() : null;
+  const tracked = result.success && result.stdout.trim() ? result.stdout.trim() : null;
+  if (!tracked) return null;
+  if (/\.example\.(ya?ml|json)$/i.test(tracked) || tracked.startsWith('templates/')) return null;
+  return tracked;
 }
 
 export function resolveZapBinary(cwd?: string): string | null {

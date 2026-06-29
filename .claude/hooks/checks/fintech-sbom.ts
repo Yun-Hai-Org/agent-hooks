@@ -4,6 +4,7 @@ import { join } from 'path';
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
 import { gateTimeoutMessage } from '../gate-timeouts.js';
+import { resolveScanTargets, getScanScope } from './scan-scope.js';
 import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 const SBOM_DIR = '.hooks/sbom';
@@ -32,7 +33,10 @@ export async function runSbomArchive(cwd?: string, options?: GateCheckRunOptions
   // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- outDir 派生自受信 root 与常量目录
   const outFile = join(outDir, `sbom-${sha}.cyclonedx.json`);
 
-  const cmd = hasSyft ? `syft . -o cyclonedx-json=${outFile}` : `trivy fs --format cyclonedx --output ${outFile} .`;
+  const scanTarget = resolveScanTargets(getScanScope(root));
+  const cmd = hasSyft
+    ? `syft ${scanTarget} -o cyclonedx-json=${outFile}`
+    : `trivy fs --format cyclonedx --output ${outFile} ${scanTarget}`;
 
   try {
     const result = await withTimeout(

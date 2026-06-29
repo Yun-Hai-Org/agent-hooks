@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { isMergeConclude } from '../native/run-pre-commit.js';
+import { isMergeConclude } from '../checks/git-policy.js';
 
 describe('merge-conclude-gate', () => {
   let tempDir: string;

@@ -1,6 +1,7 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { denyIfToolMissing, denyOnToolError } from './tools.js';
 import { gateTimeoutMessage } from '../gate-timeouts.js';
+import { resolveScanTargets, getScanScope } from './scan-scope.js';
 import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -29,8 +30,9 @@ export async function runIacCheckov(cwd?: string, options?: GateCheckRunOptions)
   if (missing) return missing;
 
   try {
+    const scanTarget = resolveScanTargets(getScanScope(root));
     const result = await withTimeout(
-      execCommandAsync('checkov -d . --framework terraform,kubernetes,dockerfile --quiet', {
+      execCommandAsync(`checkov -d ${scanTarget} --framework terraform,kubernetes,dockerfile --quiet`, {
         cwd: root,
         timeout: timeoutMs,
       }),

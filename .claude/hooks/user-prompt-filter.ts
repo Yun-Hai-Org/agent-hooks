@@ -32,6 +32,10 @@ export function scanPrompt(prompt: string): { blocked: boolean; pattern: Content
 
 async function main() {
   const data = await readStdin();
+  handleUserPromptSubmit(data);
+}
+
+export function handleUserPromptSubmit(data: Record<string, unknown>): void {
   const tool_input = data['tool_input'] as { user_prompt?: string } | undefined;
   const session_id = asString(data['session_id']);
   const cwd = asString(data['cwd']) || process.cwd();
@@ -80,3 +84,5 @@ async function main() {
 if (import.meta.main) {
   void safeMain(main);
 }
+
+export { main };

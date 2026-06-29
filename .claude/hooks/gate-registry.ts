@@ -364,6 +364,7 @@ const FULL_CHECKS: Record<string, string> = {
   'semgrep-pci': '全仓 Semgrep PCI/OWASP 金融规则',
   'payment-page-full': '全仓支付页脚本/SRI 检查',
   'zap-api-dast': 'OWASP ZAP API baseline（OpenAPI 驱动）',
+  'openapi-auth-negative': 'OpenAPI 越权负向用例（无/无效 token 期望 401/403）',
   'opa-conftest': 'Conftest/OPA 策略（PCI-DORA Rego）',
   'iac-checkov': 'Checkov IaC 扫描（Terraform/K8s/Dockerfile）',
   'slsa-cosign': 'SLSA/Cosign 制品 provenance 校验',
@@ -396,6 +397,7 @@ function buildFullHookChecks(): Record<string, GateLeafNode> {
     'semgrep-pci': { controlIds: ['PCI-6.3.3'] },
     'payment-page-full': { defaultTimeoutMs: 3 * 60 * 1000, controlIds: ['PCI-6.4.3', 'PCI-11.6.1'] },
     'zap-api-dast': { defaultTimeoutMs: 10 * 60 * 1000, controlIds: ['PCI-11.3'] },
+    'openapi-auth-negative': { defaultTimeoutMs: 3 * 60 * 1000, controlIds: ['PCI-11.3'] },
     'opa-conftest': { defaultTimeoutMs: 3 * 60 * 1000, controlIds: ['DORA-Art6', 'SOX-404'] },
     'iac-checkov': { defaultTimeoutMs: 5 * 60 * 1000, controlIds: ['PCI-6.3.3'] },
     'slsa-cosign': { defaultTimeoutMs: 2 * 60 * 1000, controlIds: ['PCI-6.3.2', 'SLSA-L3'] },
@@ -687,7 +689,22 @@ function emitYamlNode(
 
 /** 生成完整 example YAML（全部 enabled: true + registry 默认 timeout） */
 export function generateExampleYaml(): string {
-  const lines: string[] = ['# 质量门全量白名单配置 — 由 gate-registry.generateExampleYaml() 生成', ''];
+  const lines: string[] = [
+    '# 质量门全量白名单配置 — 由 gate-registry.generateExampleYaml() 生成',
+    '',
+    'settings:',
+    '  coverageThreshold:',
+    '    lines: 80',
+    '    functions: 80',
+    '  scanScope:',
+    '    include: []',
+    '    exclude:',
+    '      - _bmad-output/',
+    '  licenseDenylist:',
+    '    - GPL-3.0',
+    '    - AGPL-3.0',
+    '',
+  ];
   for (const section of ['ide', 'git'] as const) {
     lines.push(`${section}:`);
     for (const [hookId, hookNode] of Object.entries(GATE_REGISTRY[section])) {

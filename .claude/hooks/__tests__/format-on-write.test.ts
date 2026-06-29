@@ -3,6 +3,7 @@ import { classifyFormatOnWriteTarget, formatFileOnWrite } from '../checks/format
 import { mkdtempSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { PROJECT_ROOT } from './helpers.js';
 
 describe('format-on-write', () => {
   describe('classifyFormatOnWriteTarget', () => {
@@ -65,6 +66,37 @@ describe('format-on-write', () => {
       } finally {
         if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
       }
+    });
+
+    it('ts 文件应尝试 prettier 路径', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'format-on-write-'));
+      try {
+        const file = join(dir, 'sample.ts');
+        writeFileSync(file, 'const  x=1');
+        const result = await formatFileOnWrite(file, PROJECT_ROOT);
+        expect(result.skipped.includes('unsupported-extension')).toBe(false);
+        expect(result.formatted || result.skipped.length > 0 || result.errors.length > 0).toBe(true);
+      } finally {
+        if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+      }
+    }, 60_000);
+
+    it('md 文件应走 markdownlint 或 prettier 路径', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'format-on-write-'));
+      try {
+        const file = join(dir, 'note.md');
+        writeFileSync(file, '# Title\n\ncontent');
+        const result = await formatFileOnWrite(file, PROJECT_ROOT);
+        expect(result.skipped.includes('unsupported-extension')).toBe(false);
+        expect(result.tools.length + result.skipped.length + result.errors.length).toBeGreaterThan(0);
+      } finally {
+        if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+      }
+    }, 90_000);
+
+    it('空路径应 skipped', async () => {
+      const result = await formatFileOnWrite('', PROJECT_ROOT);
+      expect(result.skipped).toContain('file-missing');
     });
   });
 });

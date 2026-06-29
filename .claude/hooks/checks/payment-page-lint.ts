@@ -4,6 +4,7 @@ import yaml from 'js-yaml';
 import { formatResult, DECISION } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
 import { listTrackedFiles } from './file-patterns.js';
+import { filterPathsByScope, getScanScope } from './scan-scope.js';
 import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 const ALLOWLIST_PATH = '.hooks/payment-script-allowlist.yaml';
@@ -106,6 +107,6 @@ export function runPaymentPageStaged(cwd?: string, _options?: GateCheckRunOption
 
 export function runPaymentPageFull(cwd?: string, _options?: GateCheckRunOptions): CheckResult {
   const root = cwd ?? process.cwd();
-  const files = listTrackedFiles(isPaymentPageTarget, root);
+  const files = filterPathsByScope(listTrackedFiles(isPaymentPageTarget, root), getScanScope(root));
   return lintFiles(files, root, 'payment-page-full');
 }

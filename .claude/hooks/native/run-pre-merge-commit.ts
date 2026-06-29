@@ -5,7 +5,7 @@
 
 import { execCommand, log } from '../security-orchestrator.js';
 import { runQualityGate, logGateResult } from '../quality-gate.js';
-import { exportAuditRecord } from '../audit-export.js';
+import { exportFullAuditBundle } from '../audit-export.js';
 import { setPendingGateFailure, clearPendingGateFailure } from '../gate-pending.js';
 import { getIndexTreeSha, hasFreshFullPass, recordFullPass } from '../gate-cache.js';
 import { exitIfQualityGateExcluded, exitIfGateHookDisabled } from './native-common.js';
@@ -56,7 +56,7 @@ async function main() {
     recordFullPass(cwd, indexTreeAfter);
   }
 
-  exportAuditRecord({
+  exportFullAuditBundle({
     hookName: HOOK_NAME,
     cwd,
     passed: true,
