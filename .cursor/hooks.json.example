@@ -45,6 +45,19 @@
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts gate-retry-stop.ts",
         "loop_limit": 8
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-end-notify.ts"
+      }
+    ],
+    "afterAgentResponse": [
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-response-cache.ts"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-end-notify.ts"
       }
     ],
     "beforeSubmitPrompt": [

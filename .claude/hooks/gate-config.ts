@@ -13,14 +13,35 @@ import {
 import type { CoverageThresholdOptions } from './types.js';
 import { DEFAULT_COVERAGE_THRESHOLDS } from './checks/coverage.js';
 
+export type SessionEndTrigger = 'session_end' | 'stop' | 'both';
+
 export interface GateConfigEntry {
   enabled?: boolean;
   autoFix?: boolean;
   timeout?: string | number;
   timeoutMs?: number;
+  trigger?: SessionEndTrigger;
+  maxSummaryChars?: number;
   checks?: Record<string, GateConfigEntry>;
   rules?: Record<string, GateConfigEntry>;
+  platforms?: Record<string, GateConfigEntry>;
 }
+
+export interface NotificationChannelConfig {
+  url?: string;
+}
+
+export interface NotificationSettings {
+  timeout?: string | number;
+  cooldown?: string | number;
+  channels?: {
+    wechat?: NotificationChannelConfig;
+    feishu?: NotificationChannelConfig;
+    slack?: NotificationChannelConfig;
+  };
+}
+
+export type SessionEndNotifyEntry = GateConfigEntry;
 
 export interface ScanScopeConfig {
   include?: string[];
@@ -36,6 +57,7 @@ export interface GateSettings {
   coverageThreshold?: number | CoverageThresholdYaml;
   scanScope?: ScanScopeConfig;
   licenseDenylist?: string[];
+  notifications?: NotificationSettings;
 }
 
 export interface GateConfig {
@@ -120,6 +142,25 @@ function mergeSettings(base?: GateSettings, override?: GateSettings): GateSettin
   if (base.licenseDenylist || override.licenseDenylist) {
     merged.licenseDenylist = [...new Set([...(base.licenseDenylist ?? []), ...(override.licenseDenylist ?? [])])];
   }
+  if (base.notifications || override.notifications) {
+    merged.notifications = mergeNotificationSettings(base.notifications, override.notifications);
+  }
+  return merged;
+}
+
+function mergeNotificationSettings(base?: NotificationSettings, override?: NotificationSettings): NotificationSettings {
+  if (!base) return structuredClone(override ?? {});
+  if (!override) return structuredClone(base);
+  const merged: NotificationSettings = { ...base, ...override };
+  if (base.channels || override.channels) {
+    merged.channels = {
+      ...base.channels,
+      ...override.channels,
+      wechat: { ...base.channels?.wechat, ...override.channels?.wechat },
+      feishu: { ...base.channels?.feishu, ...override.channels?.feishu },
+      slack: { ...base.channels?.slack, ...override.channels?.slack },
+    };
+  }
   return merged;
 }
 
@@ -136,6 +177,12 @@ function mergeEntry(base: GateConfigEntry | undefined, override: GateConfigEntry
     merged.rules = { ...base.rules };
     for (const [id, child] of Object.entries(override.rules ?? {})) {
       merged.rules[id] = mergeEntry(base.rules?.[id], child);
+    }
+  }
+  if (base.platforms || override.platforms) {
+    merged.platforms = { ...base.platforms };
+    for (const [id, child] of Object.entries(override.platforms ?? {})) {
+      merged.platforms[id] = mergeEntry(base.platforms?.[id], child);
     }
   }
   return merged;
@@ -452,4 +499,106 @@ export function resolveScanScope(cwd: string = process.cwd()): ResolvedScanScope
 export function resolveLicenseDenylist(cwd: string = process.cwd()): string[] {
   const config = loadGateConfig(cwd);
   return config.settings?.licenseDenylist ?? [];
+}
+
+export interface ResolvedNotificationSettings {
+  timeoutMs: number;
+  cooldownMs: number;
+  channels: {
+    wechat?: string;
+    feishu?: string;
+    slack?: string;
+  };
+}
+
+const DEFAULT_NOTIFICATION_TIMEOUT_MS = 5000;
+const DEFAULT_NOTIFY_COOLDOWN_MS = 5 * 60 * 1000;
+const DEFAULT_SESSION_END_TRIGGER: SessionEndTrigger = 'session_end';
+const DEFAULT_MAX_SUMMARY_CHARS = 1500;
+
+function channelUrl(entry?: NotificationChannelConfig): string | undefined {
+  const url = entry?.url?.trim();
+  if (!url) return undefined;
+  return url;
+}
+
+export function getNotificationSettings(cwd: string = process.cwd()): ResolvedNotificationSettings {
+  const notifications = loadGateConfig(cwd).settings?.notifications;
+  let timeoutMs = DEFAULT_NOTIFICATION_TIMEOUT_MS;
+  let cooldownMs = DEFAULT_NOTIFY_COOLDOWN_MS;
+  if (notifications?.timeout !== undefined && notifications.timeout !== '') {
+    timeoutMs = parseDuration(notifications.timeout);
+  }
+  if (notifications?.cooldown !== undefined && notifications.cooldown !== '') {
+    cooldownMs = parseDuration(notifications.cooldown);
+  }
+  const channels = notifications?.channels ?? {};
+  const resolved: ResolvedNotificationSettings['channels'] = {};
+  const wechatUrl = channelUrl(channels.wechat);
+  const feishuUrl = channelUrl(channels.feishu);
+  const slackUrl = channelUrl(channels.slack);
+  if (wechatUrl) resolved.wechat = wechatUrl;
+  if (feishuUrl) resolved.feishu = feishuUrl;
+  if (slackUrl) resolved.slack = slackUrl;
+  return { channels: resolved, timeoutMs, cooldownMs };
+}
+
+function parseSessionEndTrigger(value: unknown): SessionEndTrigger | undefined {
+  if (value === 'session_end' || value === 'stop' || value === 'both') return value;
+  return undefined;
+}
+
+function getSessionEndNotifyEntry(config: GateConfig): SessionEndNotifyEntry | undefined {
+  return config.ide?.['session-end-notify'];
+}
+
+export interface ResolvedSessionEndNotifyConfig {
+  enabled: boolean;
+  trigger: SessionEndTrigger;
+  maxSummaryChars: number;
+  timeoutMs: number;
+  platformTrigger: SessionEndTrigger;
+}
+
+export function resolvePlatformSessionEndTrigger(
+  globalTrigger: SessionEndTrigger,
+  platform: 'cursor' | 'claude' | 'kiro',
+  platformOverride?: SessionEndTrigger,
+): SessionEndTrigger {
+  let trigger = platformOverride ?? globalTrigger;
+  if (platform === 'kiro' && trigger === 'session_end') {
+    trigger = 'stop';
+  }
+  return trigger;
+}
+
+export function getSessionEndNotifyConfig(
+  cwd: string = process.cwd(),
+  platform: 'cursor' | 'claude' | 'kiro' = 'claude',
+): ResolvedSessionEndNotifyConfig {
+  const path = 'ide.session-end-notify';
+  const node = resolveGateNode(path, cwd);
+  const config = loadGateConfig(cwd);
+  const entry = getSessionEndNotifyEntry(config);
+  const globalTrigger = parseSessionEndTrigger(entry?.trigger) ?? DEFAULT_SESSION_END_TRIGGER;
+  const platformOverride = parseSessionEndTrigger(entry?.platforms?.[platform]?.trigger);
+  const maxSummaryChars =
+    typeof entry?.maxSummaryChars === 'number' && entry.maxSummaryChars > 0
+      ? Math.round(entry.maxSummaryChars)
+      : DEFAULT_MAX_SUMMARY_CHARS;
+  const timeoutMs = node.timeoutMs ?? DEFAULT_NOTIFICATION_TIMEOUT_MS;
+  return {
+    enabled: node.configured && node.enabled,
+    trigger: globalTrigger,
+    maxSummaryChars,
+    timeoutMs,
+    platformTrigger: resolvePlatformSessionEndTrigger(globalTrigger, platform, platformOverride),
+  };
+}
+
+export function getEffectiveSessionEndTrigger(
+  platform: 'cursor' | 'claude' | 'kiro',
+  cwd: string = process.cwd(),
+): SessionEndTrigger {
+  return getSessionEndNotifyConfig(cwd, platform).platformTrigger;
 }

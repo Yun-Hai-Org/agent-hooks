@@ -37,7 +37,7 @@ export async function handleNotification(data: NotificationHookInput | null | un
   if (!isGateNodeEnabled('ide.notification', cwd)) {
     return { skipped: true, reason: 'gate disabled' };
   }
-  return dispatchSecurityNotification({ message, session_id }, HOOK_NAME);
+  return dispatchSecurityNotification({ message, session_id, cwd }, HOOK_NAME);
 }
 
 async function main() {

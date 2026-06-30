@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeEach, mock } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { spawn } from 'child_process';
 import { join } from 'path';
+import { mkdirSync, writeFileSync } from 'fs';
 import { getHookProcessEnv } from '../security-orchestrator.js';
 import { resolveBunExecutable } from '../checks/tools.js';
+import { clearGateConfigCache } from '../gate-config.js';
+import { createTempGitRepo, cleanupTempGitRepo } from './helpers.js';
 import {
   isCoolingDown,
   recordSent,
@@ -24,11 +27,12 @@ describe('notification-hook', () => {
   const HOOK_PATH = join(import.meta.dir, '..', 'notification-hook.ts');
 
   // 辅助函数：运行 hook 并获取输出
-  function runHook(input = '{}', envOverrides = {}) {
+  function runHook(input = '{}', envOverrides = {}, cwd = process.cwd()) {
     return new Promise((resolve, reject) => {
       const child = spawn(resolveBunExecutable(), [HOOK_PATH], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: getHookProcessEnv(envOverrides),
+        cwd,
       });
 
       let stdout = '';
@@ -243,37 +247,90 @@ describe('notification-hook', () => {
   // ─── getConfiguredChannels 测试 ────────────────────────────────────────────
 
   describe('getConfiguredChannels', () => {
-    it('无环境变量时应返回空数组', () => {
-      const original = { ...process.env };
-      delete process.env.NOTIFY_WEBHOOK_URL;
-      delete process.env.NOTIFY_FEISHU_URL;
-      delete process.env.NOTIFY_SLACK_URL;
+    let repoDir: string;
 
-      const channels = getConfiguredChannels();
+    beforeEach(() => {
+      repoDir = createTempGitRepo('feat/notify-channels');
+      clearGateConfigCache();
+    });
+
+    afterEach(() => {
+      cleanupTempGitRepo(repoDir);
+      clearGateConfigCache();
+    });
+
+    it('未配置 webhook url 时应返回空数组', () => {
+      mkdirSync(join(repoDir, '.claude'), { recursive: true });
+      writeFileSync(
+        join(repoDir, '.claude/quality-gate.yaml'),
+        `settings:
+  notifications:
+    channels:
+      wechat:
+        url: ""
+`,
+      );
+      clearGateConfigCache();
+      const channels = getConfiguredChannels(repoDir);
       expect(channels.length).toBe(0);
+    });
 
-      // 恢复环境
-      Object.assign(process.env, original);
+    it('应从 quality-gate.yaml 读取企业微信渠道', () => {
+      mkdirSync(join(repoDir, '.claude'), { recursive: true });
+      writeFileSync(
+        join(repoDir, '.claude/quality-gate.yaml'),
+        `settings:
+  notifications:
+    channels:
+      wechat:
+        url: "https://example.com/wechat"
+`,
+      );
+      clearGateConfigCache();
+      const channels = getConfiguredChannels(repoDir);
+      expect(channels.length).toBe(1);
+      expect(channels[0]?.name).toBe('企业微信');
     });
   });
 
   // ─── handleNotification 测试 ──────────────────────────────────────────────
 
   describe('handleNotification', () => {
-    it('无渠道配置时应返回 no_channels', async () => {
-      const original = { ...process.env };
-      delete process.env.NOTIFY_WEBHOOK_URL;
-      delete process.env.NOTIFY_FEISHU_URL;
-      delete process.env.NOTIFY_SLACK_URL;
+    let repoDir: string;
+    const prevCwd = process.cwd();
 
+    beforeEach(() => {
+      repoDir = createTempGitRepo('feat/notify-handle');
+      mkdirSync(join(repoDir, '.claude'), { recursive: true });
+      writeFileSync(
+        join(repoDir, '.claude/quality-gate.yaml'),
+        `settings:
+  notifications:
+    channels:
+      wechat:
+        url: ""
+ide:
+  notification:
+    enabled: true
+`,
+      );
+      clearGateConfigCache();
+      process.chdir(repoDir);
+    });
+
+    afterEach(() => {
+      process.chdir(prevCwd);
+      cleanupTempGitRepo(repoDir);
+      clearGateConfigCache();
+    });
+
+    it('无渠道配置时应返回 no_channels', async () => {
       const result = await handleNotification({
         tool_input: { message: '[test] deny event' },
         session_id: 'test',
       });
       expect(result.sent).toBe(false);
       expect(result.reason).toBe('no_channels');
-
-      Object.assign(process.env, original);
     });
 
     it('冷却期内应返回 cooldown', async () => {
@@ -357,6 +414,23 @@ describe('notification-hook', () => {
     });
 
     it('有 Webhook URL 配置时应尝试发送', async () => {
+      const hookRepo = createTempGitRepo('feat/notify-hook-run');
+      mkdirSync(join(hookRepo, '.claude'), { recursive: true });
+      writeFileSync(
+        join(hookRepo, '.claude/quality-gate.yaml'),
+        `settings:
+  notifications:
+    timeout: 2s
+    channels:
+      wechat:
+        url: "http://localhost:1/test"
+ide:
+  notification:
+    enabled: true
+`,
+      );
+      clearGateConfigCache();
+
       const { code, stdout } = await runHook(
         JSON.stringify({
           tool_name: 'Notification',
@@ -366,11 +440,11 @@ describe('notification-hook', () => {
           },
           session_id: 'test-002',
         }),
-        {
-          NOTIFY_WEBHOOK_URL: 'http://localhost:1/test',
-          NOTIFY_TIMEOUT_MS: '2000',
-        },
+        {},
+        hookRepo,
       );
+      cleanupTempGitRepo(hookRepo);
+      clearGateConfigCache();
       expect(code).toBe(0);
       expect(stdout.trim()).toBe('{}');
     });

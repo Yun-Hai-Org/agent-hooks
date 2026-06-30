@@ -55,6 +55,7 @@ async function main() {
         severity: 'high',
         reason: result.message,
         session_id,
+        cwd: workingDir,
       });
       console.log(formatDenyOutput(DECISION.DENY, result.message));
       return;

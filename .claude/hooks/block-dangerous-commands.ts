@@ -552,6 +552,7 @@ function denyCustomCheck(
     severity: 'strict',
     reason,
     ...(session_id ? { session_id } : {}),
+    ...(cwd ? { cwd } : {}),
   });
   process.stdout.write(`${formatDenyOutput('deny', reason)}\n`);
 }
@@ -604,6 +605,7 @@ async function main() {
           severity: p.level,
           reason,
           session_id,
+          cwd: hookCwd,
         });
         console.log(formatDenyOutput('deny', reason));
         return;

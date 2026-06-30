@@ -650,12 +650,13 @@ async function readProtectSecretsInput() {
   };
 }
 
-function denyProtectSecrets(reason: string, session_id?: string) {
+function denyProtectSecrets(reason: string, session_id?: string, cwd?: string) {
   notifySecurityEventAsync({
     hook: 'protect-secrets',
     severity: 'critical',
     reason,
     ...(session_id !== undefined ? { session_id } : {}),
+    ...(cwd !== undefined ? { cwd } : {}),
   });
   return formatDenyOutput('deny', reason);
 }
@@ -690,7 +691,7 @@ async function main() {
         tool_name as 'Read' | 'Edit' | 'Write' | 'Bash'
       ];
       const reason = `${EMOJIS[p.level as PatternLevel]} [${p.id}] Cannot ${action}: ${p.reason}`;
-      console.log(denyProtectSecrets(reason, session_id));
+      process.stdout.write(`${denyProtectSecrets(reason, session_id, cwd)}\n`);
       return;
     }
     console.log(formatAllowOutput());

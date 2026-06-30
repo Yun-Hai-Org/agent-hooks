@@ -1,5 +1,27 @@
 # 质量门全量白名单配置 — 由 gate-registry.generateExampleYaml() 生成
 
+settings:
+  coverageThreshold:
+    lines: 80
+    functions: 80
+  scanScope:
+    include: []
+    exclude:
+      - _bmad-output/
+  licenseDenylist:
+    - GPL-3.0
+    - AGPL-3.0
+  notifications:
+    timeout: 5s
+    cooldown: 5m
+    channels:
+      wechat:
+        url: ''
+      feishu:
+        url: ''
+      slack:
+        url: ''
+
 ide:
   # beforeShellExecution：拦截灾难性/高风险 shell 命令与 hook 绕过
   block-dangerous-commands:
@@ -400,6 +422,20 @@ ide:
     enabled: true
     timeout: 5s
 
+  # sessionEnd/Stop：对话结束 webhook 通知（Cursor/Claude/Kiro）
+  session-end-notify:
+    enabled: true
+    timeout: 5s
+    trigger: session_end
+    maxSummaryChars: 1500
+    platforms:
+      cursor:
+        trigger: session_end
+      claude:
+        trigger: session_end
+      kiro:
+        trigger: stop
+
 git:
   # commit-msg 钩子：校验 commit message 格式与语义
   commit-msg:
@@ -701,6 +737,11 @@ git:
       zap-api-dast:
         enabled: true
         timeout: 10m
+      # OpenAPI 越权负向用例（无/无效 token 期望 401/403）
+      # controlIds: PCI-11.3
+      openapi-auth-negative:
+        enabled: true
+        timeout: 3m
       # Conftest/OPA 策略（PCI-DORA Rego）
       # controlIds: DORA-Art6, SOX-404
       opa-conftest:
@@ -873,6 +914,11 @@ git:
       zap-api-dast:
         enabled: true
         timeout: 10m
+      # OpenAPI 越权负向用例（无/无效 token 期望 401/403）
+      # controlIds: PCI-11.3
+      openapi-auth-negative:
+        enabled: true
+        timeout: 3m
       # Conftest/OPA 策略（PCI-DORA Rego）
       # controlIds: DORA-Art6, SOX-404
       opa-conftest:

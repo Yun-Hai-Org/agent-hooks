@@ -1,20 +1,26 @@
 # Hooks 职责矩阵
 
-## A. IDE 实时安全（Cursor + Claude 双端 parity）
+## A. IDE 实时安全（Cursor + Claude + Kiro）
 
-| 检查项          | Hook                     | Claude 触发            | Cursor 触发                      |
-| --------------- | ------------------------ | ---------------------- | -------------------------------- |
-| 危险命令        | block-dangerous-commands | PreToolUse Bash        | beforeShellExecution             |
-| 敏感内容        | protect-secrets          | Read/Edit/Write/Bash   | beforeReadFile + preToolUse      |
-| Prompt 密钥     | user-prompt-filter       | UserPromptSubmit       | beforeSubmitPrompt               |
-| main 写入禁止   | branch-gate              | Write/Edit/Bash        | preToolUse Shell/Write           |
-| 未合并分支删除  | branch-delete-gate       | PreToolUse Bash        | beforeShellExecution             |
-| 工具健康检查    | session-start            | SessionStart           | sessionStart                     |
-| 写入后格式化    | format-on-write          | PostToolUse Edit/Write | afterFileEdit（先于 auto-stage） |
-| 安全 Webhook    | notification / notify    | Notification + BLOCKED | BLOCKED 直连                     |
-| 自动暂存        | auto-stage               | PostToolUse Edit/Write | afterFileEdit                    |
-| Stop commit     | auto-commit              | Stop                   | stop                             |
-| push/merge 修复 | gate-retry-stop          | Stop                   | stop                             |
+<!-- markdownlint-disable MD013 -->
+
+| 检查项         | Hook                     | Claude                 | Cursor                           | Kiro             |
+| -------------- | ------------------------ | ---------------------- | -------------------------------- | ---------------- |
+| 危险命令       | block-dangerous-commands | PreToolUse Bash        | beforeShellExecution             | preToolUse shell |
+| 敏感内容       | protect-secrets          | Read/Edit/Write/Bash   | beforeReadFile + preToolUse      | preToolUse read  |
+| Prompt 密钥    | user-prompt-filter       | UserPromptSubmit       | beforeSubmitPrompt               | —                |
+| main 写入禁止  | branch-gate              | Write/Edit/Bash        | preToolUse Shell/Write           | preToolUse write |
+| 未合并分支删除 | branch-delete-gate       | PreToolUse Bash        | beforeShellExecution             | preToolUse shell |
+| 工具健康检查   | session-start            | SessionStart           | sessionStart                     | —                |
+| 写入后格式化   | format-on-write          | PostToolUse Edit/Write | afterFileEdit（先于 auto-stage） | —                |
+| 安全 Webhook   | notification / notify    | Notification + BLOCKED | BLOCKED 直连                     | —                |
+| 对话结束通知   | session-end-notify       | SessionEnd + Stop      | sessionEnd/stop                  | Stop             |
+| AI 回复缓存    | session-response-cache   | Stop                   | afterAgentResponse               | Stop             |
+| 自动暂存       | auto-stage               | PostToolUse E/W        | afterFileEdit                    | postTool         |
+| Stop 提交      | auto-commit              | Stop                   | stop                             | —                |
+| merge 修复     | gate-retry-stop          | Stop                   | stop                             | —                |
+
+<!-- markdownlint-enable MD013 -->
 
 **Hook 进程 PATH**：Cursor/Claude 钩子子进程的 PATH 通常不含 `~/.cursor`（bun 所在目录）。
 `security-orchestrator.getHookProcessEnv()` 集中 augment PATH（与全局 git hook shell wrapper 的

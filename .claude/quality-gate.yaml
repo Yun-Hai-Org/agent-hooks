@@ -11,6 +11,16 @@ settings:
   licenseDenylist:
     - GPL-3.0
     - AGPL-3.0
+  notifications:
+    timeout: 5s
+    cooldown: 5m
+    channels:
+      wechat:
+        url: ''
+      feishu:
+        url: ''
+      slack:
+        url: ''
 
 ide:
   # beforeShellExecution??????/??? shell ??? hook ??
@@ -411,6 +421,20 @@ ide:
   notification:
     enabled: true
     timeout: 5s
+
+  # sessionEnd/Stop?????? webhook ???Cursor/Claude/Kiro?
+  session-end-notify:
+    enabled: true
+    trigger: session_end
+    maxSummaryChars: 1500
+    timeout: 5s
+    platforms:
+      cursor:
+        trigger: session_end
+      claude:
+        trigger: session_end
+      kiro:
+        trigger: stop
 
 git:
   # commit-msg ????? commit message ?????

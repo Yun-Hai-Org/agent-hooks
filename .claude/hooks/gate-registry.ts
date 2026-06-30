@@ -488,6 +488,10 @@ export const GATE_REGISTRY: GateRegistryRoot = {
       description: 'Notification：安全/质量事件 webhook 通知',
       defaultTimeoutMs: 5000,
     },
+    'session-end-notify': {
+      description: 'sessionEnd/Stop：对话结束 webhook 通知（Cursor/Claude/Kiro）',
+      defaultTimeoutMs: 5000,
+    },
   },
   git: {
     'commit-msg': {
@@ -703,12 +707,33 @@ export function generateExampleYaml(): string {
     '  licenseDenylist:',
     '    - GPL-3.0',
     '    - AGPL-3.0',
+    '  notifications:',
+    '    timeout: 5s',
+    '    cooldown: 5m',
+    '    channels:',
+    '      wechat:',
+    '        url: ""',
+    '      feishu:',
+    '        url: ""',
+    '      slack:',
+    '        url: ""',
     '',
   ];
   for (const section of ['ide', 'git'] as const) {
     lines.push(`${section}:`);
     for (const [hookId, hookNode] of Object.entries(GATE_REGISTRY[section])) {
       emitYamlNode(lines, hookId, hookNode, 1, true);
+      if (hookId === 'session-end-notify') {
+        lines.push('    trigger: session_end');
+        lines.push('    maxSummaryChars: 1500');
+        lines.push('    platforms:');
+        lines.push('      cursor:');
+        lines.push('        trigger: session_end');
+        lines.push('      claude:');
+        lines.push('        trigger: session_end');
+        lines.push('      kiro:');
+        lines.push('        trigger: stop');
+      }
       lines.push('');
     }
   }

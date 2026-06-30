@@ -3,6 +3,7 @@
  * Notification Core - Webhook 通知共享逻辑
  */
 
+import { getNotificationSettings } from './gate-config.js';
 import { log } from './security-orchestrator.js';
 import type { NotificationChannel, NotificationEvent } from './types.js';
 
@@ -16,6 +17,17 @@ interface DispatchInput {
   reason?: string;
   message?: string;
   session_id?: string;
+  cwd?: string;
+}
+
+export interface ConversationEndEvent {
+  platform: string;
+  projectName: string;
+  sessionId: string;
+  summaryText: string;
+  reason?: string;
+  durationMs?: number;
+  status?: string;
 }
 
 const lastSentMap = new Map<string, number>();
@@ -69,6 +81,11 @@ export function makeEventKey(event: NotificationEvent): string {
   return `${event.hook}:${event.severity}`;
 }
 
+export function truncateSummary(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, Math.max(0, maxChars - 3))}...`;
+}
+
 export function formatWechatMessage(event: NotificationEvent, timestamp: string): Record<string, unknown> {
   const emoji = mapSeverityEmoji(event.severity);
   return {
@@ -84,6 +101,26 @@ export function formatWechatMessage(event: NotificationEvent, timestamp: string)
       ].join('\n'),
     },
   };
+}
+
+export function formatWechatConversationEndMessage(
+  event: ConversationEndEvent,
+  timestamp: string,
+  maxSummaryChars: number,
+): Record<string, unknown> {
+  const summary = truncateSummary(event.summaryText || '(无摘要)', maxSummaryChars);
+  const lines = [
+    '✅ **对话结束通知**',
+    '',
+    `> **项目**: ${event.projectName}`,
+    `> **平台**: ${event.platform}`,
+    `> **会话**: ${event.sessionId || 'unknown'}`,
+  ];
+  if (event.reason) lines.push(`> **原因**: ${event.reason}`);
+  if (event.status) lines.push(`> **状态**: ${event.status}`);
+  if (event.durationMs !== undefined) lines.push(`> **时长**: ${String(Math.round(event.durationMs / 1000))}s`);
+  lines.push(`> **时间**: ${timestamp}`, '', '**摘要**', summary);
+  return { msgtype: 'markdown', markdown: { content: lines.join('\n') } };
 }
 
 const FEISHU_COLOR: Record<NotificationSeverity, string> = {
@@ -122,6 +159,38 @@ export function formatFeishuMessage(event: NotificationEvent, timestamp: string)
             ].join('\n'),
           },
         },
+      ],
+    },
+  };
+}
+
+export function formatFeishuConversationEndMessage(
+  event: ConversationEndEvent,
+  timestamp: string,
+  maxSummaryChars: number,
+): Record<string, unknown> {
+  const summary = truncateSummary(event.summaryText || '(无摘要)', maxSummaryChars);
+  const meta = [
+    `**项目**: ${event.projectName}`,
+    `**平台**: ${event.platform}`,
+    `**会话**: ${event.sessionId || 'unknown'}`,
+    event.reason ? `**原因**: ${event.reason}` : '',
+    event.status ? `**状态**: ${event.status}` : '',
+    event.durationMs !== undefined ? `**时长**: ${String(Math.round(event.durationMs / 1000))}s` : '',
+    `**时间**: ${timestamp}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return {
+    msg_type: 'interactive',
+    card: {
+      header: {
+        title: { tag: 'plain_text', content: '✅ 对话结束通知' },
+        template: 'green',
+      },
+      elements: [
+        { tag: 'div', text: { tag: 'lark_md', content: meta } },
+        { tag: 'div', text: { tag: 'lark_md', content: `**摘要**\n${summary}` } },
       ],
     },
   };
@@ -174,13 +243,44 @@ export function formatSlackMessage(event: NotificationEvent, timestamp: string):
   };
 }
 
-export async function sendWebhook(url: string, body: Record<string, unknown>, timeoutMs?: number) {
-  const resolvedTimeout = timeoutMs ?? (parseInt(process.env['NOTIFY_TIMEOUT_MS'] ?? '', 10) || 5000);
+export function formatSlackConversationEndMessage(
+  event: ConversationEndEvent,
+  timestamp: string,
+  maxSummaryChars: number,
+): Record<string, unknown> {
+  const summary = truncateSummary(event.summaryText || '(无摘要)', maxSummaryChars);
+  const fields = [
+    { type: 'mrkdwn', text: `*项目*\n${event.projectName}` },
+    { type: 'mrkdwn', text: `*平台*\n${event.platform}` },
+  ];
+  if (event.status) fields.push({ type: 'mrkdwn', text: `*状态*\n${event.status}` });
+  return {
+    attachments: [
+      {
+        color: '#2EB886',
+        blocks: [
+          {
+            type: 'header',
+            text: { type: 'plain_text', text: '✅ 对话结束通知', emoji: true },
+          },
+          { type: 'section', fields },
+          { type: 'section', text: { type: 'mrkdwn', text: `*摘要*\n${summary}` } },
+          {
+            type: 'context',
+            elements: [{ type: 'mrkdwn', text: `🕐 ${timestamp}` }],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+export async function sendWebhook(url: string, body: Record<string, unknown>, timeoutMs = 5000) {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       controller.abort();
-    }, resolvedTimeout);
+    }, timeoutMs);
 
     const response = await fetch(url, {
       method: 'POST',
@@ -197,41 +297,36 @@ export async function sendWebhook(url: string, body: Record<string, unknown>, ti
     return { success: true, status: response.status };
   } catch (error: unknown) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return { success: false, error: `请求超时 (${String(resolvedTimeout)}ms)` };
+      return { success: false, error: `请求超时 (${String(timeoutMs)}ms)` };
     }
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
-export function getConfiguredChannels(): NotificationChannel[] {
-  const channels: NotificationChannel[] = [];
-
-  const wechatUrl = process.env['NOTIFY_WEBHOOK_URL'];
-  if (wechatUrl) {
-    channels.push({ name: '企业微信', url: wechatUrl, formatFn: formatWechatMessage });
+export function getConfiguredChannels(cwd: string): NotificationChannel[] {
+  const { channels } = getNotificationSettings(cwd);
+  const result: NotificationChannel[] = [];
+  if (channels.wechat) {
+    result.push({ name: '企业微信', url: channels.wechat, formatFn: formatWechatMessage });
   }
-
-  const feishuUrl = process.env['NOTIFY_FEISHU_URL'];
-  if (feishuUrl) {
-    channels.push({ name: '飞书', url: feishuUrl, formatFn: formatFeishuMessage });
+  if (channels.feishu) {
+    result.push({ name: '飞书', url: channels.feishu, formatFn: formatFeishuMessage });
   }
-
-  const slackUrl = process.env['NOTIFY_SLACK_URL'];
-  if (slackUrl) {
-    channels.push({ name: 'Slack', url: slackUrl, formatFn: formatSlackMessage });
+  if (channels.slack) {
+    result.push({ name: 'Slack', url: channels.slack, formatFn: formatSlackMessage });
   }
-
-  return channels;
+  return result;
 }
 
-export async function notifyAllChannels(event: NotificationEvent, timestamp: string) {
-  const channels = getConfiguredChannels();
+export async function notifyAllChannels(event: NotificationEvent, timestamp: string, cwd: string) {
+  const channels = getConfiguredChannels(cwd);
   if (channels.length === 0) return [];
 
+  const { timeoutMs } = getNotificationSettings(cwd);
   const results = await Promise.allSettled(
     channels.map(async (ch) => {
       const body = ch.formatFn(event, timestamp);
-      const result = await sendWebhook(ch.url, body);
+      const result = await sendWebhook(ch.url, body, timeoutMs);
       return { channel: ch.name, ...result };
     }),
   );
@@ -244,6 +339,7 @@ export async function notifyAllChannels(event: NotificationEvent, timestamp: str
 }
 
 export async function dispatchSecurityNotification(input: DispatchInput, logHookName = 'notify-security-event') {
+  const cwd = input.cwd ?? process.cwd();
   const message = input.message ?? input.reason ?? '';
   const event =
     input.hook && input.severity
@@ -255,7 +351,7 @@ export async function dispatchSecurityNotification(input: DispatchInput, logHook
   if (input.reason && !event.reason) event.reason = input.reason;
 
   const eventKey = makeEventKey(event);
-  const cooldownMs = parseInt(process.env['NOTIFY_COOLDOWN_MS'] ?? '', 10) || DEFAULT_COOLDOWN_MS;
+  const { cooldownMs } = getNotificationSettings(cwd);
   const session_id = input.session_id ?? '';
 
   if (isCoolingDown(eventKey, cooldownMs)) {
@@ -263,14 +359,14 @@ export async function dispatchSecurityNotification(input: DispatchInput, logHook
     return { sent: false, reason: 'cooldown' };
   }
 
-  const channels = getConfiguredChannels();
+  const channels = getConfiguredChannels(cwd);
   if (channels.length === 0) {
     log(logHookName, { level: 'SKIP', reason: '未配置任何 Webhook URL', session_id, eventKey });
     return { sent: false, reason: 'no_channels' };
   }
 
   const timestamp = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-  const results = await notifyAllChannels(event, timestamp);
+  const results = await notifyAllChannels(event, timestamp, cwd);
   recordSent(eventKey);
 
   const successCount = results.filter((r) => r.success).length;
@@ -285,4 +381,89 @@ export async function dispatchSecurityNotification(input: DispatchInput, logHook
   });
 
   return { sent: successCount > 0, results, reason: successCount > 0 ? undefined : 'send_failed' };
+}
+
+function makeConversationEndEventKey(sessionId: string): string {
+  return `conversation-end:${sessionId || 'unknown'}`;
+}
+
+export async function dispatchConversationEndNotification(
+  event: ConversationEndEvent,
+  cwd: string,
+  options: { maxSummaryChars?: number; timeoutMs?: number } = {},
+  logHookName = 'session-end-notify',
+) {
+  const settings = getNotificationSettings(cwd);
+  const maxSummaryChars = options.maxSummaryChars ?? 1500;
+  const timeoutMs = options.timeoutMs ?? settings.timeoutMs;
+  const eventKey = makeConversationEndEventKey(event.sessionId);
+
+  if (isCoolingDown(eventKey, settings.cooldownMs)) {
+    log(logHookName, { level: 'SKIP', reason: '频控冷却期内', eventKey, session_id: event.sessionId });
+    return { sent: false, reason: 'cooldown' };
+  }
+
+  const timestamp = timestampForNotify();
+  const urls = settings.channels;
+  const targets: { name: string; url: string; format: (ts: string) => Record<string, unknown> }[] = [];
+  if (urls.wechat) {
+    targets.push({
+      name: '企业微信',
+      url: urls.wechat,
+      format: (ts) => formatWechatConversationEndMessage(event, ts, maxSummaryChars),
+    });
+  }
+  if (urls.feishu) {
+    targets.push({
+      name: '飞书',
+      url: urls.feishu,
+      format: (ts) => formatFeishuConversationEndMessage(event, ts, maxSummaryChars),
+    });
+  }
+  if (urls.slack) {
+    targets.push({
+      name: 'Slack',
+      url: urls.slack,
+      format: (ts) => formatSlackConversationEndMessage(event, ts, maxSummaryChars),
+    });
+  }
+
+  if (targets.length === 0) {
+    log(logHookName, { level: 'SKIP', reason: '未配置任何 Webhook URL', session_id: event.sessionId, eventKey });
+    return { sent: false, reason: 'no_channels' };
+  }
+
+  const results = await Promise.allSettled(
+    targets.map(async (ch) => {
+      const body = ch.format(timestamp);
+      const result = await sendWebhook(ch.url, body, timeoutMs);
+      return { channel: ch.name, ...result };
+    }),
+  );
+
+  const mapped = results.map((r) => {
+    if (r.status === 'fulfilled') return r.value;
+    const reason = r.reason instanceof Error ? r.reason.message : '发送失败';
+    return { channel: 'unknown', success: false, error: reason };
+  });
+
+  recordSent(eventKey);
+  const successCount = mapped.filter((r) => r.success).length;
+  const failCount = mapped.filter((r) => !r.success).length;
+  log(logHookName, {
+    level: failCount > 0 ? 'WARN' : 'INFO',
+    eventKey,
+    channels: targets.map((c) => c.name),
+    success: successCount,
+    failed: failCount,
+    session_id: event.sessionId,
+    platform: event.platform,
+    project: event.projectName,
+  });
+
+  return { sent: successCount > 0, results: mapped, reason: successCount > 0 ? undefined : 'send_failed' };
+}
+
+function timestampForNotify(): string {
+  return new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
 }

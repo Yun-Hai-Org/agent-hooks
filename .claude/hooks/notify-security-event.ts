@@ -29,10 +29,12 @@ interface SecurityEventInput {
   reason?: string;
   message?: string;
   session_id?: string;
+  cwd?: string;
 }
 
 export async function notifySecurityEvent(input: SecurityEventInput) {
-  return dispatchSecurityNotification(input, HOOK_NAME);
+  const cwd = input.cwd ?? process.cwd();
+  return dispatchSecurityNotification({ ...input, cwd }, HOOK_NAME);
 }
 
 export function notifySecurityEventAsync(input: SecurityEventInput) {

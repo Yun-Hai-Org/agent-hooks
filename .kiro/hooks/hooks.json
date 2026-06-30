@@ -11,6 +11,10 @@
     ],
     "postToolUse": [
       { "command": "HOOK_PLATFORM=kiro bun .claude/hooks/auto-stage.js", "matcher": "write" }
+    ],
+    "Stop": [
+      { "command": "HOOK_PLATFORM=kiro bun .claude/hooks/resolve-hook-path.ts session-response-cache.ts" },
+      { "command": "HOOK_PLATFORM=kiro bun .claude/hooks/resolve-hook-path.ts session-end-notify.ts" }
     ]
   }
 }
