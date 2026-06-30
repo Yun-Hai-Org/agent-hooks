@@ -148,18 +148,35 @@ function mergeSettings(base?: GateSettings, override?: GateSettings): GateSettin
   return merged;
 }
 
+function mergeNotificationChannel(
+  base?: NotificationChannelConfig,
+  override?: NotificationChannelConfig,
+): NotificationChannelConfig | undefined {
+  if (!base && !override) return undefined;
+  const overrideUrl = override?.url?.trim();
+  const baseUrl = base?.url?.trim();
+  let url: string | undefined;
+  if (overrideUrl) url = overrideUrl;
+  else if (baseUrl) url = baseUrl;
+  return { ...base, ...override, ...(url ? { url } : {}) };
+}
+
 function mergeNotificationSettings(base?: NotificationSettings, override?: NotificationSettings): NotificationSettings {
   if (!base) return structuredClone(override ?? {});
   if (!override) return structuredClone(base);
   const merged: NotificationSettings = { ...base, ...override };
   if (base.channels || override.channels) {
-    merged.channels = {
+    const channels: NonNullable<NotificationSettings['channels']> = {
       ...base.channels,
       ...override.channels,
-      wechat: { ...base.channels?.wechat, ...override.channels?.wechat },
-      feishu: { ...base.channels?.feishu, ...override.channels?.feishu },
-      slack: { ...base.channels?.slack, ...override.channels?.slack },
     };
+    const wechat = mergeNotificationChannel(base.channels?.wechat, override.channels?.wechat);
+    const feishu = mergeNotificationChannel(base.channels?.feishu, override.channels?.feishu);
+    const slack = mergeNotificationChannel(base.channels?.slack, override.channels?.slack);
+    if (wechat !== undefined) channels.wechat = wechat;
+    if (feishu !== undefined) channels.feishu = feishu;
+    if (slack !== undefined) channels.slack = slack;
+    merged.channels = channels;
   }
   return merged;
 }
