@@ -425,14 +425,14 @@ ide:
   # sessionEnd/Stop?????? webhook ???Cursor/Claude/Kiro?
   session-end-notify:
     enabled: true
-    trigger: session_end
+    trigger: stop
     maxSummaryChars: 1500
     timeout: 5s
     platforms:
       cursor:
-        trigger: session_end
+        trigger: stop
       claude:
-        trigger: session_end
+        trigger: stop
       kiro:
         trigger: stop
 

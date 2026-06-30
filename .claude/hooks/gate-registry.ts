@@ -724,13 +724,13 @@ export function generateExampleYaml(): string {
     for (const [hookId, hookNode] of Object.entries(GATE_REGISTRY[section])) {
       emitYamlNode(lines, hookId, hookNode, 1, true);
       if (hookId === 'session-end-notify') {
-        lines.push('    trigger: session_end');
+        lines.push('    trigger: stop');
         lines.push('    maxSummaryChars: 1500');
         lines.push('    platforms:');
         lines.push('      cursor:');
-        lines.push('        trigger: session_end');
+        lines.push('        trigger: stop');
         lines.push('      claude:');
-        lines.push('        trigger: session_end');
+        lines.push('        trigger: stop');
         lines.push('      kiro:');
         lines.push('        trigger: stop');
       }

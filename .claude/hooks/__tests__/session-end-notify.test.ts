@@ -35,14 +35,14 @@ function writeNotifyYaml(repoDir: string, overrides?: { maxSummaryChars?: number
   const maxSummaryChars = overrides?.maxSummaryChars ?? 1500;
   const triggerBlock =
     overrides?.triggerBlock ??
-    `    trigger: session_end
+    `    trigger: stop
     maxSummaryChars: ${String(maxSummaryChars)}
     timeout: 5s
     platforms:
       cursor:
-        trigger: session_end
+        trigger: stop
       claude:
-        trigger: session_end
+        trigger: stop
       kiro:
         trigger: stop`;
   writeFileSync(
@@ -129,7 +129,18 @@ describe('session-end-notify', () => {
 
   describe('gate-config', () => {
     it('Kiro session_end 应降级为 stop', () => {
-      writeNotifyYaml(repoDir);
+      writeNotifyYaml(repoDir, {
+        triggerBlock: `    trigger: session_end
+    maxSummaryChars: 1500
+    timeout: 5s
+    platforms:
+      cursor:
+        trigger: session_end
+      claude:
+        trigger: session_end
+      kiro:
+        trigger: stop`,
+      });
       expect(getEffectiveSessionEndTrigger('kiro', repoDir)).toBe('stop');
       expect(resolvePlatformSessionEndTrigger('session_end', 'kiro')).toBe('stop');
       expect(formatTriggerLabel('stop', 'kiro')).toContain('Kiro 无 sessionEnd');
@@ -194,12 +205,18 @@ ide:
       writeNotifyYaml(repoDir);
       writeSessionResponse('s-end', 'final summary');
       process.env.HOOK_PLATFORM = 'claude';
+      const hasWechat = Boolean(getNotificationSettings(repoDir).channels.wechat);
       const result = await handleSessionEndNotify({
-        hook_event_name: 'SessionEnd',
+        hook_event_name: 'Stop',
         session_id: 's-end',
+        last_assistant_message: 'final summary',
         cwd: repoDir,
       });
-      expect(result.reason).toBe('no_channels');
+      if (hasWechat) {
+        expect(result.sent).toBe(true);
+      } else {
+        expect(result.reason).toBe('no_channels');
+      }
       clearSessionResponse('s-end');
     });
 
@@ -207,7 +224,7 @@ ide:
       writeNotifyYaml(repoDir);
       process.env.HOOK_PLATFORM = 'cursor';
       const result = await handleSessionEndNotify({
-        hook_event_name: 'Stop',
+        hook_event_name: 'sessionEnd',
         status: 'completed',
         conversation_id: 'c-stop',
         cwd: repoDir,
