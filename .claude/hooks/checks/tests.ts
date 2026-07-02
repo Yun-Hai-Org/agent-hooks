@@ -260,7 +260,9 @@ export async function runHookUnitTests(cwd?: string, options: GateCheckRunOption
       `Hook 常规单测超时 (${String(unitTestTimeoutMs / 1000)}s)`,
     );
     const combinedOutput = result.stdout + result.stderr;
-    const success = result.success && !/(^|\n)\(fail\) /m.test(combinedOutput);
+    const failCountMatch = /(\d+)\s+fail\b/.exec(combinedOutput);
+    const failCount = failCountMatch?.[1] ? Number(failCountMatch[1]) : 0;
+    const success = result.success && failCount === 0;
 
     if (!success) {
       return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 常规单测失败', {

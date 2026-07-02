@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
+import { mkdirSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import {
   clearCooldownState,
   formatFeishuConversationEndMessage,
@@ -7,6 +9,7 @@ import {
   formatSlackMessage,
   formatWechatConversationEndMessage,
   formatWechatMessage,
+  getConfiguredChannels,
   isCoolingDown,
   makeEventKey,
   mapSeverityEmoji,
@@ -15,6 +18,8 @@ import {
   truncateSummary,
   type ConversationEndEvent,
 } from '../notification-core.js';
+import { clearGateConfigCache } from '../gate-config.js';
+import { createTempGitRepo, cleanupTempGitRepo } from './helpers.js';
 
 describe('notification-core', () => {
   beforeEach(() => {
@@ -71,5 +76,26 @@ describe('notification-core', () => {
     expect(formatWechatConversationEndMessage(event, '2026/6/30', 100).msgtype).toBe('markdown');
     expect(formatFeishuConversationEndMessage(event, '2026/6/30', 100).msg_type).toBe('interactive');
     expect(formatSlackConversationEndMessage(event, '2026/6/30', 100).attachments).toBeDefined();
+  });
+
+  it('getConfiguredChannels 无 url 时返回空数组', () => {
+    const repoDir = createTempGitRepo('feat/notify-core');
+    try {
+      mkdirSync(join(repoDir, '.claude'), { recursive: true });
+      writeFileSync(
+        join(repoDir, '.claude/quality-gate.yaml'),
+        `settings:
+  notifications:
+    channels:
+      wechat:
+        url: ""
+`,
+      );
+      clearGateConfigCache();
+      expect(getConfiguredChannels(repoDir)).toEqual([]);
+    } finally {
+      cleanupTempGitRepo(repoDir);
+      clearGateConfigCache();
+    }
   });
 });
