@@ -262,7 +262,7 @@ export async function runHookUnitTests(cwd?: string, options: GateCheckRunOption
     const combinedOutput = result.stdout + result.stderr;
     const failCountMatch = /(\d+)\s+fail\b/.exec(combinedOutput);
     const failCount = failCountMatch?.[1] ? Number(failCountMatch[1]) : 0;
-    const success = result.success && failCount === 0;
+    const success = failCount === 0 && /\b0\s+fail\b/.test(combinedOutput);
 
     if (!success) {
       return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 常规单测失败', {
