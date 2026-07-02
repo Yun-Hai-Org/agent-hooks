@@ -246,9 +246,16 @@ export async function runHookUnitTests(cwd?: string, options: GateCheckRunOption
   try {
     const withCoverage = options.coverageThreshold !== undefined;
     const flags = withCoverage ? ' --coverage' : ' --dots';
-    const cmd = bunTestCommand(`${HOOK_UNIT_TEST_GLOB}${flags}`);
+    const cmd = bunTestCommand(`${HOOK_UNIT_TEST_GLOB}${flags} --concurrency 1`);
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 为受信 hooks 仓库根，第二段为常量测试 stub 路径
+    const emptyGlobalPath = join(cwd ?? process.cwd(), '.claude/hooks/__tests__/empty-global-quality-gate.yaml');
     const result = await withTimeout(
-      execCommandAsync(cmd, { cwd, timeout: unitTestTimeoutMs, ...HOOK_UNIT_TEST_EXEC_OPTS }),
+      execCommandAsync(cmd, {
+        cwd,
+        timeout: unitTestTimeoutMs,
+        ...HOOK_UNIT_TEST_EXEC_OPTS,
+        env: { ...process.env, QUALITY_GATE_GLOBAL_CONFIG_PATH: emptyGlobalPath },
+      }),
       unitTestTimeoutMs,
       `Hook 常规单测超时 (${String(unitTestTimeoutMs / 1000)}s)`,
     );

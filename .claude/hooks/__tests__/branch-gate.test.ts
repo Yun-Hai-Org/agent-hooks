@@ -564,22 +564,29 @@ describe('branch-gate', () => {
   describe('main() 函数直接测试', () => {
     let originalStdin;
     let originalConsoleLog;
+    let originalStdoutWrite;
     let consoleOutput;
 
     beforeEach(() => {
       originalStdin = process.stdin;
       originalConsoleLog = console.log;
+      originalStdoutWrite = process.stdout.write.bind(process.stdout);
       consoleOutput = [];
 
-      // Mock console.log to capture output
       console.log = (...args) => {
         consoleOutput.push(args.join(' '));
       };
+      process.stdout.write = ((chunk: string | Uint8Array) => {
+        const text = typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString();
+        consoleOutput.push(text.trimEnd());
+        return true;
+      }) as typeof process.stdout.write;
     });
 
     afterEach(() => {
       process.stdin = originalStdin;
       console.log = originalConsoleLog;
+      process.stdout.write = originalStdoutWrite;
     });
 
     it('应该允许非目标工具（Read）', async () => {
