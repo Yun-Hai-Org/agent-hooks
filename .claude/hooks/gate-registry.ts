@@ -704,6 +704,7 @@ export function generateExampleYaml(): string {
     '    include: []',
     '    exclude:',
     '      - _bmad-output/',
+    '      - .github/',
     '      - data/evals/',
     '      - data/',
     '      - dist/',

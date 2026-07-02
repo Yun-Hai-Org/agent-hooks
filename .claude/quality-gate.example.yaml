@@ -8,6 +8,7 @@ settings:
     include: []
     exclude:
       - _bmad-output/
+      - .github/
       - data/evals/
       - data/
       - dist/

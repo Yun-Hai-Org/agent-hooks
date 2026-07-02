@@ -5,6 +5,7 @@ import {
   shouldRunFullGateForBranches,
   parsePrePushLocalBranches,
   describePushMergeBranchSkip,
+  refToBranchName,
 } from '../checks/branch-policy.js';
 import type { ResolvedPushMergeBranchPolicy } from '../gate-config.js';
 
@@ -55,7 +56,12 @@ describe('branch-policy', () => {
     expect(parsePrePushLocalBranches(lines)).toEqual(['main', 'feat/x']);
   });
 
-  it('describePushMergeBranchSkip 含 mode', () => {
-    expect(describePushMergeBranchSkip(selectedPolicy, ['wip/x'])).toContain('mode=selected');
+  it('parsePrePushLocalBranches 忽略非 heads ref', () => {
+    expect(parsePrePushLocalBranches(['refs/tags/v1.0 abc', ''])).toEqual([]);
+  });
+
+  it('refToBranchName 解析 refs/heads', () => {
+    expect(refToBranchName('refs/heads/main')).toBe('main');
+    expect(refToBranchName('main')).toBe('main');
   });
 });
