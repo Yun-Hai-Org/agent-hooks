@@ -1,10 +1,9 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import { denyIfToolMissing, denyOnToolError, getBunxInvocation } from './tools.js';
 import { isHooksProject } from './hooks-project.js';
-import { getStagedFiles } from './git-policy.js';
+import { getScopedStagedFiles, getScanScope, resolveScanTargets } from './scan-scope.js';
 import { resolveTrivyScanners } from './file-patterns.js';
 import { COMMIT_GATE_TIMEOUT_MS, FULL_GATE_TIMEOUT_MS, gateTimeoutMessage } from '../gate-timeouts.js';
-import { getScanScope, resolveScanTargets } from './scan-scope.js';
 import { resolveLicenseDenylist } from '../gate-config.js';
 import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
@@ -173,7 +172,7 @@ export function evaluateSemgrepOutput(stdout: string, checkId: string): CheckRes
 
 export async function runSemgrepStaged(cwd?: string, options?: GateCheckRunOptions): Promise<CheckResult> {
   const timeoutMs = options?.timeoutMs ?? COMMIT_GATE_TIMEOUT_MS;
-  const stagedFiles = getStagedFiles(cwd).filter((f) => isSemgrepStagedTarget(f));
+  const stagedFiles = getScopedStagedFiles(cwd).filter((f) => isSemgrepStagedTarget(f));
   if (stagedFiles.length === 0) {
     return formatResult('semgrep-staged', DECISION.SKIP, '暂存区无（非测试）代码文件，跳过 semgrep');
   }
@@ -237,7 +236,7 @@ export async function runSemgrep(cwd?: string, options?: GateCheckRunOptions): P
 
 export async function runSemgrepPciStaged(cwd?: string, options?: GateCheckRunOptions): Promise<CheckResult> {
   const timeoutMs = options?.timeoutMs ?? COMMIT_GATE_TIMEOUT_MS;
-  const stagedFiles = getStagedFiles(cwd).filter((f) => isSemgrepStagedTarget(f));
+  const stagedFiles = getScopedStagedFiles(cwd).filter((f) => isSemgrepStagedTarget(f));
   if (stagedFiles.length === 0) {
     return formatResult('semgrep-pci-staged', DECISION.SKIP, '暂存区无（非测试）代码文件，跳过 PCI semgrep');
   }

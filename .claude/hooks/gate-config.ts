@@ -53,9 +53,18 @@ export interface CoverageThresholdYaml {
   functions?: number;
 }
 
+export type PushMergeBranchMode = 'all' | 'selected';
+
+export interface PushMergeBranchPolicy {
+  mode?: PushMergeBranchMode;
+  include?: string[];
+  exclude?: string[];
+}
+
 export interface GateSettings {
   coverageThreshold?: number | CoverageThresholdYaml;
   scanScope?: ScanScopeConfig;
+  pushMergeBranches?: PushMergeBranchPolicy;
   licenseDenylist?: string[];
   notifications?: NotificationSettings;
 }
@@ -138,6 +147,20 @@ function mergeSettings(base?: GateSettings, override?: GateSettings): GateSettin
     const include = override.scanScope?.include ?? base.scanScope?.include;
     const exclude = [...new Set([...(base.scanScope?.exclude ?? []), ...(override.scanScope?.exclude ?? [])])];
     merged.scanScope = { ...(include !== undefined ? { include } : {}), ...(exclude.length > 0 ? { exclude } : {}) };
+  }
+  if (base.pushMergeBranches || override.pushMergeBranches) {
+    const mode = override.pushMergeBranches?.mode ?? base.pushMergeBranches?.mode;
+    const include = [
+      ...new Set([...(base.pushMergeBranches?.include ?? []), ...(override.pushMergeBranches?.include ?? [])]),
+    ];
+    const exclude = [
+      ...new Set([...(base.pushMergeBranches?.exclude ?? []), ...(override.pushMergeBranches?.exclude ?? [])]),
+    ];
+    merged.pushMergeBranches = {
+      ...(mode !== undefined ? { mode } : {}),
+      ...(include.length > 0 ? { include } : {}),
+      ...(exclude.length > 0 ? { exclude } : {}),
+    };
   }
   if (base.licenseDenylist || override.licenseDenylist) {
     merged.licenseDenylist = [...new Set([...(base.licenseDenylist ?? []), ...(override.licenseDenylist ?? [])])];
@@ -510,6 +533,22 @@ export function resolveScanScope(cwd: string = process.cwd()): ResolvedScanScope
   return {
     include: [...include],
     exclude: [...new Set([...BUILTIN_SCAN_EXCLUDE, ...yamlExclude])],
+  };
+}
+
+export interface ResolvedPushMergeBranchPolicy {
+  mode: PushMergeBranchMode;
+  include: string[];
+  exclude: string[];
+}
+
+export function resolvePushMergeBranchPolicy(cwd: string = process.cwd()): ResolvedPushMergeBranchPolicy {
+  const config = loadGateConfig(cwd);
+  const raw = config.settings?.pushMergeBranches;
+  return {
+    mode: raw?.mode ?? 'all',
+    include: [...(raw?.include ?? [])],
+    exclude: [...(raw?.exclude ?? [])],
   };
 }
 

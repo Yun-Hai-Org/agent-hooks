@@ -3,7 +3,12 @@
  * Native pre-merge-commit hook runner
  */
 
-import { execCommand, log } from '../security-orchestrator.js';
+import { execCommand, log, getCurrentBranch } from '../security-orchestrator.js';
+import {
+  describePushMergeBranchSkip,
+  resolvePushMergeBranchPolicyForCwd,
+  shouldRunFullGateForBranch,
+} from '../checks/branch-policy.js';
 import { runQualityGate, logGateResult } from '../quality-gate.js';
 import { exportFullAuditBundle } from '../audit-export.js';
 import { setPendingGateFailure, clearPendingGateFailure } from '../gate-pending.js';
@@ -25,6 +30,18 @@ async function main() {
   const cwd = getRepoRoot();
   exitIfQualityGateExcluded(HOOK_NAME, cwd);
   exitIfGateHookDisabled(HOOK_NAME, 'git.pre-merge-commit', cwd);
+
+  const branchPolicy = resolvePushMergeBranchPolicyForCwd(cwd);
+  const currentBranch = getCurrentBranch(cwd) ?? '';
+  if (!shouldRunFullGateForBranch(currentBranch, branchPolicy)) {
+    log(HOOK_NAME, {
+      level: 'SKIP',
+      reason: describePushMergeBranchSkip(branchPolicy, [currentBranch]),
+      branch: currentBranch,
+      cwd,
+    });
+    process.exit(0);
+  }
 
   const indexTree = getIndexTreeSha(cwd);
   if (indexTree && hasFreshFullPass(cwd, indexTree)) {

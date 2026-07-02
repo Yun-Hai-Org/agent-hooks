@@ -15,6 +15,11 @@ import {
   hasUncommittedChanges,
   buildUncommittedWorktreeDenyReason,
 } from './checks/git-policy.js';
+import {
+  describePushMergeBranchSkip,
+  resolvePushMergeBranchPolicyForCwd,
+  shouldRunFullGateForBranch,
+} from './checks/branch-policy.js';
 import { runQualityGate, logGateResult } from './quality-gate.js';
 import { buildGateDenyReason } from './gate-fix.js';
 import { setPendingGateFailure, clearPendingGateFailure } from './gate-pending.js';
@@ -65,14 +70,15 @@ async function main() {
     }
 
     const currentBranch = getCurrentBranch(workingDir);
-    if (currentBranch !== 'main' && currentBranch !== 'master') {
+    const branchPolicy = resolvePushMergeBranchPolicyForCwd(workingDir);
+    if (!shouldRunFullGateForBranch(currentBranch ?? '', branchPolicy)) {
       log(HOOK_NAME, {
         level: 'SKIP',
-        reason: `当前分支 ${currentBranch ?? 'unknown'} 非 main/master`,
+        reason: describePushMergeBranchSkip(branchPolicy, [currentBranch ?? '']),
         session_id,
         cwd: workingDir,
       });
-      console.log(formatAllowOutput());
+      process.stdout.write(`${formatAllowOutput()}\n`);
       return;
     }
 

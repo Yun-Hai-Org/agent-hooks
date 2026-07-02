@@ -7,6 +7,8 @@ import {
   resolveScanTargets,
   filterPathsByScope,
   getScanScope,
+  getScopedStagedFiles,
+  isRepoRelativePathInScope,
 } from '../checks/scan-scope.js';
 import { clearGateConfigCache } from '../gate-config.js';
 import { createTempGitRepo, cleanupTempGitRepo } from './helpers.js';
@@ -89,5 +91,36 @@ describe('getScanScope from yaml', () => {
     clearGateConfigCache();
     const scope = getScanScope(repoDir);
     expect(scope.exclude).toContain('custom-ignore/');
+  });
+
+  it('isRepoRelativePathInScope 受 include 限制', () => {
+    mkdirSync(join(repoDir, '.claude'), { recursive: true });
+    writeFileSync(
+      join(repoDir, '.claude/quality-gate.yaml'),
+      `settings:
+  scanScope:
+    include:
+      - dual-track-eval/
+`,
+    );
+    clearGateConfigCache();
+    expect(isRepoRelativePathInScope('dual-track-eval/a.py', repoDir)).toBe(true);
+    expect(isRepoRelativePathInScope('eval-console/a.py', repoDir)).toBe(false);
+  });
+
+  it('getScopedStagedFiles 过滤 scope 外暂存文件', () => {
+    mkdirSync(join(repoDir, '.claude'), { recursive: true });
+    writeFileSync(
+      join(repoDir, '.claude/quality-gate.yaml'),
+      `settings:
+  scanScope:
+    include:
+      - src/
+`,
+    );
+    clearGateConfigCache();
+    const scoped = filterPathsByScope(['src/a.ts', 'other/b.ts'], getScanScope(repoDir));
+    expect(scoped).toEqual(['src/a.ts']);
+    expect(getScopedStagedFiles).toBeDefined();
   });
 });

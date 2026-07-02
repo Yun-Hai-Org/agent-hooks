@@ -3,8 +3,15 @@
  * Native pre-push hook runner
  */
 
-import { execCommand, log } from '../security-orchestrator.js';
+import { readFileSync } from 'fs';
+import { execCommand, log, getCurrentBranch } from '../security-orchestrator.js';
 import { hasUncommittedChanges, buildUncommittedWorktreeDenyReason } from '../checks/git-policy.js';
+import {
+  describePushMergeBranchSkip,
+  parsePrePushLocalBranches,
+  resolvePushMergeBranchPolicyForCwd,
+  shouldRunFullGateForBranches,
+} from '../checks/branch-policy.js';
 import { runQualityGate, logGateResult } from '../quality-gate.js';
 import { setPendingGateFailure } from '../gate-pending.js';
 import { getHeadTreeSha, hasFreshFullPass, recordFullPass } from '../gate-cache.js';
@@ -21,10 +28,34 @@ function getRepoRoot() {
   return result.stdout.trim();
 }
 
+function readPrePushBranchNames(cwd: string): string[] {
+  try {
+    const raw = readFileSync(0, 'utf-8');
+    const fromStdin = parsePrePushLocalBranches(raw.split('\n'));
+    if (fromStdin.length > 0) return fromStdin;
+  } catch {
+    // stdin unavailable in some runners
+  }
+  const current = getCurrentBranch(cwd);
+  return current ? [current] : [];
+}
+
 async function main() {
   const cwd = getRepoRoot();
   exitIfQualityGateExcluded(HOOK_NAME, cwd);
   exitIfGateHookDisabled(HOOK_NAME, 'git.pre-push', cwd);
+
+  const branchPolicy = resolvePushMergeBranchPolicyForCwd(cwd);
+  const pushBranches = readPrePushBranchNames(cwd);
+  if (!shouldRunFullGateForBranches(pushBranches, branchPolicy)) {
+    log(HOOK_NAME, {
+      level: 'SKIP',
+      reason: describePushMergeBranchSkip(branchPolicy, pushBranches),
+      branches: pushBranches,
+      cwd,
+    });
+    process.exit(0);
+  }
 
   if (hasUncommittedChanges(cwd)) {
     console.error(buildUncommittedWorktreeDenyReason(cwd, 'push'));
@@ -38,7 +69,7 @@ async function main() {
   }
 
   const gateResult = await runQualityGate({ profile: 'full', cwd });
-  logGateResult(HOOK_NAME, gateResult, { profile: 'full', cwd });
+  logGateResult(HOOK_NAME, gateResult, { profile: 'full', cwd, branches: pushBranches });
 
   if (!gateResult.passed) {
     setPendingGateFailure('', {

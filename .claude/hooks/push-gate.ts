@@ -4,9 +4,14 @@
  * 推送门：git push 前跑 quality-gate --profile=full
  */
 
-import { safeMain, getCurrentBranch, DECISION } from './security-orchestrator.js';
+import { safeMain, log, getCurrentBranch, DECISION } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
 import { isGitPushCommand, hasUncommittedChanges, buildUncommittedWorktreeDenyReason } from './checks/git-policy.js';
+import {
+  describePushMergeBranchSkip,
+  resolvePushMergeBranchPolicyForCwd,
+  shouldRunFullGateForBranch,
+} from './checks/branch-policy.js';
 import { runQualityGate, logGateResult } from './quality-gate.js';
 import { buildGateDenyReason } from './gate-fix.js';
 import { setPendingGateFailure, clearPendingGateFailure } from './gate-pending.js';
@@ -34,6 +39,18 @@ async function main() {
     }
 
     const branch = getCurrentBranch(workingDir);
+    const branchPolicy = resolvePushMergeBranchPolicyForCwd(workingDir);
+    if (!shouldRunFullGateForBranch(branch ?? '', branchPolicy)) {
+      log(HOOK_NAME, {
+        level: 'SKIP',
+        reason: describePushMergeBranchSkip(branchPolicy, [branch ?? '']),
+        branch,
+        session_id,
+        cwd: workingDir,
+      });
+      process.stdout.write(`${formatAllowOutput()}\n`);
+      return;
+    }
 
     if (hasUncommittedChanges(workingDir)) {
       console.log(formatDenyOutput(DECISION.DENY, buildUncommittedWorktreeDenyReason(workingDir, 'push')));

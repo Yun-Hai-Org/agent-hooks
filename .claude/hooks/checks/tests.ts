@@ -12,6 +12,7 @@ import {
   DECISION,
 } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
+import { getScopedStagedFiles } from './scan-scope.js';
 import { denyIfToolMissing, denyOnToolError, isToolInstalled, resolveBunExecutable } from './tools.js';
 import { isHooksProject } from './hooks-project.js';
 
@@ -22,7 +23,7 @@ function bunTestCommand(args: string): string {
 }
 
 export async function runRelatedTests(cwd?: string, _options?: GateCheckRunOptions) {
-  const stagedFiles = getStagedFiles(cwd);
+  const stagedFiles = getScopedStagedFiles(cwd);
   if (stagedFiles.length === 0) {
     return formatResult('related-tests', DECISION.SKIP, '无暂存文件，跳过关联测试');
   }

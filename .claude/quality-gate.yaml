@@ -8,6 +8,18 @@ settings:
     include: []
     exclude:
       - _bmad-output/
+      - data/evals/
+      - data/
+      - dist/
+      - build/
+      - .pytest_cache/
+      - .mypy_cache/
+      - htmlcov/
+      - coverage/
+  pushMergeBranches:
+    mode: all
+    include: []
+    exclude: []
   licenseDenylist:
     - GPL-3.0
     - AGPL-3.0

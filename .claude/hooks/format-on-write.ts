@@ -10,6 +10,7 @@ import { LOG_DIR, execCommand } from './security-orchestrator.js';
 import { readFileEditInput, isFileEditTool } from './hook-adapter.js';
 import { isInGitRepo } from './auto-stage.js';
 import { formatFileOnWrite } from './checks/format-on-write.js';
+import { isAbsPathInScanScope } from './checks/scan-scope.js';
 import { isGateNodeEnabled } from './gate-config.js';
 
 function log(data: Record<string, unknown>) {
@@ -64,6 +65,12 @@ async function main() {
     if (!isGateNodeEnabled('ide.format-on-write', gitRoot)) {
       log({ level: 'SKIP', reason: 'format-on-write 未在 quality-gate.yaml 中启用', file: absPath, session_id });
       console.log('{}');
+      return;
+    }
+
+    if (!isAbsPathInScanScope(absPath, gitRoot)) {
+      log({ level: 'SKIP', reason: '文件不在 settings.scanScope 范围内', file: absPath, session_id });
+      process.stdout.write('{}\n');
       return;
     }
 

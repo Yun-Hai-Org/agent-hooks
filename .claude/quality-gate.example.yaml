@@ -8,6 +8,18 @@ settings:
     include: []
     exclude:
       - _bmad-output/
+      - data/evals/
+      - data/
+      - dist/
+      - build/
+      - .pytest_cache/
+      - .mypy_cache/
+      - htmlcov/
+      - coverage/
+  pushMergeBranches:
+    mode: all
+    include: []
+    exclude: []
   licenseDenylist:
     - GPL-3.0
     - AGPL-3.0
@@ -16,11 +28,11 @@ settings:
     cooldown: 5m
     channels:
       wechat:
-        url: ""
+        url: ''
       feishu:
-        url: ""
+        url: ''
       slack:
-        url: ""
+        url: ''
 
 ide:
   # beforeShellExecution：拦截灾难性/高风险 shell 命令与 hook 绕过
