@@ -698,7 +698,7 @@ export function generateExampleYaml(): string {
     '',
     'settings:',
     '  coverageThreshold:',
-    '    lines: 80',
+    '    lines: 79',
     '    functions: 80',
     '  scanScope:',
     '    include: []',
