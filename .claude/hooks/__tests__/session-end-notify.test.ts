@@ -31,6 +31,7 @@ import {
 import { createTempGitRepo, cleanupTempGitRepo } from './helpers.js';
 
 function writeNotifyYaml(repoDir: string, overrides?: { maxSummaryChars?: number; triggerBlock?: string }) {
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- repoDir 为受信临时测试仓库根
   mkdirSync(join(repoDir, '.claude'), { recursive: true });
   const maxSummaryChars = overrides?.maxSummaryChars ?? 1500;
   const triggerBlock =
@@ -46,6 +47,7 @@ function writeNotifyYaml(repoDir: string, overrides?: { maxSummaryChars?: number
       kiro:
         trigger: stop`;
   writeFileSync(
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- repoDir 为受信临时测试仓库根
     join(repoDir, '.claude/quality-gate.yaml'),
     `settings:
   notifications:

@@ -84,6 +84,14 @@ export interface ResolvedGateNode {
 
 const GLOBAL_CONFIG_PATH = join(homedir(), '.claude', 'quality-gate.yaml');
 
+export function resolveGlobalQualityGateConfigPath(): string {
+  return process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'] ?? GLOBAL_CONFIG_PATH;
+}
+
+function readGlobalGateConfig(): GateConfig {
+  return readYamlFile(resolveGlobalQualityGateConfigPath());
+}
+
 interface CacheEntry {
   mtimeGlobal: number;
   mtimeRepo: number;
@@ -127,7 +135,7 @@ function mergeCoverageThresholdYaml(
     return { lines: o.lines ?? base, functions: o.functions ?? base };
   }
   if (typeof override === 'number') {
-    return { lines: base.lines ?? override, functions: base.functions ?? override };
+    return { lines: override, functions: override };
   }
   const lines = override.lines ?? base.lines;
   const functions = override.functions ?? base.functions;
@@ -252,13 +260,14 @@ function getFileMtime(path: string): number {
 
 export function loadGateConfig(cwd: string): GateConfig {
   const repoPath = getRepoConfigPath(cwd);
-  const mtimeGlobal = getFileMtime(GLOBAL_CONFIG_PATH);
+  const globalPath = resolveGlobalQualityGateConfigPath();
+  const mtimeGlobal = getFileMtime(globalPath);
   const mtimeRepo = getFileMtime(repoPath);
   const cached = configCache.get(cwd);
   if (cached?.mtimeGlobal === mtimeGlobal && cached.mtimeRepo === mtimeRepo) {
     return cached.merged;
   }
-  const merged = deepMergeConfig(readYamlFile(GLOBAL_CONFIG_PATH), readYamlFile(repoPath));
+  const merged = deepMergeConfig(readGlobalGateConfig(), readYamlFile(repoPath));
   configCache.set(cwd, { mtimeGlobal, mtimeRepo, merged });
   return merged;
 }

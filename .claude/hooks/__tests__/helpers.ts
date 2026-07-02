@@ -48,6 +48,21 @@ export function expectAllow(output) {
 }
 
 const FIXTURE_DIR = join(tmpdir(), `hook-tests-${process.pid}`);
+const EMPTY_GLOBAL_GATE_PATH = join(FIXTURE_DIR, 'empty-global-quality-gate.yaml');
+
+export function useEmptyGlobalQualityGateConfig(): void {
+  mkdirSync(FIXTURE_DIR, { recursive: true });
+  if (!existsSync(EMPTY_GLOBAL_GATE_PATH)) {
+    writeFileSync(EMPTY_GLOBAL_GATE_PATH, '{}\n', 'utf-8');
+  }
+  process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'] = EMPTY_GLOBAL_GATE_PATH;
+  clearGateConfigCache();
+}
+
+export function restoreGlobalQualityGateConfig(): void {
+  delete process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'];
+  clearGateConfigCache();
+}
 
 export function disableGlobalGitHooks(cwd: string) {
   execSync('git config --local core.hooksPath .git/hooks', { cwd, stdio: 'pipe' });
@@ -66,6 +81,7 @@ export function bootstrapQualityGateYaml(repoDir: string): void {
 }
 
 export function createTempGitRepo(branch = 'feat/test') {
+  useEmptyGlobalQualityGateConfig();
   mkdirSync(FIXTURE_DIR, { recursive: true });
   const repoName = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const repoPath = join(FIXTURE_DIR, repoName);
