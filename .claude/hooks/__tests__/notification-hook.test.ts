@@ -185,14 +185,26 @@ describe('notification-hook', () => {
   describe('formatWechatMessage', () => {
     it('应输出企业微信 markdown 格式', () => {
       const msg = formatWechatMessage(
-        { hook: 'commit-gate', severity: 'high', reason: '拦截了危险提交' },
+        {
+          hook: 'commit-gate',
+          severity: 'high',
+          reason: '拦截了危险提交',
+          projectName: 'demo',
+          platform: 'Cursor',
+        },
         '2026-06-08 10:00:00',
       );
       expect(msg.msgtype).toBe('markdown');
-      expect(msg.markdown.content).toContain('commit-gate');
-      expect(msg.markdown.content).toContain('HIGH');
-      expect(msg.markdown.content).toContain('拦截了危险提交');
-      expect(msg.markdown.content).toContain('🟠');
+      const content = msg.markdown.content as string;
+      expect(content).toContain('commit-gate');
+      expect(content).toContain('HIGH');
+      expect(content).toContain('拦截了危险提交');
+      expect(content).toContain('🟠');
+      expect(content).toContain('**安全事件通知**');
+      expect(content).toContain('demo');
+      expect(content).toContain('Cursor');
+      expect(content).not.toContain('Claude Code');
+      expect(content).toContain('**详情**');
     });
 
     it('应包含时间戳', () => {
@@ -206,13 +218,22 @@ describe('notification-hook', () => {
   describe('formatFeishuMessage', () => {
     it('应输出飞书消息卡片格式', () => {
       const msg = formatFeishuMessage(
-        { hook: 'protect-secrets', severity: 'critical', reason: '检测到 API 密钥泄露' },
+        {
+          hook: 'protect-secrets',
+          severity: 'critical',
+          reason: '检测到 API 密钥泄露',
+          projectName: 'demo',
+          platform: 'Claude Code',
+        },
         '2026-06-08 10:00:00',
       );
       expect(msg.msg_type).toBe('interactive');
       expect(msg.card.header.template).toBe('red');
+      expect(msg.card.header.title.content).toContain('安全事件通知');
       expect(msg.card.elements[0].text.content).toContain('protect-secrets');
       expect(msg.card.elements[0].text.content).toContain('CRITICAL');
+      expect(msg.card.elements[0].text.content).toContain('demo');
+      expect(msg.card.elements[1].text.content).toContain('检测到 API 密钥泄露');
     });
 
     it('不同级别应使用不同卡片颜色', () => {
@@ -237,10 +258,14 @@ describe('notification-hook', () => {
     });
 
     it('应包含钩子名和级别字段', () => {
-      const msg = formatSlackMessage({ hook: 'branch-gate', severity: 'low', reason: '提示信息' }, '');
+      const msg = formatSlackMessage(
+        { hook: 'branch-gate', severity: 'low', reason: '提示信息', projectName: 'demo', platform: 'Cursor' },
+        '',
+      );
       const fields = msg.attachments[0].blocks[1].fields;
-      expect(fields[0].text).toContain('branch-gate');
-      expect(fields[1].text).toContain('LOW');
+      expect(fields[0].text).toContain('demo');
+      expect(fields[2].text).toContain('branch-gate');
+      expect(fields[3].text).toContain('LOW');
     });
   });
 

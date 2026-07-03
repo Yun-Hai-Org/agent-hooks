@@ -52,8 +52,14 @@ describe('notification-core', () => {
   });
 
   it('formatWechatMessage 应生成 markdown 内容', () => {
-    const body = formatWechatMessage({ hook: 'x', severity: 'info', reason: 'test' }, '2026-06-08 12:00:00');
-    expect((body.markdown as { content: string }).content).toContain('test');
+    const body = formatWechatMessage(
+      { hook: 'x', severity: 'info', reason: 'test', projectName: 'proj', platform: 'Cursor' },
+      '2026-06-08 12:00:00',
+    );
+    const content = (body.markdown as { content: string }).content;
+    expect(content).toContain('test');
+    expect(content).toContain('**安全事件通知**');
+    expect(content).toContain('proj');
   });
 
   it('formatFeishuMessage 应生成 interactive 卡片', () => {

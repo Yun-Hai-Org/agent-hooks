@@ -122,6 +122,9 @@ export interface NotificationEvent {
   hook: string;
   severity: string;
   reason: string;
+  projectName?: string;
+  platform?: string;
+  sessionId?: string;
 }
 
 export interface NotificationChannel {

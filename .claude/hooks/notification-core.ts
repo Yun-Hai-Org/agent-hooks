@@ -4,8 +4,10 @@
  */
 
 import { getNotificationSettings } from './gate-config.js';
+import { getPlatform, platformLabel } from './hook-adapter.js';
 import { log } from './security-orchestrator.js';
 import type { NotificationChannel, NotificationEvent } from './types.js';
+import { basename } from 'path';
 
 export const DEFAULT_COOLDOWN_MS = 5 * 60 * 1000;
 
@@ -35,6 +37,14 @@ export function conversationEndTitle(status?: string): string {
   if (status === 'error' || status === 'aborted') return '⚠️ **对话异常结束**';
   if (status === 'completed' || !status) return '✅ **对话结束通知**';
   return 'ℹ️ **对话结束通知**';
+}
+
+function resolveSecurityProjectName(cwd: string): string {
+  return basename(cwd) || 'project';
+}
+
+function resolveSecurityPlatform(): string {
+  return platformLabel(getPlatform());
 }
 
 const lastSentMap = new Map<string, number>();
@@ -67,6 +77,10 @@ export function mapSeverityEmoji(severity: string | null | undefined): string {
   return key in SEVERITY_EMOJI ? SEVERITY_EMOJI[key] : '⚠️';
 }
 
+export function securityEventTitle(severity: string): string {
+  return `${mapSeverityEmoji(severity)} **安全事件通知**`;
+}
+
 export function parseNotificationMessage(message: string): NotificationEvent {
   if (!message || typeof message !== 'string') {
     return { hook: 'unknown', severity: 'info', reason: typeof message === 'string' ? message : '' };
@@ -94,20 +108,17 @@ export function truncateSummary(text: string, maxChars: number): string {
 }
 
 export function formatWechatMessage(event: NotificationEvent, timestamp: string): Record<string, unknown> {
-  const emoji = mapSeverityEmoji(event.severity);
-  return {
-    msgtype: 'markdown',
-    markdown: {
-      content: [
-        `${emoji} **Claude Code 安全事件通知**`,
-        '',
-        `> **钩子**: ${event.hook}`,
-        `> **级别**: ${event.severity.toUpperCase()}`,
-        `> **详情**: ${event.reason}`,
-        `> **时间**: ${timestamp}`,
-      ].join('\n'),
-    },
-  };
+  const lines = [
+    securityEventTitle(event.severity),
+    '',
+    `> **项目**: ${event.projectName ?? 'unknown'}`,
+    `> **平台**: ${event.platform ?? 'unknown'}`,
+    `> **钩子**: ${event.hook}`,
+    `> **级别**: ${event.severity.toUpperCase()}`,
+  ];
+  if (event.sessionId) lines.push(`> **会话**: ${event.sessionId}`);
+  lines.push(`> **时间**: ${timestamp}`, '', '**详情**', event.reason);
+  return { msgtype: 'markdown', markdown: { content: lines.join('\n') } };
 }
 
 export function formatWechatConversationEndMessage(
@@ -142,33 +153,30 @@ const FEISHU_COLOR: Record<NotificationSeverity, string> = {
 };
 
 export function formatFeishuMessage(event: NotificationEvent, timestamp: string): Record<string, unknown> {
-  const emoji = mapSeverityEmoji(event.severity);
   const severityKey = event.severity.toLowerCase() as NotificationSeverity;
   const color = severityKey in FEISHU_COLOR ? FEISHU_COLOR[severityKey] : 'grey';
+  const meta = [
+    `**项目**: ${event.projectName ?? 'unknown'}`,
+    `**平台**: ${event.platform ?? 'unknown'}`,
+    `**钩子**: ${event.hook}`,
+    `**级别**: ${event.severity.toUpperCase()}`,
+    event.sessionId ? `**会话**: ${event.sessionId}` : '',
+    `**时间**: ${timestamp}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const titlePlain = securityEventTitle(event.severity).replace(/\*\*/g, '');
 
   return {
     msg_type: 'interactive',
     card: {
       header: {
-        title: {
-          tag: 'plain_text',
-          content: `${emoji} Claude Code 安全事件`,
-        },
+        title: { tag: 'plain_text', content: titlePlain },
         template: color,
       },
       elements: [
-        {
-          tag: 'div',
-          text: {
-            tag: 'lark_md',
-            content: [
-              `**钩子**: ${event.hook}`,
-              `**级别**: ${event.severity.toUpperCase()}`,
-              `**详情**: ${event.reason}`,
-              `**时间**: ${timestamp}`,
-            ].join('\n'),
-          },
-        },
+        { tag: 'div', text: { tag: 'lark_md', content: meta } },
+        { tag: 'div', text: { tag: 'lark_md', content: `**详情**\n${event.reason}` } },
       ],
     },
   };
@@ -220,9 +228,15 @@ const SLACK_COLOR: Record<NotificationSeverity, string> = {
 };
 
 export function formatSlackMessage(event: NotificationEvent, timestamp: string): Record<string, unknown> {
-  const emoji = mapSeverityEmoji(event.severity);
   const severityKey = event.severity.toLowerCase() as NotificationSeverity;
   const color = severityKey in SLACK_COLOR ? SLACK_COLOR[severityKey] : '#999999';
+  const titlePlain = securityEventTitle(event.severity).replace(/\*\*/g, '');
+  const fields = [
+    { type: 'mrkdwn', text: `*项目*\n${event.projectName ?? 'unknown'}` },
+    { type: 'mrkdwn', text: `*平台*\n${event.platform ?? 'unknown'}` },
+    { type: 'mrkdwn', text: `*钩子*\n${event.hook}` },
+    { type: 'mrkdwn', text: `*级别*\n${event.severity.toUpperCase()}` },
+  ];
 
   return {
     attachments: [
@@ -231,23 +245,10 @@ export function formatSlackMessage(event: NotificationEvent, timestamp: string):
         blocks: [
           {
             type: 'header',
-            text: {
-              type: 'plain_text',
-              text: `${emoji} Claude Code 安全事件通知`,
-              emoji: true,
-            },
+            text: { type: 'plain_text', text: titlePlain, emoji: true },
           },
-          {
-            type: 'section',
-            fields: [
-              { type: 'mrkdwn', text: `*钩子*\n${event.hook}` },
-              { type: 'mrkdwn', text: `*级别*\n${event.severity.toUpperCase()}` },
-            ],
-          },
-          {
-            type: 'section',
-            text: { type: 'mrkdwn', text: `*详情*\n${event.reason}` },
-          },
+          { type: 'section', fields },
+          { type: 'section', text: { type: 'mrkdwn', text: `*详情*\n${event.reason}` } },
           {
             type: 'context',
             elements: [{ type: 'mrkdwn', text: `🕐 ${timestamp}` }],
@@ -370,6 +371,10 @@ export async function dispatchSecurityNotification(input: DispatchInput, logHook
   if (input.hook) event.hook = input.hook;
   if (input.severity) event.severity = input.severity;
   if (input.reason && !event.reason) event.reason = input.reason;
+
+  event.projectName = resolveSecurityProjectName(cwd);
+  event.platform = resolveSecurityPlatform();
+  if (input.session_id) event.sessionId = input.session_id;
 
   const eventKey = makeEventKey(event);
   const { cooldownMs } = getNotificationSettings(cwd);
