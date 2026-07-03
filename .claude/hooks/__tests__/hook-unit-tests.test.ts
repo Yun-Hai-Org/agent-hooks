@@ -14,10 +14,22 @@ describe('parseBunTestRunSummary', () => {
   });
 
   it('应解析 (pass)/(fail) 摘要行', () => {
-    const output = ' 10 pass\n 2 fail\nRan 12 tests.';
+    const output = ' 10 pass\n 2 fail\nRan 12 tests across 1 files.';
     const summary = parseBunTestRunSummary(output);
     expect(summary.failCount).toBe(2);
     expect(summary.passCount).toBe(10);
+  });
+
+  it('应忽略测试标题中的 (pass)/(fail) 字样', () => {
+    const output = [
+      '(pass) parseBunTestRunSummary > 应解析 (pass)/(fail) 摘要行',
+      ' 1146 pass',
+      ' 0 fail',
+      'Ran 1146 tests across 71 files.',
+    ].join('\n');
+    const summary = parseBunTestRunSummary(output);
+    expect(summary.failCount).toBe(0);
+    expect(summary.passCount).toBe(1146);
   });
 
   it('无摘要时 failCount 为 0 且 parsed false', () => {

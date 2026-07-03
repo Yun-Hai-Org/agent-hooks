@@ -233,18 +233,27 @@ export interface BunTestRunSummary {
 }
 
 export function parseBunTestRunSummary(output: string): BunTestRunSummary {
+  const ranMatch = /Ran (\d+) tests across \d+ files/mg;
+  let lastRanIndex = -1;
+  let match: RegExpExecArray | null;
+  while ((match = ranMatch.exec(output)) !== null) {
+    lastRanIndex = match.index;
+  }
+  if (lastRanIndex !== -1) {
+    const tail = output.slice(Math.max(0, lastRanIndex - 300), lastRanIndex);
+    const block = /(\d+)\s+pass(?:ed)?\s*\n\s*(\d+)\s+fail\b/m.exec(tail);
+    if (block) {
+      return {
+        failCount: Number(block[2]),
+        passCount: Number(block[1]),
+        parsed: true,
+      };
+    }
+  }
+
   const failMatches = [...output.matchAll(/(\d+)\s+fail\b/g)];
   const lastFail = failMatches.at(-1);
   const failCount = lastFail?.[1] !== undefined ? Number(lastFail[1]) : 0;
-
-  const passFailLine = /(\d+)\s+pass(?:ed)?.*?(\d+)\s+fail\b/i.exec(output);
-  if (passFailLine) {
-    return {
-      failCount: Number(passFailLine[2]),
-      passCount: Number(passFailLine[1]),
-      parsed: true,
-    };
-  }
 
   const passOnly = /(\d+)\s+pass(?:ed)?\b/i.exec(output);
   const failOnly = failMatches.length > 0;

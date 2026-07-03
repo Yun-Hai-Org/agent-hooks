@@ -428,6 +428,21 @@ export const GATE_REGISTRY: GateRegistryRoot = {
     'branch-gate': {
       description: 'preToolUse：非 Git 仓库或功能分支策略下的分支操作门控',
     },
+    'worktree-gate': {
+      description: 'preToolUse：主 checkout 禁写；feat/* worktree 内允许 Write/Shell',
+    },
+    'workflow-gate': {
+      description: 'beforeReadFile/preToolUse：Todo 先于 Read/Write；Orchestrator 禁直接读写',
+    },
+    'workflow-stop-gate': {
+      description: 'Stop：pending≥2 时要求 ≥2 并行后台 Task',
+    },
+    'orchestrator-gate': {
+      description: 'beforeReadFile/preToolUse：Orchestrator 禁直接 Read/Write（complement workflow-gate）',
+    },
+    'git-ship-gate': {
+      description: 'beforeShellExecution/preToolUse Shell：Orchestrator 禁 git commit/push/merge；仅 ship-sa 子代理',
+    },
     'branch-delete-gate': {
       description: 'beforeShellExecution：限制删除未 merge 分支与 worktree prune',
       checks: checksFrom({
@@ -451,6 +466,10 @@ export const GATE_REGISTRY: GateRegistryRoot = {
       description: 'SessionStart：检测 hook 依赖 CLI 工具可用性（fail-open）',
       defaultTimeoutMs: 2000,
       checks: buildSessionStartChecks(),
+    },
+    'hooks-doctor': {
+      description: 'SessionStart / watchdog：hooks 配置与部署完整性检查及自动恢复（fail-open）',
+      defaultTimeoutMs: 2000,
     },
     'format-on-write': {
       description: 'afterFileEdit：写后自动 format（prettier/ruff 等）',

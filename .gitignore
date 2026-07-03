@@ -4,5 +4,6 @@ node_modules/
 .claude/hooks/__tests__/fixtures/
 .tools/
 .claude/worktrees/
+.worktrees/
 .claude/settings.backup.*.json
 _tsc-output.txt

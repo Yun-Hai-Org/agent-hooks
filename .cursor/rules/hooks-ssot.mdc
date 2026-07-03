@@ -1,0 +1,56 @@
+---
+description: Hooks single source of truth — hooks.json.example, append-only edits, validate before deploy
+alwaysApply: true
+---
+
+# Hooks Single Source of Truth
+
+## Cursor hooks config
+
+- **SSOT**: `.cursor/hooks.json.example` is the canonical Cursor hooks configuration.
+- **Append-only**: when adding hooks, append new entries only — do not reorder or remove existing hook entries unless intentionally deprecating them.
+- **No project-level duplicate**: in this hooks repo, do not add `.cursor/hooks.json`; global install symlinks the example file (strategy B).
+
+## Before link or commit
+
+Run validation before linking globally or committing changes:
+
+```bash
+./scripts/validate-hooks-json.example.sh
+```
+
+## After changing hooks.json.example
+
+1. Sync `hooks-manifest.json` when that file exists in the repo.
+2. Update related tests (e.g. `.claude/hooks/__tests__/`) so manifest and hook wiring stay aligned.
+
+## Global deploy
+
+```bash
+./scripts/link-cursor-hooks-global.sh
+```
+
+Then **restart Cursor** so the IDE reloads hook configuration.
+
+This script links:
+
+- `~/.cursor/hooks.json` → `.cursor/hooks.json.example`
+- `~/.claude/hooks` → `.claude/hooks` (Bun TypeScript hooks)
+- `~/.cursor/bun` / `~/.cursor/bunx` → vendored Bun in this repo
+
+## Yingmi shell layer
+
+Shell guards under `$HOME/.cursor/hooks/` (dangerous-command, prohibited-content, session-init) are installed separately:
+
+```bash
+./scripts/install-cursor-yingmi-hooks.sh
+```
+
+Source scripts live in `scripts/cursor-yingmi-hooks/`. This layer complements — does not replace — the Bun hooks symlinked via `~/.claude/hooks`.
+
+## Bun hooks path
+
+TypeScript hook implementations run through the global symlink:
+
+- `~/.claude/hooks` → `<repo>/.claude/hooks`
+- Hook commands in `hooks.json.example` invoke `$HOME/.cursor/bun` + `$HOME/.claude/hooks/resolve-hook-path.ts`

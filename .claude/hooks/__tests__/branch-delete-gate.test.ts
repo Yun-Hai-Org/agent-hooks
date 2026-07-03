@@ -114,4 +114,35 @@ describe('branch-delete-gate', () => {
     const result = evaluateBranchDeleteCommand(`git update-ref -d refs/heads/${branch}`, repoPath);
     expect(result?.decision).toBe(DECISION.DENY);
   });
+
+  it('feat/*-task-* 已 merge 进父 epic 时 worktree remove 应放行', () => {
+    const epic = 'feat/hooks-restore-workflow';
+    const taskBranch = 'feat/hooks-restore-workflow-task-p2-json';
+    execSync(`git checkout -b ${epic}`, { cwd: repoPath, stdio: 'pipe' });
+    execSync(`git checkout -b ${taskBranch}`, { cwd: repoPath, stdio: 'pipe' });
+    writeFileSync(join(repoPath, 'task.txt'), 'task\n');
+    execSync('git add task.txt', { cwd: repoPath, stdio: 'pipe' });
+    execSync('git commit -m "feat: task work"', { cwd: repoPath, stdio: 'pipe' });
+    execSync(`git checkout ${epic}`, { cwd: repoPath, stdio: 'pipe' });
+    execSync(`git merge ${taskBranch} --no-edit`, { cwd: repoPath, stdio: 'pipe' });
+    const wtPath = join(tempDir, 'wt-task-merged');
+    execSync(`git worktree add "${wtPath}" "${taskBranch}"`, { cwd: repoPath, stdio: 'pipe' });
+    expect(evaluateBranchDeleteCommand(`git worktree remove "${wtPath}"`, repoPath)).toBeNull();
+  });
+
+  it('feat/*-task-* 未 merge 进父 epic 时 worktree remove 应 deny', () => {
+    const epic = 'feat/hooks-restore-workflow';
+    const taskBranch = 'feat/hooks-restore-workflow-task-unmerged';
+    execSync(`git checkout -b ${epic}`, { cwd: repoPath, stdio: 'pipe' });
+    execSync(`git checkout -b ${taskBranch}`, { cwd: repoPath, stdio: 'pipe' });
+    writeFileSync(join(repoPath, 'unmerged.txt'), 'unmerged\n');
+    execSync('git add unmerged.txt', { cwd: repoPath, stdio: 'pipe' });
+    execSync('git commit -m "feat: unmerged task"', { cwd: repoPath, stdio: 'pipe' });
+    execSync(`git checkout ${epic}`, { cwd: repoPath, stdio: 'pipe' });
+    const wtPath = join(tempDir, 'wt-task-unmerged');
+    execSync(`git worktree add "${wtPath}" "${taskBranch}"`, { cwd: repoPath, stdio: 'pipe' });
+    const result = evaluateBranchDeleteCommand(`git worktree remove "${wtPath}"`, repoPath);
+    expect(result?.decision).toBe(DECISION.DENY);
+    expect(result?.message).toContain('未合并');
+  });
 });

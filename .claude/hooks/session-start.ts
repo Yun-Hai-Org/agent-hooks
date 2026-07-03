@@ -11,7 +11,7 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, appendFileSync, mkdirSync } from 'fs';
+import { existsSync, appendFileSync, mkdirSync, realpathSync } from 'fs';
 import { join } from 'path';
 import { LOG_DIR, getHookProcessEnv } from './security-orchestrator.js';
 import { getPlatform } from './hook-adapter.js';
@@ -238,6 +238,7 @@ function main() {
 
     process.stderr.write(formatReport(results) + '\n');
     checkGitHooksPath();
+    runHooksDoctor();
 
     if (getPlatform() === 'cursor') {
       console.log('{}');
@@ -263,6 +264,57 @@ function main() {
     // 输出降级消息
     process.stderr.write(`ℹ️ [session-start] 健康检查超时，部分工具状态未知\n`);
     console.log('{}');
+  }
+}
+
+function resolveHooksRepo(): string | null {
+  const envRepo = process.env['HOOKS_REPO'];
+  if (envRepo && existsSync(join(envRepo, '.cursor', 'hooks-manifest.json'))) {
+    return envRepo;
+  }
+  try {
+    const home = process.env['HOME'] ?? '';
+    const claudeHooks = join(home, '.claude', 'hooks');
+    if (existsSync(claudeHooks)) {
+      const resolved = realpathSync(claudeHooks);
+      const repo = join(resolved, '..', '..');
+      if (existsSync(join(repo, '.cursor', 'hooks-manifest.json'))) {
+        return repo;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  const cwd = process.cwd();
+  if (existsSync(join(cwd, '.cursor', 'hooks-manifest.json'))) {
+    return cwd;
+  }
+  return null;
+}
+
+function runHooksDoctor(): void {
+  try {
+    const cwd = process.cwd();
+    if (!isGateNodeEnabled('ide.hooks-doctor', cwd)) {
+      return;
+    }
+    const repo = resolveHooksRepo();
+    if (!repo) {
+      return;
+    }
+    const doctorScript = join(repo, 'scripts', 'hooks-doctor.sh');
+    if (!existsSync(doctorScript)) {
+      return;
+    }
+    // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process -- 固定 hooks-doctor 脚本路径，2s 超时 fail-open
+    execSync(`"${doctorScript}" --repair --quiet`, {
+      timeout: 2000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: getHookProcessEnv(),
+      cwd: repo,
+    });
+  } catch {
+    // fail-open：不阻止会话启动
   }
 }
 
