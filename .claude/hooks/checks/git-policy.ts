@@ -93,6 +93,9 @@ export function hasUncommittedChanges(cwd?: string): boolean {
   return result.stdout.trim().length > 0;
 }
 
+export const GENERIC_GITIGNORE_HINT =
+  '若有无需纳入版本管理的本地文件，可将其路径加入 .gitignore，避免重复出现在未提交列表中。';
+
 export function countUncommittedFiles(cwd?: string): number {
   const result = execCommand('git status --porcelain', { cwd });
   if (!result.success) return 0;
@@ -121,6 +124,8 @@ export function buildUncommittedWorktreeDenyReason(
       '2. git add 相关文件（auto-stage 会自动暂存）',
       '3. git commit -m "类型: 描述"（需通过 pre-commit 质量门）',
       actionStep,
+      '',
+      GENERIC_GITIGNORE_HINT,
     ].join('\n');
   }
 
@@ -136,6 +141,8 @@ export function buildUncommittedWorktreeDenyReason(
     '2. git add 相关文件（auto-stage 已暂存则跳过）',
     '3. git commit -m "类型: 描述"（feat/fix/docs/test/chore…，需通过 pre-commit 质量门）',
     actionStep,
+    '',
+    GENERIC_GITIGNORE_HINT,
   ].join('\n');
 }
 

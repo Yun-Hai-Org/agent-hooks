@@ -438,16 +438,16 @@ ide:
   # sessionEnd/Stop?????? webhook ???Cursor/Claude/Kiro?
   session-end-notify:
     enabled: true
-    trigger: stop
+    trigger: both
     maxSummaryChars: 1500
     timeout: 5s
     platforms:
       cursor:
-        trigger: stop
+        trigger: both
       claude:
-        trigger: stop
+        trigger: both
       kiro:
-        trigger: stop
+        trigger: both
 
 git:
   # commit-msg ????? commit message ?????

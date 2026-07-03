@@ -21,8 +21,10 @@ import {
   formatWechatConversationEndMessage,
   truncateSummary,
   clearCooldownState,
+  conversationEndTitle,
   type ConversationEndEvent,
 } from '../notification-core.js';
+import { buildUncommittedWorktreeDenyReason, GENERIC_GITIGNORE_HINT } from '../checks/git-policy.js';
 import {
   extractLastAssistantFromTranscript,
   handleSessionEndNotify,
@@ -36,16 +38,16 @@ function writeNotifyYaml(repoDir: string, overrides?: { maxSummaryChars?: number
   const maxSummaryChars = overrides?.maxSummaryChars ?? 1500;
   const triggerBlock =
     overrides?.triggerBlock ??
-    `    trigger: stop
+    `    trigger: both
     maxSummaryChars: ${String(maxSummaryChars)}
     timeout: 5s
     platforms:
       cursor:
-        trigger: stop
+        trigger: both
       claude:
-        trigger: stop
+        trigger: both
       kiro:
-        trigger: stop`;
+        trigger: both`;
   writeFileSync(
     // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- repoDir 为受信临时测试仓库根
     join(repoDir, '.claude/quality-gate.yaml'),
@@ -199,6 +201,32 @@ ide:
       expect(content).toContain('demo');
       expect(content).toContain('Cursor');
       expect(content).toContain('summary text');
+      expect(content).toContain('✅ **对话结束通知**');
+    });
+
+    it('conversationEndTitle 应按 status 切换标题', () => {
+      expect(conversationEndTitle('completed')).toContain('✅');
+      expect(conversationEndTitle('error')).toContain('⚠️');
+      expect(conversationEndTitle('aborted')).toContain('⚠️');
+    });
+
+    it('formatWechatConversationEndMessage 未提交时应含通用 gitignore 提示', () => {
+      const event: ConversationEndEvent = {
+        platform: 'Cursor',
+        projectName: 'demo',
+        sessionId: 's1',
+        summaryText: 'summary text',
+        uncommittedHint: GENERIC_GITIGNORE_HINT,
+      };
+      const body = formatWechatConversationEndMessage(event, '2026/6/30 12:00:00', 1500);
+      const content = (body.markdown as { content: string }).content;
+      expect(content).toContain('**提示**');
+      expect(content).toContain(GENERIC_GITIGNORE_HINT);
+    });
+
+    it('buildUncommittedWorktreeDenyReason 应含通用 gitignore 提示', () => {
+      const reason = buildUncommittedWorktreeDenyReason(repoDir, 'push');
+      expect(reason).toContain(GENERIC_GITIGNORE_HINT);
     });
   });
 
@@ -223,7 +251,18 @@ ide:
     });
 
     it('trigger 不匹配时应 skip', async () => {
-      writeNotifyYaml(repoDir);
+      writeNotifyYaml(repoDir, {
+        triggerBlock: `    trigger: stop
+    maxSummaryChars: 1500
+    timeout: 5s
+    platforms:
+      cursor:
+        trigger: stop
+      claude:
+        trigger: stop
+      kiro:
+        trigger: stop`,
+      });
       process.env.HOOK_PLATFORM = 'cursor';
       const result = await handleSessionEndNotify({
         hook_event_name: 'sessionEnd',
@@ -236,27 +275,34 @@ ide:
       expect(result.reason).toBe('trigger_filtered');
     });
 
-    it('Cursor stop 非 completed 时应 skip', async () => {
-      writeNotifyYaml(repoDir, {
-        triggerBlock: `    trigger: stop
-    maxSummaryChars: 1500
-    timeout: 5s
-    platforms:
-      cursor:
-        trigger: stop
-      claude:
-        trigger: session_end
-      kiro:
-        trigger: stop`,
+    it('trigger both 时 sessionEnd 应尝试发送', async () => {
+      writeNotifyYaml(repoDir);
+      writeSessionResponse('s-both', 'session end summary');
+      process.env.HOOK_PLATFORM = 'cursor';
+      const result = await handleSessionEndNotify({
+        hook_event_name: 'sessionEnd',
+        status: 'completed',
+        conversation_id: 'c-both',
+        cwd: repoDir,
+        text: 'session end summary',
       });
+      expect(result.reason).not.toBe('trigger_filtered');
+      clearSessionResponse('s-both');
+    });
+
+    it('Cursor stop aborted 时应尝试发送（非 trigger_filtered）', async () => {
+      writeNotifyYaml(repoDir);
+      writeSessionResponse('c-abort', 'aborted summary');
       process.env.HOOK_PLATFORM = 'cursor';
       const result = await handleSessionEndNotify({
         hook_event_name: 'Stop',
         status: 'aborted',
         conversation_id: 'c-abort',
         cwd: repoDir,
+        text: 'aborted summary',
       });
-      expect(result.reason).toBe('trigger_filtered');
+      expect(result.reason).not.toBe('trigger_filtered');
+      clearSessionResponse('c-abort');
     });
 
     it('resolveSummaryText 应优先 inline 再读缓存', () => {

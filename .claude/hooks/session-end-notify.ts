@@ -5,9 +5,9 @@
 
 import { existsSync, readFileSync } from 'fs';
 import { getSessionEndNotifyConfig } from './gate-config.js';
+import { GENERIC_GITIGNORE_HINT, hasUncommittedChanges } from './checks/git-policy.js';
 import {
   isSessionEndHookEvent,
-  isStopHookEvent,
   parseConversationEndInput,
   platformLabel,
   shouldNotifyForTrigger,
@@ -72,13 +72,7 @@ export function resolveSummaryText(input: ConversationEndInput): string {
 }
 
 export function shouldSendSessionEndNotify(input: ConversationEndInput, platformTrigger: string): boolean {
-  if (!shouldNotifyForTrigger(platformTrigger as 'session_end' | 'stop' | 'both', input.hookEvent)) {
-    return false;
-  }
-  if (isStopHookEvent(input.hookEvent) && input.platform === 'cursor' && input.status !== 'completed') {
-    return false;
-  }
-  return true;
+  return shouldNotifyForTrigger(platformTrigger as 'session_end' | 'stop' | 'both', input.hookEvent);
 }
 
 export async function handleSessionEndNotify(data: Record<string, unknown>) {
@@ -88,6 +82,13 @@ export async function handleSessionEndNotify(data: Record<string, unknown>) {
     return { sent: false, reason: 'gate disabled' };
   }
   if (!shouldSendSessionEndNotify(input, config.platformTrigger)) {
+    log(HOOK_NAME, {
+      level: 'SKIP',
+      reason: 'trigger_filtered',
+      hook_event: input.hookEvent,
+      status: input.status,
+      session_id: input.sessionId,
+    });
     return { sent: false, reason: 'trigger_filtered' };
   }
   const summaryText = resolveSummaryText(input);
@@ -95,6 +96,7 @@ export async function handleSessionEndNotify(data: Record<string, unknown>) {
     log(HOOK_NAME, { level: 'SKIP', reason: 'empty summary', session_id: input.sessionId });
     return { sent: false, reason: 'empty_summary' };
   }
+  const uncommittedHint = hasUncommittedChanges(input.cwd) ? GENERIC_GITIGNORE_HINT : undefined;
   const result = await dispatchConversationEndNotification(
     {
       platform: platformLabel(input.platform),
@@ -104,6 +106,7 @@ export async function handleSessionEndNotify(data: Record<string, unknown>) {
       ...(input.reason !== undefined ? { reason: input.reason } : {}),
       ...(input.durationMs !== undefined ? { durationMs: input.durationMs } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(uncommittedHint !== undefined ? { uncommittedHint } : {}),
     },
     input.cwd,
     { maxSummaryChars: config.maxSummaryChars, timeoutMs: config.timeoutMs },

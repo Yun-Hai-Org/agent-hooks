@@ -28,6 +28,13 @@ export interface ConversationEndEvent {
   reason?: string;
   durationMs?: number;
   status?: string;
+  uncommittedHint?: string;
+}
+
+export function conversationEndTitle(status?: string): string {
+  if (status === 'error' || status === 'aborted') return '⚠️ **对话异常结束**';
+  if (status === 'completed' || !status) return '✅ **对话结束通知**';
+  return 'ℹ️ **对话结束通知**';
 }
 
 const lastSentMap = new Map<string, number>();
@@ -110,7 +117,7 @@ export function formatWechatConversationEndMessage(
 ): Record<string, unknown> {
   const summary = truncateSummary(event.summaryText || '(无摘要)', maxSummaryChars);
   const lines = [
-    '✅ **对话结束通知**',
+    conversationEndTitle(event.status),
     '',
     `> **项目**: ${event.projectName}`,
     `> **平台**: ${event.platform}`,
@@ -120,6 +127,9 @@ export function formatWechatConversationEndMessage(
   if (event.status) lines.push(`> **状态**: ${event.status}`);
   if (event.durationMs !== undefined) lines.push(`> **时长**: ${String(Math.round(event.durationMs / 1000))}s`);
   lines.push(`> **时间**: ${timestamp}`, '', '**摘要**', summary);
+  if (event.uncommittedHint) {
+    lines.push('', '**提示**', event.uncommittedHint);
+  }
   return { msgtype: 'markdown', markdown: { content: lines.join('\n') } };
 }
 
@@ -181,17 +191,22 @@ export function formatFeishuConversationEndMessage(
   ]
     .filter(Boolean)
     .join('\n');
+  const elements: { tag: string; text: { tag: string; content: string } }[] = [
+    { tag: 'div', text: { tag: 'lark_md', content: meta } },
+    { tag: 'div', text: { tag: 'lark_md', content: `**摘要**\n${summary}` } },
+  ];
+  if (event.uncommittedHint) {
+    elements.push({ tag: 'div', text: { tag: 'lark_md', content: `**提示**\n${event.uncommittedHint}` } });
+  }
+  const titlePlain = conversationEndTitle(event.status).replace(/\*\*/g, '');
   return {
     msg_type: 'interactive',
     card: {
       header: {
-        title: { tag: 'plain_text', content: '✅ 对话结束通知' },
-        template: 'green',
+        title: { tag: 'plain_text', content: titlePlain },
+        template: event.status === 'error' || event.status === 'aborted' ? 'orange' : 'green',
       },
-      elements: [
-        { tag: 'div', text: { tag: 'lark_md', content: meta } },
-        { tag: 'div', text: { tag: 'lark_md', content: `**摘要**\n${summary}` } },
-      ],
+      elements,
     },
   };
 }
@@ -254,22 +269,28 @@ export function formatSlackConversationEndMessage(
     { type: 'mrkdwn', text: `*平台*\n${event.platform}` },
   ];
   if (event.status) fields.push({ type: 'mrkdwn', text: `*状态*\n${event.status}` });
+  const titlePlain = conversationEndTitle(event.status).replace(/\*\*/g, '');
+  const color = event.status === 'error' || event.status === 'aborted' ? '#ECB22E' : '#2EB886';
+  const blocks: Record<string, unknown>[] = [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: titlePlain, emoji: true },
+    },
+    { type: 'section', fields },
+    { type: 'section', text: { type: 'mrkdwn', text: `*摘要*\n${summary}` } },
+  ];
+  if (event.uncommittedHint) {
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*提示*\n${event.uncommittedHint}` } });
+  }
+  blocks.push({
+    type: 'context',
+    elements: [{ type: 'mrkdwn', text: `🕐 ${timestamp}` }],
+  });
   return {
     attachments: [
       {
-        color: '#2EB886',
-        blocks: [
-          {
-            type: 'header',
-            text: { type: 'plain_text', text: '✅ 对话结束通知', emoji: true },
-          },
-          { type: 'section', fields },
-          { type: 'section', text: { type: 'mrkdwn', text: `*摘要*\n${summary}` } },
-          {
-            type: 'context',
-            elements: [{ type: 'mrkdwn', text: `🕐 ${timestamp}` }],
-          },
-        ],
+        color,
+        blocks,
       },
     ],
   };

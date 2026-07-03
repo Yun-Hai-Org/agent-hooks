@@ -439,15 +439,15 @@ ide:
   session-end-notify:
     enabled: true
     timeout: 5s
-    trigger: stop
+    trigger: both
     maxSummaryChars: 1500
     platforms:
       cursor:
-        trigger: stop
+        trigger: both
       claude:
-        trigger: stop
+        trigger: both
       kiro:
-        trigger: stop
+        trigger: both
 
 git:
   # commit-msg 钩子：校验 commit message 格式与语义
