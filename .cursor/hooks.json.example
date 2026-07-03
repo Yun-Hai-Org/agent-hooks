@@ -16,6 +16,14 @@
     ],
     "preToolUse": [
       {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts worktree-gate.ts",
+        "matcher": "Shell|Write"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-gate.ts",
+        "matcher": "Read|Write|Shell"
+      },
+      {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts branch-gate.ts",
         "matcher": "Shell|Write"
       },
@@ -24,7 +32,16 @@
         "matcher": "Shell|Write"
       }
     ],
+    "postToolUse": [
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-todo-sync.ts",
+        "matcher": "TodoWrite"
+      }
+    ],
     "beforeReadFile": [
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-gate.ts"
+      },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts protect-secrets.ts"
       }
@@ -38,6 +55,10 @@
       }
     ],
     "stop": [
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-stop-gate.ts",
+        "loop_limit": 8
+      },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts auto-commit.ts",
         "loop_limit": 8

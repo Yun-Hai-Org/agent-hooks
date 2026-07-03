@@ -228,6 +228,18 @@ ide:
   branch-gate:
     enabled: true
 
+  # preToolUse：主 checkout 禁写；feat/* worktree 内允许
+  worktree-gate:
+    enabled: true
+
+  # beforeReadFile/preToolUse：Todo 先于 Read/Write
+  workflow-gate:
+    enabled: true
+
+  # Stop：并行后台 Task 审计
+  workflow-stop-gate:
+    enabled: true
+
   # beforeShellExecution：限制删除未 merge 分支与 worktree prune
   branch-delete-gate:
     enabled: true

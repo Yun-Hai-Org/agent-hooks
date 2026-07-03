@@ -428,6 +428,15 @@ export const GATE_REGISTRY: GateRegistryRoot = {
     'branch-gate': {
       description: 'preToolUse：非 Git 仓库或功能分支策略下的分支操作门控',
     },
+    'worktree-gate': {
+      description: 'preToolUse：主 checkout 禁写；feat/* worktree 内允许 Write/Shell',
+    },
+    'workflow-gate': {
+      description: 'beforeReadFile/preToolUse：Todo 先于 Read/Write；Orchestrator 禁直接读写',
+    },
+    'workflow-stop-gate': {
+      description: 'Stop：pending≥2 时要求 ≥2 并行后台 Task',
+    },
     'branch-delete-gate': {
       description: 'beforeShellExecution：限制删除未 merge 分支与 worktree prune',
       checks: checksFrom({
