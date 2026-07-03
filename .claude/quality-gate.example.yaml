@@ -450,6 +450,15 @@ ide:
         trigger: both
 
 git:
+  # commit / push / merge 成功后 webhook 通知
+  git-operation-notify:
+    enabled: true
+    timeout: 5s
+    operations:
+      - commit
+      - push
+      - merge
+
   # commit-msg 钩子：校验 commit message 格式与语义
   commit-msg:
     enabled: true

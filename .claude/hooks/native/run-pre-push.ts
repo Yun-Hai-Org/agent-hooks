@@ -16,8 +16,17 @@ import { runQualityGate, logGateResult } from '../quality-gate.js';
 import { setPendingGateFailure } from '../gate-pending.js';
 import { getHeadTreeSha, hasFreshFullPass, recordFullPass } from '../gate-cache.js';
 import { exitIfQualityGateExcluded, exitIfGateHookDisabled } from './native-common.js';
+import { handleGitOperationNotify } from '../git-operation-notify.js';
 
 const HOOK_NAME = 'native-pre-push';
+
+async function notifyPushSuccess(cwd: string) {
+  try {
+    await handleGitOperationNotify('push', cwd);
+  } catch {
+    // fail-open
+  }
+}
 
 function getRepoRoot() {
   const result = execCommand('git rev-parse --show-toplevel');
@@ -65,6 +74,7 @@ async function main() {
   const headTree = getHeadTreeSha(cwd);
   if (headTree && hasFreshFullPass(cwd, headTree)) {
     log(HOOK_NAME, { level: 'SKIP', reason: 'full 门已在相同提交树通过，跳过重复扫描', tree: headTree, cwd });
+    await notifyPushSuccess(cwd);
     process.exit(0);
   }
 
@@ -85,6 +95,7 @@ async function main() {
     recordFullPass(cwd, headTree);
   }
 
+  await notifyPushSuccess(cwd);
   process.exit(0);
 }
 

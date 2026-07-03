@@ -450,6 +450,15 @@ ide:
         trigger: both
 
 git:
+  # commit / push / merge ??? webhook ??
+  git-operation-notify:
+    enabled: true
+    timeout: 5s
+    operations:
+      - commit
+      - push
+      - merge
+
   # commit-msg ????? commit message ?????
   commit-msg:
     enabled: true

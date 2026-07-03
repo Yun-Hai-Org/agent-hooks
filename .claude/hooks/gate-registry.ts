@@ -516,6 +516,10 @@ export const GATE_REGISTRY: GateRegistryRoot = {
       defaultTimeoutMs: REGISTRY_FULL_TIMEOUT_MS,
       checks: buildFullHookChecks(),
     },
+    'git-operation-notify': {
+      description: 'post-commit/post-merge/pre-push：Git 操作成功 webhook 通知',
+      defaultTimeoutMs: 5000,
+    },
   },
 };
 
@@ -746,6 +750,12 @@ export function generateExampleYaml(): string {
         lines.push('        trigger: both');
         lines.push('      kiro:');
         lines.push('        trigger: both');
+      }
+      if (hookId === 'git-operation-notify') {
+        lines.push('    operations:');
+        lines.push('      - commit');
+        lines.push('      - push');
+        lines.push('      - merge');
       }
       lines.push('');
     }

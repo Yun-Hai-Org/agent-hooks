@@ -14,6 +14,7 @@ import type { CoverageThresholdOptions } from './types.js';
 import { DEFAULT_COVERAGE_THRESHOLDS } from './checks/coverage.js';
 
 export type SessionEndTrigger = 'session_end' | 'stop' | 'both';
+export type GitOperationKind = 'commit' | 'push' | 'merge';
 
 export interface GateConfigEntry {
   enabled?: boolean;
@@ -42,6 +43,10 @@ export interface NotificationSettings {
 }
 
 export type SessionEndNotifyEntry = GateConfigEntry;
+
+export interface GitOperationNotifyEntry extends GateConfigEntry {
+  operations?: GitOperationKind[];
+}
 
 export interface ScanScopeConfig {
   include?: string[];
@@ -666,4 +671,41 @@ export function getEffectiveSessionEndTrigger(
   cwd: string = process.cwd(),
 ): SessionEndTrigger {
   return getSessionEndNotifyConfig(cwd, platform).platformTrigger;
+}
+
+const DEFAULT_GIT_OPERATIONS: GitOperationKind[] = ['commit', 'push', 'merge'];
+
+function parseGitOperationKind(value: unknown): GitOperationKind | undefined {
+  if (value === 'commit' || value === 'push' || value === 'merge') return value;
+  return undefined;
+}
+
+function getGitOperationNotifyEntry(config: GateConfig): GitOperationNotifyEntry | undefined {
+  return config.git?.['git-operation-notify'];
+}
+
+export interface ResolvedGitOperationNotifyConfig {
+  enabled: boolean;
+  operations: GitOperationKind[];
+  timeoutMs: number;
+  maxSummaryChars: number;
+}
+
+export function getGitOperationNotifyConfig(cwd: string = process.cwd()): ResolvedGitOperationNotifyConfig {
+  const path = 'git.git-operation-notify';
+  const node = resolveGateNode(path, cwd);
+  const config = loadGateConfig(cwd);
+  const entry = getGitOperationNotifyEntry(config);
+  const operationsRaw = entry?.operations;
+  const operations =
+    Array.isArray(operationsRaw) && operationsRaw.length > 0
+      ? operationsRaw.map(parseGitOperationKind).filter((op): op is GitOperationKind => op !== undefined)
+      : DEFAULT_GIT_OPERATIONS;
+  const timeoutMs = node.timeoutMs ?? DEFAULT_NOTIFICATION_TIMEOUT_MS;
+  return {
+    enabled: node.configured && node.enabled,
+    operations: operations.length > 0 ? operations : DEFAULT_GIT_OPERATIONS,
+    timeoutMs,
+    maxSummaryChars: DEFAULT_MAX_SUMMARY_CHARS,
+  };
 }
