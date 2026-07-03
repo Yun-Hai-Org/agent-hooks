@@ -22,11 +22,15 @@ if [[ ! -f "$HOOKS_REPO/.cursor/hooks.json.example" ]]; then
 	exit 1
 fi
 
+"$SCRIPT_DIR/validate-hooks-json.example.sh" "$HOOKS_REPO"
+
 if [[ -d "$HOME/.cursor/hooks" && ! -L "$HOME/.cursor/hooks" ]]; then
 	backup="$HOME/.cursor/hooks.bak-$(date +%Y%m%d)"
 	echo "backing up $HOME/.cursor/hooks -> $backup"
 	mv "$HOME/.cursor/hooks" "$backup"
 fi
+
+"$SCRIPT_DIR/install-cursor-yingmi-hooks.sh"
 
 if [[ -e "$HOME/.claude/hooks" && ! -L "$HOME/.claude/hooks" ]]; then
 	echo "removing existing directory $HOME/.claude/hooks"

@@ -3,10 +3,16 @@
   "hooks": {
     "sessionStart": [
       {
+        "command": "$HOME/.cursor/hooks/session-init.sh"
+      },
+      {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-start.ts"
       }
     ],
     "beforeShellExecution": [
+      {
+        "command": "$HOME/.cursor/hooks/dangerous-command-guard.sh"
+      },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts block-dangerous-commands.ts"
       },
@@ -15,6 +21,10 @@
       }
     ],
     "preToolUse": [
+      {
+        "command": "$HOME/.cursor/hooks/prohibited-content-pretool-guard.sh",
+        "matcher": "Write|TabWrite"
+      },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts worktree-gate.ts",
         "matcher": "Shell|Write"
