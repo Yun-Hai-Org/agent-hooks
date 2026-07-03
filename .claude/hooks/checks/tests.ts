@@ -12,6 +12,7 @@ import {
   DECISION,
 } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
+import { getScopedStagedFiles } from './scan-scope.js';
 import { denyIfToolMissing, denyOnToolError, isToolInstalled, resolveBunExecutable } from './tools.js';
 import { isHooksProject } from './hooks-project.js';
 
@@ -22,7 +23,7 @@ function bunTestCommand(args: string): string {
 }
 
 export async function runRelatedTests(cwd?: string, _options?: GateCheckRunOptions) {
-  const stagedFiles = getStagedFiles(cwd);
+  const stagedFiles = getScopedStagedFiles(cwd);
   if (stagedFiles.length === 0) {
     return formatResult('related-tests', DECISION.SKIP, '无暂存文件，跳过关联测试');
   }
@@ -225,6 +226,35 @@ const HOOK_UNIT_TEST_TIMEOUT_MS = 1200000;
 const HOOK_UNIT_TEST_GLOB = process.env['HOOK_UNIT_TEST_GLOB'] ?? './.claude/hooks/__tests__/*.test.ts';
 const HOOK_UNIT_TEST_EXEC_OPTS = { maxBuffer: 64 * 1024 * 1024, shell: '/bin/sh' as const };
 
+export interface BunTestRunSummary {
+  failCount: number;
+  passCount?: number;
+  parsed: boolean;
+}
+
+export function parseBunTestRunSummary(output: string): BunTestRunSummary {
+  const failMatches = [...output.matchAll(/(\d+)\s+fail\b/g)];
+  const lastFail = failMatches.at(-1);
+  const failCount = lastFail?.[1] !== undefined ? Number(lastFail[1]) : 0;
+
+  const passFailLine = /(\d+)\s+pass(?:ed)?.*?(\d+)\s+fail\b/i.exec(output);
+  if (passFailLine) {
+    return {
+      failCount: Number(passFailLine[2]),
+      passCount: Number(passFailLine[1]),
+      parsed: true,
+    };
+  }
+
+  const passOnly = /(\d+)\s+pass(?:ed)?\b/i.exec(output);
+  const failOnly = failMatches.length > 0;
+  if (passOnly || failOnly || /\b0\s+fail\b/.test(output)) {
+    return { failCount, ...(passOnly ? { passCount: Number(passOnly[1]) } : {}), parsed: true };
+  }
+
+  return { failCount: 0, parsed: false };
+}
+
 export async function runHookUnitTests(cwd?: string, options: GateCheckRunOptions = {}) {
   const unitTestTimeoutMs = options.timeoutMs ?? HOOK_UNIT_TEST_TIMEOUT_MS;
   if (!isHooksProject(cwd)) {
@@ -245,17 +275,26 @@ export async function runHookUnitTests(cwd?: string, options: GateCheckRunOption
   try {
     const withCoverage = options.coverageThreshold !== undefined;
     const flags = withCoverage ? ' --coverage' : ' --dots';
-    const cmd = bunTestCommand(`${HOOK_UNIT_TEST_GLOB}${flags}`);
+    const cmd = bunTestCommand(`${HOOK_UNIT_TEST_GLOB}${flags} --concurrency=1`);
+    // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 为受信 hooks 仓库根，第二段为常量测试 stub 路径
+    const emptyGlobalPath = join(cwd ?? process.cwd(), '.claude/hooks/__tests__/empty-global-quality-gate.yaml');
     const result = await withTimeout(
-      execCommandAsync(cmd, { cwd, timeout: unitTestTimeoutMs, ...HOOK_UNIT_TEST_EXEC_OPTS }),
+      execCommandAsync(cmd, {
+        cwd,
+        timeout: unitTestTimeoutMs,
+        ...HOOK_UNIT_TEST_EXEC_OPTS,
+        env: { ...process.env, QUALITY_GATE_GLOBAL_CONFIG_PATH: emptyGlobalPath },
+      }),
       unitTestTimeoutMs,
       `Hook 常规单测超时 (${String(unitTestTimeoutMs / 1000)}s)`,
     );
     const combinedOutput = result.stdout + result.stderr;
-    const success = result.success && !combinedOutput.includes('(fail)');
+    const summary = parseBunTestRunSummary(combinedOutput);
+    const success = summary.parsed ? summary.failCount === 0 : result.success;
 
     if (!success) {
-      return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 常规单测失败', {
+      const tail = combinedOutput.trim().split('\n').slice(-3).join('\n');
+      return formatResult('hook-unit-tests', DECISION.DENY, `Hook 常规单测失败${tail ? `\n${tail}` : ''}`, {
         output: combinedOutput.slice(0, 500),
       });
     }

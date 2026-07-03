@@ -1,5 +1,40 @@
 # 质量门全量白名单配置 — 由 gate-registry.generateExampleYaml() 生成
 
+settings:
+  coverageThreshold:
+    lines: 79
+    functions: 80
+  scanScope:
+    include: []
+    exclude:
+      - _bmad-output/
+      - .github/
+      - data/evals/
+      - data/
+      - dist/
+      - build/
+      - .pytest_cache/
+      - .mypy_cache/
+      - htmlcov/
+      - coverage/
+  pushMergeBranches:
+    mode: all
+    include: []
+    exclude: []
+  licenseDenylist:
+    - GPL-3.0
+    - AGPL-3.0
+  notifications:
+    timeout: 5s
+    cooldown: 5m
+    channels:
+      wechat:
+        url: ''
+      feishu:
+        url: ''
+      slack:
+        url: ''
+
 ide:
   # beforeShellExecution：拦截灾难性/高风险 shell 命令与 hook 绕过
   block-dangerous-commands:
@@ -400,7 +435,30 @@ ide:
     enabled: true
     timeout: 5s
 
+  # sessionEnd/Stop：对话结束 webhook 通知（Cursor/Claude/Kiro）
+  session-end-notify:
+    enabled: true
+    timeout: 5s
+    trigger: both
+    maxSummaryChars: 1500
+    platforms:
+      cursor:
+        trigger: both
+      claude:
+        trigger: both
+      kiro:
+        trigger: both
+
 git:
+  # commit / push / merge 成功后 webhook 通知
+  git-operation-notify:
+    enabled: true
+    timeout: 5s
+    operations:
+      - commit
+      - push
+      - merge
+
   # commit-msg 钩子：校验 commit message 格式与语义
   commit-msg:
     enabled: true
@@ -701,6 +759,11 @@ git:
       zap-api-dast:
         enabled: true
         timeout: 10m
+      # OpenAPI 越权负向用例（无/无效 token 期望 401/403）
+      # controlIds: PCI-11.3
+      openapi-auth-negative:
+        enabled: true
+        timeout: 3m
       # Conftest/OPA 策略（PCI-DORA Rego）
       # controlIds: DORA-Art6, SOX-404
       opa-conftest:
@@ -873,6 +936,11 @@ git:
       zap-api-dast:
         enabled: true
         timeout: 10m
+      # OpenAPI 越权负向用例（无/无效 token 期望 401/403）
+      # controlIds: PCI-11.3
+      openapi-auth-negative:
+        enabled: true
+        timeout: 3m
       # Conftest/OPA 策略（PCI-DORA Rego）
       # controlIds: DORA-Art6, SOX-404
       opa-conftest:

@@ -5,8 +5,10 @@
  */
 
 import { readStdin as readStdinBase } from './security-orchestrator.js';
+import { basename } from 'path';
 import type { HookInput, HookPlatform, HookToolInput } from './types.js';
 import { asString } from './types.js';
+import type { SessionEndTrigger } from './gate-config.js';
 
 export function getPlatform(): HookPlatform {
   const raw = process.env['HOOK_PLATFORM'];
@@ -209,4 +211,141 @@ export function formatStopSuccessOutput(message: string, hookEvent = 'Stop'): st
       additionalContext: message,
     },
   });
+}
+
+export interface ConversationEndInput {
+  platform: HookPlatform;
+  hookEvent: string;
+  sessionId: string;
+  cwd: string;
+  projectName: string;
+  summaryText: string;
+  reason?: string;
+  durationMs?: number;
+  status?: string;
+  transcriptPath?: string;
+}
+
+function resolveConversationCwd(data: Record<string, unknown>): string {
+  const cwd = asString(data['cwd']);
+  if (cwd) return cwd;
+  const roots = data['workspace_roots'];
+  if (Array.isArray(roots) && typeof roots[0] === 'string') return roots[0];
+  return process.cwd();
+}
+
+export function resolveProjectName(data: Record<string, unknown>): string {
+  const cwd = resolveConversationCwd(data);
+  const roots = data['workspace_roots'];
+  const root = Array.isArray(roots) && typeof roots[0] === 'string' ? roots[0] : cwd;
+  return basename(root) || basename(cwd) || 'project';
+}
+
+function normalizeHookEventName(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  const lower = trimmed.toLowerCase();
+  if (lower === 'sessionend' || lower === 'session_end') return 'SessionEnd';
+  if (lower === 'stop') return 'Stop';
+  if (lower === 'afteragentresponse') return 'afterAgentResponse';
+  return trimmed;
+}
+
+export function extractAssistantText(data: Record<string, unknown>, platform: HookPlatform, hookEvent: string): string {
+  const event = hookEvent.toLowerCase();
+  if (platform === 'cursor') {
+    if (event.includes('afteragent')) {
+      return asString(data['text']) || asString(data['response']);
+    }
+    if (event === 'stop') {
+      return asString(data['text']) || asString(data['last_assistant_message']);
+    }
+  }
+  if (platform === 'claude') {
+    if (event === 'stop' || event === 'subagentstop' || event === 'sessionend') {
+      return asString(data['last_assistant_message']);
+    }
+  }
+  if (platform === 'kiro') {
+    if (event === 'stop') {
+      return asString(data['assistant_response']) || asString(data['last_assistant_message']);
+    }
+  }
+  return '';
+}
+
+export function parseConversationEndInput(data: Record<string, unknown>): ConversationEndInput {
+  const platform = getPlatform();
+  const hookEvent = normalizeHookEventName(asString(data['hook_event_name']));
+  const sessionId = asString(data['session_id']) || asString(data['conversation_id']) || asString(data['sessionId']);
+  const cwd = resolveConversationCwd(data);
+  const summaryText = extractAssistantText(data, platform, hookEvent);
+  const durationRaw = data['duration_ms'] ?? data['durationMs'];
+  const durationMs = typeof durationRaw === 'number' ? durationRaw : undefined;
+  const input: ConversationEndInput = {
+    platform,
+    hookEvent,
+    sessionId,
+    cwd,
+    projectName: resolveProjectName(data),
+    summaryText,
+  };
+  const reason = asString(data['reason']);
+  if (reason) input.reason = reason;
+  const status = asString(data['status']);
+  if (status) input.status = status;
+  if (durationMs !== undefined) input.durationMs = durationMs;
+  const transcriptPath = asString(data['transcript_path']);
+  if (transcriptPath) input.transcriptPath = transcriptPath;
+  return input;
+}
+
+const PLATFORM_LABELS: Record<HookPlatform, string> = {
+  cursor: 'Cursor',
+  claude: 'Claude Code',
+  kiro: 'Kiro',
+};
+
+export function platformLabel(platform: HookPlatform): string {
+  return PLATFORM_LABELS[platform];
+}
+
+export function formatTriggerLabel(trigger: SessionEndTrigger, platform: HookPlatform): string {
+  switch (trigger) {
+    case 'session_end':
+      return '会话结束';
+    case 'stop':
+      return platform === 'kiro' ? '每轮结束（Kiro 无 sessionEnd）' : '每轮结束';
+    case 'both':
+      return '会话结束/每轮结束';
+    default: {
+      const _exhaustive: never = trigger;
+      return _exhaustive;
+    }
+  }
+}
+
+export function isSessionEndHookEvent(hookEvent: string): boolean {
+  return hookEvent.replace(/_/g, '').toLowerCase() === 'sessionend';
+}
+
+export function isStopHookEvent(hookEvent: string): boolean {
+  return hookEvent.toLowerCase() === 'stop';
+}
+
+export function shouldNotifyForTrigger(trigger: SessionEndTrigger, hookEvent: string): boolean {
+  const sessionEnd = isSessionEndHookEvent(hookEvent);
+  const stop = isStopHookEvent(hookEvent);
+  switch (trigger) {
+    case 'both':
+      return sessionEnd || stop;
+    case 'session_end':
+      return sessionEnd;
+    case 'stop':
+      return stop;
+    default: {
+      const _exhaustive: never = trigger;
+      return _exhaustive;
+    }
+  }
 }

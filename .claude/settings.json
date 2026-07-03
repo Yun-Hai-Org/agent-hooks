@@ -106,6 +106,28 @@
             "type": "command",
             "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts gate-retry-stop.ts",
             "statusMessage": "push/merge 质量门修复循环..."
+          },
+          {
+            "type": "command",
+            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts session-response-cache.ts",
+            "statusMessage": "缓存 AI 末条回复..."
+          },
+          {
+            "type": "command",
+            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts session-end-notify.ts",
+            "statusMessage": "发送对话结束通知..."
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts session-end-notify.ts",
+            "statusMessage": "发送对话结束通知..."
           }
         ]
       }

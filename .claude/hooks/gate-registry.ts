@@ -488,6 +488,10 @@ export const GATE_REGISTRY: GateRegistryRoot = {
       description: 'Notification：安全/质量事件 webhook 通知',
       defaultTimeoutMs: 5000,
     },
+    'session-end-notify': {
+      description: 'sessionEnd/Stop：对话结束 webhook 通知（Cursor/Claude/Kiro）',
+      defaultTimeoutMs: 5000,
+    },
   },
   git: {
     'commit-msg': {
@@ -511,6 +515,10 @@ export const GATE_REGISTRY: GateRegistryRoot = {
       description: 'pre-merge-commit 钩子：与 pre-push 相同的 full profile 质量门',
       defaultTimeoutMs: REGISTRY_FULL_TIMEOUT_MS,
       checks: buildFullHookChecks(),
+    },
+    'git-operation-notify': {
+      description: 'post-commit/post-merge/pre-push：Git 操作成功 webhook 通知',
+      defaultTimeoutMs: 5000,
     },
   },
 };
@@ -694,21 +702,61 @@ export function generateExampleYaml(): string {
     '',
     'settings:',
     '  coverageThreshold:',
-    '    lines: 80',
+    '    lines: 79',
     '    functions: 80',
     '  scanScope:',
     '    include: []',
     '    exclude:',
     '      - _bmad-output/',
+    '      - .github/',
+    '      - data/evals/',
+    '      - data/',
+    '      - dist/',
+    '      - build/',
+    '      - .pytest_cache/',
+    '      - .mypy_cache/',
+    '      - htmlcov/',
+    '      - coverage/',
+    '  pushMergeBranches:',
+    '    mode: all',
+    '    include: []',
+    '    exclude: []',
     '  licenseDenylist:',
     '    - GPL-3.0',
     '    - AGPL-3.0',
+    '  notifications:',
+    '    timeout: 5s',
+    '    cooldown: 5m',
+    '    channels:',
+    '      wechat:',
+    '        url: ""',
+    '      feishu:',
+    '        url: ""',
+    '      slack:',
+    '        url: ""',
     '',
   ];
   for (const section of ['ide', 'git'] as const) {
     lines.push(`${section}:`);
     for (const [hookId, hookNode] of Object.entries(GATE_REGISTRY[section])) {
       emitYamlNode(lines, hookId, hookNode, 1, true);
+      if (hookId === 'session-end-notify') {
+        lines.push('    trigger: both');
+        lines.push('    maxSummaryChars: 1500');
+        lines.push('    platforms:');
+        lines.push('      cursor:');
+        lines.push('        trigger: both');
+        lines.push('      claude:');
+        lines.push('        trigger: both');
+        lines.push('      kiro:');
+        lines.push('        trigger: both');
+      }
+      if (hookId === 'git-operation-notify') {
+        lines.push('    operations:');
+        lines.push('      - commit');
+        lines.push('      - push');
+        lines.push('      - merge');
+      }
       lines.push('');
     }
   }

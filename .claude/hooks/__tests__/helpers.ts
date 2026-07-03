@@ -49,6 +49,16 @@ export function expectAllow(output) {
 
 const FIXTURE_DIR = join(tmpdir(), `hook-tests-${process.pid}`);
 
+export function useEmptyGlobalQualityGateConfig(): void {
+  process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'] = join(import.meta.dir, 'empty-global-quality-gate.yaml');
+  clearGateConfigCache();
+}
+
+export function restoreGlobalQualityGateConfig(): void {
+  process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'] = join(import.meta.dir, 'empty-global-quality-gate.yaml');
+  clearGateConfigCache();
+}
+
 export function disableGlobalGitHooks(cwd: string) {
   execSync('git config --local core.hooksPath .git/hooks', { cwd, stdio: 'pipe' });
 }
@@ -56,11 +66,13 @@ export function disableGlobalGitHooks(cwd: string) {
 /** 为测试仓库写入 quality-gate 白名单（从项目 example 复制） */
 export function bootstrapQualityGateYaml(repoDir: string): void {
   const src = join(PROJECT_ROOT, '.claude', 'quality-gate.yaml');
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- repoDir 为受信临时测试仓库根
   const destDir = join(repoDir, '.claude');
   mkdirSync(destDir, { recursive: true });
   const content = existsSync(src)
     ? readFileSync(src, 'utf-8')
     : 'ide:\n  branch-gate:\n    enabled: true\n  block-dangerous-commands:\n    enabled: true\n';
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- repoDir 为受信临时测试仓库根
   writeFileSync(join(destDir, 'quality-gate.yaml'), content, 'utf-8');
   clearGateConfigCache();
 }
@@ -70,7 +82,7 @@ export function createTempGitRepo(branch = 'feat/test') {
   const repoName = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const repoPath = join(FIXTURE_DIR, repoName);
   mkdirSync(repoPath, { recursive: true });
-  execSync('git init', { cwd: repoPath });
+  execSync('git init', { cwd: repoPath }); // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process -- 测试夹具初始化受信临时仓库
   execSync('git config user.email "test@test.com"', { cwd: repoPath });
   execSync('git config user.name "Test"', { cwd: repoPath });
   disableGlobalGitHooks(repoPath);
@@ -78,7 +90,7 @@ export function createTempGitRepo(branch = 'feat/test') {
   execSync('git add .', { cwd: repoPath });
   execSync('git commit -m "chore: init"', { cwd: repoPath });
   if (branch !== 'master' && branch !== 'main') {
-    execSync(`git checkout -b ${branch}`, { cwd: repoPath });
+    execSync(`git checkout -b ${branch}`, { cwd: repoPath }); // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process -- branch 为测试构造的分支名
   }
   return repoPath;
 }
@@ -90,7 +102,7 @@ export function cleanupTempGitRepo(repoPath) {
 }
 
 export function writeFile(repoPath, relativePath, content) {
-  const fullPath = join(repoPath, relativePath);
+  const fullPath = join(repoPath, relativePath); // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- repoPath 为受信临时测试仓库根，relativePath 由测试构造
   const dir = dirname(fullPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(fullPath, content);

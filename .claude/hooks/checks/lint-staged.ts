@@ -1,7 +1,7 @@
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
-import { getStagedFiles } from './git-policy.js';
+import { getScopedStagedFiles } from './scan-scope.js';
 import {
   denyIfToolMissing,
   denyOnToolError,
@@ -23,7 +23,7 @@ export async function runLintStaged(cwd?: string, options?: GateCheckRunOptions)
   const timeoutMs = options?.timeoutMs ?? COMMIT_GATE_TIMEOUT_MS;
   const gatePathPrefix: GatePathPrefix = options?.gatePathPrefix ?? 'git.pre-commit';
   const root = cwd ?? process.cwd();
-  const stagedFiles = filterExistingStagedFiles(getStagedFiles(cwd), cwd);
+  const stagedFiles = filterExistingStagedFiles(getScopedStagedFiles(cwd), cwd);
   const jsFiles = stagedFiles.filter((f) => /\.(js|ts|jsx|tsx|mjs|cjs)$/i.test(f) && !f.includes('__tests__'));
   const pyFiles = stagedFiles.filter((f) => f.endsWith('.py'));
 

@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeEach, mock } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { spawn } from 'child_process';
 import { join } from 'path';
+import { mkdirSync, writeFileSync } from 'fs';
 import { getHookProcessEnv } from '../security-orchestrator.js';
 import { resolveBunExecutable } from '../checks/tools.js';
+import { clearGateConfigCache } from '../gate-config.js';
+import { createTempGitRepo, cleanupTempGitRepo } from './helpers.js';
 import {
   isCoolingDown,
   recordSent,
@@ -24,11 +27,12 @@ describe('notification-hook', () => {
   const HOOK_PATH = join(import.meta.dir, '..', 'notification-hook.ts');
 
   // 辅助函数：运行 hook 并获取输出
-  function runHook(input = '{}', envOverrides = {}) {
+  function runHook(input = '{}', envOverrides = {}, cwd = process.cwd()) {
     return new Promise((resolve, reject) => {
       const child = spawn(resolveBunExecutable(), [HOOK_PATH], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: getHookProcessEnv(envOverrides),
+        cwd,
       });
 
       let stdout = '';
@@ -181,14 +185,26 @@ describe('notification-hook', () => {
   describe('formatWechatMessage', () => {
     it('应输出企业微信 markdown 格式', () => {
       const msg = formatWechatMessage(
-        { hook: 'commit-gate', severity: 'high', reason: '拦截了危险提交' },
+        {
+          hook: 'commit-gate',
+          severity: 'high',
+          reason: '拦截了危险提交',
+          projectName: 'demo',
+          platform: 'Cursor',
+        },
         '2026-06-08 10:00:00',
       );
       expect(msg.msgtype).toBe('markdown');
-      expect(msg.markdown.content).toContain('commit-gate');
-      expect(msg.markdown.content).toContain('HIGH');
-      expect(msg.markdown.content).toContain('拦截了危险提交');
-      expect(msg.markdown.content).toContain('🟠');
+      const content = msg.markdown.content as string;
+      expect(content).toContain('commit-gate');
+      expect(content).toContain('HIGH');
+      expect(content).toContain('拦截了危险提交');
+      expect(content).toContain('🟠');
+      expect(content).toContain('**安全事件通知**');
+      expect(content).toContain('demo');
+      expect(content).toContain('Cursor');
+      expect(content).not.toContain('Claude Code');
+      expect(content).toContain('**详情**');
     });
 
     it('应包含时间戳', () => {
@@ -202,13 +218,22 @@ describe('notification-hook', () => {
   describe('formatFeishuMessage', () => {
     it('应输出飞书消息卡片格式', () => {
       const msg = formatFeishuMessage(
-        { hook: 'protect-secrets', severity: 'critical', reason: '检测到 API 密钥泄露' },
+        {
+          hook: 'protect-secrets',
+          severity: 'critical',
+          reason: '检测到 API 密钥泄露',
+          projectName: 'demo',
+          platform: 'Claude Code',
+        },
         '2026-06-08 10:00:00',
       );
       expect(msg.msg_type).toBe('interactive');
       expect(msg.card.header.template).toBe('red');
+      expect(msg.card.header.title.content).toContain('安全事件通知');
       expect(msg.card.elements[0].text.content).toContain('protect-secrets');
       expect(msg.card.elements[0].text.content).toContain('CRITICAL');
+      expect(msg.card.elements[0].text.content).toContain('demo');
+      expect(msg.card.elements[1].text.content).toContain('检测到 API 密钥泄露');
     });
 
     it('不同级别应使用不同卡片颜色', () => {
@@ -233,47 +258,104 @@ describe('notification-hook', () => {
     });
 
     it('应包含钩子名和级别字段', () => {
-      const msg = formatSlackMessage({ hook: 'branch-gate', severity: 'low', reason: '提示信息' }, '');
+      const msg = formatSlackMessage(
+        { hook: 'branch-gate', severity: 'low', reason: '提示信息', projectName: 'demo', platform: 'Cursor' },
+        '',
+      );
       const fields = msg.attachments[0].blocks[1].fields;
-      expect(fields[0].text).toContain('branch-gate');
-      expect(fields[1].text).toContain('LOW');
+      expect(fields[0].text).toContain('demo');
+      expect(fields[2].text).toContain('branch-gate');
+      expect(fields[3].text).toContain('LOW');
     });
   });
 
   // ─── getConfiguredChannels 测试 ────────────────────────────────────────────
 
   describe('getConfiguredChannels', () => {
-    it('无环境变量时应返回空数组', () => {
-      const original = { ...process.env };
-      delete process.env.NOTIFY_WEBHOOK_URL;
-      delete process.env.NOTIFY_FEISHU_URL;
-      delete process.env.NOTIFY_SLACK_URL;
+    let repoDir: string;
 
-      const channels = getConfiguredChannels();
+    beforeEach(() => {
+      repoDir = createTempGitRepo('feat/notify-channels');
+      clearGateConfigCache();
+    });
+
+    afterEach(() => {
+      cleanupTempGitRepo(repoDir);
+      clearGateConfigCache();
+    });
+
+    it('未配置 webhook url 时应返回空数组', () => {
+      mkdirSync(join(repoDir, '.claude'), { recursive: true });
+      writeFileSync(
+        join(repoDir, '.claude/quality-gate.yaml'),
+        `settings:
+  notifications:
+    channels:
+      wechat:
+        url: ""
+`,
+      );
+      clearGateConfigCache();
+      const channels = getConfiguredChannels(repoDir);
       expect(channels.length).toBe(0);
+    });
 
-      // 恢复环境
-      Object.assign(process.env, original);
+    it('应从 quality-gate.yaml 读取企业微信渠道', () => {
+      mkdirSync(join(repoDir, '.claude'), { recursive: true });
+      writeFileSync(
+        join(repoDir, '.claude/quality-gate.yaml'),
+        `settings:
+  notifications:
+    channels:
+      wechat:
+        url: "https://example.com/wechat"
+`,
+      );
+      clearGateConfigCache();
+      const channels = getConfiguredChannels(repoDir);
+      expect(channels.length).toBe(1);
+      expect(channels[0]?.name).toBe('企业微信');
     });
   });
 
   // ─── handleNotification 测试 ──────────────────────────────────────────────
 
   describe('handleNotification', () => {
-    it('无渠道配置时应返回 no_channels', async () => {
-      const original = { ...process.env };
-      delete process.env.NOTIFY_WEBHOOK_URL;
-      delete process.env.NOTIFY_FEISHU_URL;
-      delete process.env.NOTIFY_SLACK_URL;
+    let repoDir: string;
+    const prevCwd = process.cwd();
 
+    beforeEach(() => {
+      repoDir = createTempGitRepo('feat/notify-handle');
+      mkdirSync(join(repoDir, '.claude'), { recursive: true });
+      writeFileSync(
+        join(repoDir, '.claude/quality-gate.yaml'),
+        `settings:
+  notifications:
+    channels:
+      wechat:
+        url: ""
+ide:
+  notification:
+    enabled: true
+`,
+      );
+      clearGateConfigCache();
+      process.chdir(repoDir);
+    });
+
+    afterEach(() => {
+      process.chdir(prevCwd);
+      cleanupTempGitRepo(repoDir);
+      clearGateConfigCache();
+    });
+
+    it('无渠道配置时应返回 no_channels', async () => {
       const result = await handleNotification({
         tool_input: { message: '[test] deny event' },
         session_id: 'test',
       });
       expect(result.sent).toBe(false);
       expect(result.reason).toBe('no_channels');
-
-      Object.assign(process.env, original);
     });
 
     it('冷却期内应返回 cooldown', async () => {
@@ -357,6 +439,23 @@ describe('notification-hook', () => {
     });
 
     it('有 Webhook URL 配置时应尝试发送', async () => {
+      const hookRepo = createTempGitRepo('feat/notify-hook-run');
+      mkdirSync(join(hookRepo, '.claude'), { recursive: true });
+      writeFileSync(
+        join(hookRepo, '.claude/quality-gate.yaml'),
+        `settings:
+  notifications:
+    timeout: 2s
+    channels:
+      wechat:
+        url: "http://localhost:1/test"
+ide:
+  notification:
+    enabled: true
+`,
+      );
+      clearGateConfigCache();
+
       const { code, stdout } = await runHook(
         JSON.stringify({
           tool_name: 'Notification',
@@ -366,11 +465,11 @@ describe('notification-hook', () => {
           },
           session_id: 'test-002',
         }),
-        {
-          NOTIFY_WEBHOOK_URL: 'http://localhost:1/test',
-          NOTIFY_TIMEOUT_MS: '2000',
-        },
+        {},
+        hookRepo,
       );
+      cleanupTempGitRepo(hookRepo);
+      clearGateConfigCache();
       expect(code).toBe(0);
       expect(stdout.trim()).toBe('{}');
     });

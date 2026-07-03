@@ -1,5 +1,5 @@
 import { execCommand, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
-import { getStagedFiles } from './git-policy.js';
+import { getScopedStagedFiles } from './scan-scope.js';
 import {
   denyIfPyrightMissing,
   denyIfToolMissing,
@@ -33,7 +33,7 @@ function formatTypecheckToolOutput(result: TypecheckToolResult) {
 
 export async function runStagedTypecheck(cwd?: string, options?: GateCheckRunOptions) {
   const timeoutMs = options?.timeoutMs ?? COMMIT_GATE_TIMEOUT_MS;
-  const stagedFiles = getStagedFiles(cwd);
+  const stagedFiles = getScopedStagedFiles(cwd);
   const stagedPyFiles = stagedFiles.filter((f) => f.endsWith('.py'));
   const stagedJsTsFiles = stagedFiles.filter((f) => /\.(js|ts|jsx|tsx|mjs|cjs)$/i.test(f));
 

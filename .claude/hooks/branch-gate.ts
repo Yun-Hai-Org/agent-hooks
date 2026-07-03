@@ -126,12 +126,13 @@ async function readBranchGateInput() {
   return { ...data, tool_name: normalizeToolName(data.tool_name) };
 }
 
-function deny(reason: string, session_id?: string) {
+function deny(reason: string, session_id?: string, cwd?: string) {
   notifySecurityEventAsync({
     hook: 'branch-gate',
     severity: 'high',
     reason,
     ...(session_id !== undefined ? { session_id } : {}),
+    ...(cwd !== undefined ? { cwd } : {}),
   });
   return formatDenyOutput('deny', reason);
 }
@@ -179,7 +180,7 @@ async function main() {
         }
       }
       log({ level: 'BLOCKED', reason: 'not a git repo', tool: tool_name, session_id, cwd: workingDir });
-      console.log(deny(GIT_INIT_REQUIRED_MESSAGE, session_id));
+      process.stdout.write(`${deny(GIT_INIT_REQUIRED_MESSAGE, session_id, workingDir)}\n`);
       return;
     }
 
@@ -204,6 +205,7 @@ async function main() {
           deny(
             `🔒 [branch-gate] 禁止在 main/master 上创建 worktree 进行开发。请使用 feature 分支 worktree。`,
             session_id,
+            workingDir,
           ),
         );
         return;
@@ -245,6 +247,7 @@ async function main() {
         deny(
           `🔒 [branch-gate] 禁止在 ${branch} 分支执行文件写入操作 (${patternName ?? 'unknown'})。请切换到功能分支后再试。`,
           session_id,
+          workingDir,
         ),
       );
       return;
@@ -265,7 +268,9 @@ async function main() {
       session_id,
       cwd: workingDir,
     });
-    console.log(deny(`🔒 [branch-gate] 禁止在 ${branch} 分支写入文件。请切换到功能分支后再试。`, session_id));
+    process.stdout.write(
+      `${deny(`🔒 [branch-gate] 禁止在 ${branch} 分支写入文件。请切换到功能分支后再试。`, session_id, workingDir)}\n`,
+    );
     return;
   } catch (/** @type {unknown} */ e) {
     log({ level: 'ERROR', error: e instanceof Error ? e.message : String(e) });

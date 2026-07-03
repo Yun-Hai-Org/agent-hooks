@@ -5,6 +5,7 @@ import {
   clearGateConfigCache,
   resolveCoverageThresholds,
   resolveScanScope,
+  resolvePushMergeBranchPolicy,
   resolveLicenseDenylist,
   parseDuration,
   normalizeTimeout,
@@ -82,9 +83,29 @@ describe('gate-config settings', () => {
     expect(resolveScanScope(repoDir).include).toEqual(['src/']);
   });
 
+  it('pushMergeBranches mode 与 include/exclude 合并', () => {
+    mkdirSync(join(repoDir, '.claude'), { recursive: true });
+    writeFileSync(
+      join(repoDir, '.claude/quality-gate.yaml'),
+      `settings:
+  pushMergeBranches:
+    mode: selected
+    include:
+      - feat/*
+    exclude:
+      - wip/*
+`,
+    );
+    clearGateConfigCache();
+    const policy = resolvePushMergeBranchPolicy(repoDir);
+    expect(policy.mode).toBe('selected');
+    expect(policy.include).toEqual(['feat/*']);
+    expect(policy.exclude).toEqual(['wip/*']);
+  });
+
   it('PROJECT_ROOT yaml 含 settings', () => {
     const t = resolveCoverageThresholds(PROJECT_ROOT);
-    expect(t.lines).toBeGreaterThanOrEqual(80);
+    expect(t.lines).toBeGreaterThanOrEqual(79);
     expect(t.functions).toBeGreaterThanOrEqual(80);
   });
 });

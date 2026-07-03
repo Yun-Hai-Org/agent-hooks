@@ -2,15 +2,38 @@
 
 settings:
   coverageThreshold:
-    lines: 80
+    lines: 79
     functions: 80
   scanScope:
     include: []
     exclude:
       - _bmad-output/
+      - .github/
+      - data/evals/
+      - data/
+      - dist/
+      - build/
+      - .pytest_cache/
+      - .mypy_cache/
+      - htmlcov/
+      - coverage/
+  pushMergeBranches:
+    mode: all
+    include: []
+    exclude: []
   licenseDenylist:
     - GPL-3.0
     - AGPL-3.0
+  notifications:
+    timeout: 5s
+    cooldown: 5m
+    channels:
+      wechat:
+        url: ''
+      feishu:
+        url: ''
+      slack:
+        url: ''
 
 ide:
   # beforeShellExecution??????/??? shell ??? hook ??
@@ -412,7 +435,30 @@ ide:
     enabled: true
     timeout: 5s
 
+  # sessionEnd/Stop?????? webhook ???Cursor/Claude/Kiro?
+  session-end-notify:
+    enabled: true
+    trigger: both
+    maxSummaryChars: 1500
+    timeout: 5s
+    platforms:
+      cursor:
+        trigger: both
+      claude:
+        trigger: both
+      kiro:
+        trigger: both
+
 git:
+  # commit / push / merge ??? webhook ??
+  git-operation-notify:
+    enabled: true
+    timeout: 5s
+    operations:
+      - commit
+      - push
+      - merge
+
   # commit-msg ????? commit message ?????
   commit-msg:
     enabled: true

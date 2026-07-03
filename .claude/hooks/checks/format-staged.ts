@@ -1,5 +1,6 @@
 import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
-import { getStagedFiles, filterExistingStagedFiles } from './git-policy.js';
+import { filterExistingStagedFiles } from './git-policy.js';
+import { getScopedStagedFiles } from './scan-scope.js';
 import {
   denyIfToolMissing,
   denyOnToolError,
@@ -15,7 +16,7 @@ export async function runFormatStaged(cwd?: string, options?: GateCheckRunOption
   const timeoutMs = options?.timeoutMs ?? COMMIT_GATE_TIMEOUT_MS;
   const gatePathPrefix: GatePathPrefix = options?.gatePathPrefix ?? 'git.pre-commit';
   const root = cwd ?? process.cwd();
-  const stagedFiles = filterExistingStagedFiles(getStagedFiles(cwd), cwd);
+  const stagedFiles = filterExistingStagedFiles(getScopedStagedFiles(cwd), cwd);
   const jsFiles = stagedFiles.filter(
     (f) =>
       /\.(js|ts|jsx|tsx|mjs|cjs|json|md|mdx|yaml|yml|css|scss|less)$/i.test(f) &&
