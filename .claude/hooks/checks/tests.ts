@@ -226,6 +226,35 @@ const HOOK_UNIT_TEST_TIMEOUT_MS = 1200000;
 const HOOK_UNIT_TEST_GLOB = process.env['HOOK_UNIT_TEST_GLOB'] ?? './.claude/hooks/__tests__/*.test.ts';
 const HOOK_UNIT_TEST_EXEC_OPTS = { maxBuffer: 64 * 1024 * 1024, shell: '/bin/sh' as const };
 
+export interface BunTestRunSummary {
+  failCount: number;
+  passCount?: number;
+  parsed: boolean;
+}
+
+export function parseBunTestRunSummary(output: string): BunTestRunSummary {
+  const failMatches = [...output.matchAll(/(\d+)\s+fail\b/g)];
+  const lastFail = failMatches.at(-1);
+  const failCount = lastFail?.[1] !== undefined ? Number(lastFail[1]) : 0;
+
+  const passFailLine = /(\d+)\s+pass(?:ed)?.*?(\d+)\s+fail\b/i.exec(output);
+  if (passFailLine) {
+    return {
+      failCount: Number(passFailLine[2]),
+      passCount: Number(passFailLine[1]),
+      parsed: true,
+    };
+  }
+
+  const passOnly = /(\d+)\s+pass(?:ed)?\b/i.exec(output);
+  const failOnly = failMatches.length > 0;
+  if (passOnly || failOnly || /\b0\s+fail\b/.test(output)) {
+    return { failCount, ...(passOnly ? { passCount: Number(passOnly[1]) } : {}), parsed: true };
+  }
+
+  return { failCount: 0, parsed: false };
+}
+
 export async function runHookUnitTests(cwd?: string, options: GateCheckRunOptions = {}) {
   const unitTestTimeoutMs = options.timeoutMs ?? HOOK_UNIT_TEST_TIMEOUT_MS;
   if (!isHooksProject(cwd)) {
@@ -260,12 +289,12 @@ export async function runHookUnitTests(cwd?: string, options: GateCheckRunOption
       `Hook 常规单测超时 (${String(unitTestTimeoutMs / 1000)}s)`,
     );
     const combinedOutput = result.stdout + result.stderr;
-    const failCountMatch = /(\d+)\s+fail\b/.exec(combinedOutput);
-    const failCount = failCountMatch?.[1] ? Number(failCountMatch[1]) : 0;
-    const success = failCount === 0 && /\b0\s+fail\b/.test(combinedOutput);
+    const summary = parseBunTestRunSummary(combinedOutput);
+    const success = summary.parsed ? summary.failCount === 0 : result.success;
 
     if (!success) {
-      return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 常规单测失败', {
+      const tail = combinedOutput.trim().split('\n').slice(-3).join('\n');
+      return formatResult('hook-unit-tests', DECISION.DENY, `Hook 常规单测失败${tail ? `\n${tail}` : ''}`, {
         output: combinedOutput.slice(0, 500),
       });
     }
