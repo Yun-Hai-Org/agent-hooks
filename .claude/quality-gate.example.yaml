@@ -240,6 +240,14 @@ ide:
   workflow-stop-gate:
     enabled: true
 
+  # beforeReadFile/preToolUse：Orchestrator 禁直接 Read/Write
+  orchestrator-gate:
+    enabled: true
+
+  # beforeShellExecution/preToolUse Shell：Orchestrator 禁 git commit/push/merge
+  git-ship-gate:
+    enabled: true
+
   # beforeShellExecution：限制删除未 merge 分支与 worktree prune
   branch-delete-gate:
     enabled: true
@@ -401,6 +409,11 @@ ide:
       checkov:
         enabled: true
         timeout: 500ms
+
+  # SessionStart / watchdog：hooks 配置与部署完整性检查及自动恢复
+  hooks-doctor:
+    enabled: true
+    timeout: 2s
 
   # afterFileEdit：写后自动 format（prettier/ruff 等）
   format-on-write:

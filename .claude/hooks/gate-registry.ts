@@ -437,6 +437,12 @@ export const GATE_REGISTRY: GateRegistryRoot = {
     'workflow-stop-gate': {
       description: 'Stop：pending≥2 时要求 ≥2 并行后台 Task',
     },
+    'orchestrator-gate': {
+      description: 'beforeReadFile/preToolUse：Orchestrator 禁直接 Read/Write（complement workflow-gate）',
+    },
+    'git-ship-gate': {
+      description: 'beforeShellExecution/preToolUse Shell：Orchestrator 禁 git commit/push/merge；仅 ship-sa 子代理',
+    },
     'branch-delete-gate': {
       description: 'beforeShellExecution：限制删除未 merge 分支与 worktree prune',
       checks: checksFrom({
@@ -460,6 +466,10 @@ export const GATE_REGISTRY: GateRegistryRoot = {
       description: 'SessionStart：检测 hook 依赖 CLI 工具可用性（fail-open）',
       defaultTimeoutMs: 2000,
       checks: buildSessionStartChecks(),
+    },
+    'hooks-doctor': {
+      description: 'SessionStart / watchdog：hooks 配置与部署完整性检查及自动恢复（fail-open）',
+      defaultTimeoutMs: 2000,
     },
     'format-on-write': {
       description: 'afterFileEdit：写后自动 format（prettier/ruff 等）',
