@@ -702,8 +702,18 @@ export function getGitOperationNotifyConfig(cwd: string = process.cwd()): Resolv
       ? operationsRaw.map(parseGitOperationKind).filter((op): op is GitOperationKind => op !== undefined)
       : DEFAULT_GIT_OPERATIONS;
   const timeoutMs = node.timeoutMs ?? DEFAULT_NOTIFICATION_TIMEOUT_MS;
+  const registryHasHook = getRegistryNode(path) !== undefined;
+  const explicitlyDisabled = entry?.enabled === false;
+  let enabled: boolean;
+  if (explicitlyDisabled) {
+    enabled = false;
+  } else if (node.configured) {
+    enabled = true;
+  } else {
+    enabled = registryHasHook;
+  }
   return {
-    enabled: node.configured && node.enabled,
+    enabled,
     operations: operations.length > 0 ? operations : DEFAULT_GIT_OPERATIONS,
     timeoutMs,
     maxSummaryChars: DEFAULT_MAX_SUMMARY_CHARS,

@@ -6,6 +6,7 @@ import {
   formatFeishuGitOperationMessage,
   formatSlackGitOperationMessage,
   formatWechatGitOperationMessage,
+  gitOperationEmoji,
   gitOperationTitle,
   clearCooldownState,
 } from '../notification-core.js';
@@ -50,10 +51,31 @@ describe('git-operation-notify', () => {
     clearCooldownState();
   });
 
-  it('gitOperationTitle 应区分操作类型', () => {
+  it('gitOperationTitle 应区分操作类型与图标', () => {
     expect(gitOperationTitle('commit')).toContain('提交通知');
     expect(gitOperationTitle('push')).toContain('推送通知');
     expect(gitOperationTitle('merge')).toContain('合并通知');
+    expect(gitOperationEmoji('commit')).toBe('💾');
+    expect(gitOperationEmoji('push')).toBe('📤');
+    expect(gitOperationEmoji('merge')).toBe('🔀');
+    expect(gitOperationTitle('commit')).not.toContain('✅');
+  });
+
+  it('formatWechatGitOperationMessage 标题应使用 Git 专用图标', () => {
+    const body = formatWechatGitOperationMessage(
+      {
+        operation: 'commit',
+        projectName: 'demo',
+        platform: 'Git',
+        branch: 'feat/test',
+        summaryText: 'feat: add notify',
+      },
+      '2026/7/3 12:00:00',
+      1500,
+    );
+    const content = (body.markdown as { content: string }).content;
+    expect(content).toContain('💾');
+    expect(content).not.toContain('✅');
   });
 
   it('formatWechatGitOperationMessage 应含项目分支与说明', () => {
@@ -90,6 +112,7 @@ describe('git-operation-notify', () => {
       1500,
     );
     expect(body.msg_type).toBe('interactive');
+    expect(body.card.header.template).toBe('wathet');
     expect(body.card.elements[1].text.content).toContain('push ok');
   });
 
@@ -113,6 +136,21 @@ describe('git-operation-notify', () => {
     const config = getGitOperationNotifyConfig(repoDir);
     expect(config.enabled).toBe(true);
     expect(config.operations).toEqual(['commit', 'push']);
+  });
+
+  it('yaml 无 git-operation-notify 节时应 registry 默认启用', () => {
+    mkdirSync(join(repoDir, '.claude'), { recursive: true });
+    writeFileSync(
+      join(repoDir, '.claude/quality-gate.yaml'),
+      `settings:
+  notifications:
+    channels:
+      wechat:
+        url: ""
+`,
+    );
+    clearGateConfigCache();
+    expect(getGitOperationNotifyConfig(repoDir).enabled).toBe(true);
   });
 
   it('operation 未启用时应 operation_filtered', async () => {

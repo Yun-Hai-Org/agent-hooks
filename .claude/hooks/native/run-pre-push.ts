@@ -63,6 +63,7 @@ async function main() {
       branches: pushBranches,
       cwd,
     });
+    await notifyPushSuccess(cwd);
     process.exit(0);
   }
 

@@ -25,7 +25,7 @@ fi
 
 mkdir -p "$DEST"
 ln -sf "${HOME}/.cursor/bun" "${HOME}/.cursor/bunx" 2>/dev/null || true
-for hook in pre-commit commit-msg pre-push pre-merge-commit; do
+for hook in pre-commit commit-msg pre-push pre-merge-commit post-commit post-merge; do
 	cp "$SRC/$hook" "$DEST/$hook"
 	chmod +x "$DEST/$hook"
 done
