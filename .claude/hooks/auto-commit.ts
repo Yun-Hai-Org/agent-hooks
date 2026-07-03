@@ -19,6 +19,7 @@ import { summarizeResults } from './quality-gate.js';
 import type { CheckResult } from './types.js';
 import { getPlatform, formatStopContinueOutput, formatStopSuccessOutput } from './hook-adapter.js';
 import { isGateNodeEnabled } from './gate-config.js';
+import { buildShipStopDenyReason, loadWorkflowState, needsShipBeforeStop } from './workflow-state.js';
 
 const HOOK_NAME = 'auto-commit';
 const MAIN_BRANCHES = ['main', 'master'];
@@ -242,6 +243,20 @@ async function main() {
     if (!execCommand('git rev-parse --git-dir', { cwd }).success) {
       log(HOOK_NAME, { level: 'SKIP', reason: 'not a git repo', session_id: sessionId, cwd });
       console.log('{}');
+      return;
+    }
+
+    const workflowState = loadWorkflowState(sessionId);
+    if (needsShipBeforeStop(workflowState)) {
+      const followup = buildShipStopDenyReason(workflowState);
+      log(HOOK_NAME, {
+        level: 'BLOCKED',
+        reason: 'ship incomplete',
+        ship_status: workflowState.ship_status,
+        session_id: sessionId,
+        cwd,
+      });
+      process.stdout.write(`${formatStopContinueOutput(followup, hookEvent)}\n`);
       return;
     }
 

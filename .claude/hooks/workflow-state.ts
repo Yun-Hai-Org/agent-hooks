@@ -25,10 +25,20 @@ export interface ActiveBackgroundTask {
   startedAt: string;
 }
 
+export type WorkflowPhase =
+  | 'planning'
+  | 'exploring'
+  | 'implementing'
+  | 'shipping'
+  | 'pushing'
+  | 'merging'
+  | 'ci_fix_loop'
+  | 'done';
+
 export type ShipStatus = 'pending' | 'commit_ok' | 'push_ok' | 'merge_ok' | 'failed';
 
 export interface WorkflowState {
-  phase: string;
+  phase: WorkflowPhase;
   level: 'L1' | 'L2' | 'L3';
   feature_branch?: string;
   session_worktree?: string;
@@ -148,4 +158,63 @@ function normalizeTodoStatus(value: string): WorkflowTodoStatus {
     default:
       return 'pending';
   }
+}
+
+export function isWorkflowActive(state: WorkflowState): boolean {
+  return state.todos.length > 0;
+}
+
+export function countPendingImplTodos(state: WorkflowState): number {
+  return state.todos.filter(
+    (t) => (t.kind === 'impl' || t.kind === 'other') && (t.status === 'pending' || t.status === 'in_progress'),
+  ).length;
+}
+
+export function isImplPhaseComplete(state: WorkflowState): boolean {
+  const implTodos = state.todos.filter((t) => t.kind === 'impl');
+  if (implTodos.length === 0) return false;
+  return implTodos.every((t) => t.status === 'completed' || t.status === 'cancelled');
+}
+
+export function needsShipBeforeStop(state: WorkflowState): boolean {
+  if (!isWorkflowActive(state)) return false;
+  if (!isImplPhaseComplete(state)) return false;
+  return state.ship_status !== 'merge_ok';
+}
+
+export function buildShipStopDenyReason(state: WorkflowState): string {
+  const status = state.ship_status;
+  const attempts = state.ship_attempts;
+  const error = state.last_ship_error ? `\n上次错误: ${state.last_ship_error}` : '';
+
+  if (status === 'pending' || status === 'failed') {
+    return [
+      '🔒 [auto-commit] impl 已完成，须 dispatch 后台 ship-sa 完成 commit/push/merge。',
+      '',
+      `ship_status=${status}，ship_attempts=${String(attempts)}${error}`,
+      '',
+      '步骤：',
+      '1. Task(background, shell) ship-sa — git add + commit（过 pre-commit）',
+      '2. 成功后 merge-sa — merge + push',
+      '3. 失败则 ci-fixer-sa 修复后重试',
+    ].join('\n');
+  }
+
+  if (status === 'commit_ok' || status === 'push_ok') {
+    return [
+      '🔒 [auto-commit] ship 未完成，须 dispatch merge-sa 直至 ship_status=merge_ok。',
+      '',
+      `ship_status=${status}，ship_attempts=${String(attempts)}${error}`,
+      '',
+      '步骤：',
+      '1. Task(background) merge-sa — merge feat/* + push',
+      '2. 失败则 ci-fixer-sa → gate-retry-stop 循环',
+    ].join('\n');
+  }
+
+  return [
+    '🔒 [auto-commit] workflow 活跃，ship 未完成（ship_status 须为 merge_ok）。',
+    '',
+    `ship_status=${status}${error}`,
+  ].join('\n');
 }

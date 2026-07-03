@@ -3,3 +3,7 @@ ide:
     enabled: true
   workflow-gate:
     enabled: true
+  orchestrator-gate:
+    enabled: true
+  git-ship-gate:
+    enabled: true

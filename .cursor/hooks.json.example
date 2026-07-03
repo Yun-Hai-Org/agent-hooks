@@ -18,6 +18,9 @@
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts branch-delete-gate.ts"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts git-ship-gate.ts"
       }
     ],
     "preToolUse": [
@@ -32,6 +35,14 @@
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-gate.ts",
         "matcher": "Read|Write|Shell"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts orchestrator-gate.ts",
+        "matcher": "Read|Write"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts git-ship-gate.ts",
+        "matcher": "Shell"
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts branch-gate.ts",
@@ -51,6 +62,9 @@
     "beforeReadFile": [
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-gate.ts"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts orchestrator-gate.ts"
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts protect-secrets.ts"

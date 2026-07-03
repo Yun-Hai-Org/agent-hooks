@@ -16,6 +16,7 @@ import {
 } from './gate-fix.js';
 import { getPlatform, formatStopContinueOutput, formatStopSuccessOutput } from './hook-adapter.js';
 import { isGateNodeEnabled } from './gate-config.js';
+import { loadWorkflowState, needsShipBeforeStop } from './workflow-state.js';
 import type { GatePendingEntry } from './types.js';
 
 const HOOK_NAME = 'gate-retry-stop';
@@ -145,6 +146,25 @@ async function main() {
       console.error(`[gate-retry] 已达最大重试次数 (${String(maxLoops)})，请手动修复后重新 push/merge`);
       console.log('{}');
       return;
+    }
+
+    const workflowState = loadWorkflowState(sessionId);
+    if (needsShipBeforeStop(workflowState)) {
+      const pending = getPendingGateFailure(sessionId, cwd);
+      if (pending) {
+        const followup = [
+          '🔒 [gate-retry-stop] push/merge 质量门失败，须 dispatch ci-fixer-sa 修复后重试 ship。',
+          '',
+          `pending: ${pending.type} — ${pending.command.slice(0, 200)}`,
+          '',
+          '步骤：',
+          '1. Task(background) ci-fixer-sa 读取 CI/门失败日志并修复',
+          '2. 再 dispatch ship-sa / merge-sa 直至 ship_status=merge_ok',
+        ].join('\n');
+        log(HOOK_NAME, { level: 'BLOCKED', reason: 'ship gate retry', session_id: sessionId });
+        process.stdout.write(`${formatStopContinueOutput(followup, hookEvent)}\n`);
+        return;
+      }
     }
 
     const result = await runGateRetryStop(sessionId, { loopCount, cwd });
