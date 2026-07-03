@@ -91,14 +91,63 @@ export function securityEventTitle(severity: string): string {
   return `${mapSeverityEmoji(severity)} **安全事件通知**`;
 }
 
-export function gitOperationTitle(operation: GitOperationKind): string {
+export function gitOperationEmoji(operation: GitOperationKind): string {
   switch (operation) {
     case 'commit':
-      return '✅ **Git 提交通知**';
+      return '💾';
     case 'push':
-      return '✅ **Git 推送通知**';
+      return '📤';
     case 'merge':
-      return '✅ **Git 合并通知**';
+      return '🔀';
+    default: {
+      const _exhaustive: never = operation;
+      return _exhaustive;
+    }
+  }
+}
+
+export function gitOperationTitle(operation: GitOperationKind): string {
+  return `${gitOperationEmoji(operation)} **Git ${gitOperationLabel(operation)}通知**`;
+}
+
+function gitOperationLabel(operation: GitOperationKind): string {
+  switch (operation) {
+    case 'commit':
+      return '提交';
+    case 'push':
+      return '推送';
+    case 'merge':
+      return '合并';
+    default: {
+      const _exhaustive: never = operation;
+      return _exhaustive;
+    }
+  }
+}
+
+function gitOperationFeishuTemplate(operation: GitOperationKind): string {
+  switch (operation) {
+    case 'commit':
+      return 'blue';
+    case 'push':
+      return 'wathet';
+    case 'merge':
+      return 'purple';
+    default: {
+      const _exhaustive: never = operation;
+      return _exhaustive;
+    }
+  }
+}
+
+function gitOperationSlackColor(operation: GitOperationKind): string {
+  switch (operation) {
+    case 'commit':
+      return '#439FE0';
+    case 'push':
+      return '#36C5F0';
+    case 'merge':
+      return '#6B4FBB';
     default: {
       const _exhaustive: never = operation;
       return _exhaustive;
@@ -248,7 +297,10 @@ export function formatFeishuGitOperationMessage(
   return {
     msg_type: 'interactive',
     card: {
-      header: { title: { tag: 'plain_text', content: titlePlain }, template: 'green' },
+      header: {
+        title: { tag: 'plain_text', content: titlePlain },
+        template: gitOperationFeishuTemplate(event.operation),
+      },
       elements: [
         { tag: 'div', text: { tag: 'lark_md', content: meta } },
         { tag: 'div', text: { tag: 'lark_md', content: `**说明**\n${summary}` } },
@@ -350,7 +402,7 @@ export function formatSlackGitOperationMessage(
   return {
     attachments: [
       {
-        color: '#2EB886',
+        color: gitOperationSlackColor(event.operation),
         blocks: [
           { type: 'header', text: { type: 'plain_text', text: titlePlain, emoji: true } },
           { type: 'section', fields },
