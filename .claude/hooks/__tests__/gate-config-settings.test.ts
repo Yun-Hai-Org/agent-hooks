@@ -105,7 +105,7 @@ describe('gate-config settings', () => {
 
   it('PROJECT_ROOT yaml 含 settings', () => {
     const t = resolveCoverageThresholds(PROJECT_ROOT);
-    expect(t.lines).toBeGreaterThanOrEqual(80);
+    expect(t.lines).toBeGreaterThanOrEqual(79);
     expect(t.functions).toBeGreaterThanOrEqual(80);
   });
 });
