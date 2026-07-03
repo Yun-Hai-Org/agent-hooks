@@ -16,6 +16,8 @@ import {
   extractWorktreeRemovePaths,
   hasUncommittedChanges,
   buildUncommittedWorktreeDenyReason,
+  isFeatTaskBranch,
+  resolveParentEpicBranch,
 } from '../../checks/git-policy.js';
 
 describe('adversarial: git-policy command detection', () => {
@@ -53,6 +55,13 @@ describe('adversarial: git-policy command detection', () => {
     expect(extractRemoteBranchDeleteTargets('git push origin --delete feat/x')).toEqual(['feat/x']);
     expect(extractRemoteBranchDeleteTargets('git push origin :refs/heads/feat/x')).toEqual(['feat/x']);
     expect(extractWorktreeRemovePaths('git worktree remove --force /tmp/wt')).toEqual(['/tmp/wt']);
+  });
+
+  it('应识别 feat task 分支并解析父 epic', () => {
+    expect(isFeatTaskBranch('feat/hooks-restore-workflow-task-p2-json')).toBe(true);
+    expect(isFeatTaskBranch('feat/hooks-restore-workflow')).toBe(false);
+    expect(resolveParentEpicBranch('feat/hooks-restore-workflow-task-p2-json')).toBe('feat/hooks-restore-workflow');
+    expect(resolveParentEpicBranch('feat/other')).toBeNull();
   });
 });
 
