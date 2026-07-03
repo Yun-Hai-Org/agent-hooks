@@ -243,10 +243,30 @@ export function isMergeConclude(cwd: string): boolean {
 }
 
 const PROTECTED_BRANCHES = ['main', 'master'] as const;
+const FEAT_TASK_BRANCH_PATTERN = /^feat\/.+-task-.+$/;
 
 export function isProtectedBranch(branch: string): boolean {
   const name = normalizeBranchRef(branch);
   return PROTECTED_BRANCHES.includes(name as (typeof PROTECTED_BRANCHES)[number]);
+}
+
+export function isFeatTaskBranch(branch: string): boolean {
+  return FEAT_TASK_BRANCH_PATTERN.test(normalizeBranchRef(branch));
+}
+
+export function resolveParentEpicBranch(taskBranch: string): string | null {
+  const normalized = normalizeBranchRef(taskBranch);
+  if (!isFeatTaskBranch(normalized)) return null;
+  const taskIdx = normalized.indexOf('-task-');
+  if (taskIdx <= 0) return null;
+  return normalized.slice(0, taskIdx);
+}
+
+export function isTaskBranchMergedIntoEpicOrBase(branch: string, base: string, cwd?: string): boolean {
+  if (isBranchMergedInto(branch, base, cwd)) return true;
+  if (!isFeatTaskBranch(branch)) return false;
+  const parent = resolveParentEpicBranch(branch);
+  return Boolean(parent && isBranchMergedInto(branch, parent, cwd));
 }
 
 export function isGitBranchDeleteCommand(cmd: string): boolean {
@@ -468,7 +488,7 @@ export function evaluateBranchDeleteCommand(cmd: string, cwd: string): CheckResu
     if (isProtectedBranch(branch)) {
       return formatResult('branch-delete-gate', DECISION.DENY, buildProtectedBranchDeleteDenyReason(branch));
     }
-    if (!isBranchMergedInto(branch, base, cwd)) {
+    if (!isTaskBranchMergedIntoEpicOrBase(branch, base, cwd)) {
       return formatResult('branch-delete-gate', DECISION.DENY, buildUnmergedBranchDeleteDenyReason(branch, base));
     }
   }
@@ -492,7 +512,7 @@ export function evaluateBranchDeleteCommand(cmd: string, cwd: string): CheckResu
         buildDirtyWorktreeDeleteDenyReason(worktreePath, branch),
       );
     }
-    if (!isBranchMergedInto(branch, base, cwd)) {
+    if (!isTaskBranchMergedIntoEpicOrBase(branch, base, cwd)) {
       return formatResult('branch-delete-gate', DECISION.DENY, buildUnmergedBranchDeleteDenyReason(branch, base));
     }
   }
