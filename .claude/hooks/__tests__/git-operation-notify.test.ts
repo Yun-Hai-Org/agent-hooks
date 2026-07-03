@@ -115,6 +115,21 @@ describe('git-operation-notify', () => {
     expect(config.operations).toEqual(['commit', 'push']);
   });
 
+  it('yaml 无 git-operation-notify 节时应 registry 默认启用', () => {
+    mkdirSync(join(repoDir, '.claude'), { recursive: true });
+    writeFileSync(
+      join(repoDir, '.claude/quality-gate.yaml'),
+      `settings:
+  notifications:
+    channels:
+      wechat:
+        url: ""
+`,
+    );
+    clearGateConfigCache();
+    expect(getGitOperationNotifyConfig(repoDir).enabled).toBe(true);
+  });
+
   it('operation 未启用时应 operation_filtered', async () => {
     writeGitNotifyYaml(repoDir, { operations: ['push'] });
     const result = await handleGitOperationNotify('commit', repoDir);
