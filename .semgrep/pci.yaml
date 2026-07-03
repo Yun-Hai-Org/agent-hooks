@@ -1,3 +1,0 @@
-# PCI DSS Semgrep profile marker for fail-closed gate checks.
-# Registry rule packs are applied via SEMGREP_PCI_CONFIGS in security-scan.ts.
-rules: []
