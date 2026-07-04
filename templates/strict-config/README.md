@@ -32,6 +32,16 @@ cp templates/strict-config/pyrightconfig.strict.json pyrightconfig.json
 - 下一阶段：**80%** → 最终 **100%**（随单测补充逐步 ratchet `DEFAULT_COVERAGE_THRESHOLD`）
 - `bunfig.toml` 启用 `coverage = true`，但不设全局 `coverageThreshold`（避免对抗性/子集测试误失败）
 
+### commit vs push 覆盖率检查
+
+| 阶段         | Git hook / profile      | 覆盖率阈值                                       |
+| ------------ | ----------------------- | ------------------------------------------------ |
+| `git commit` | pre-commit / commit     | **不检查**（SKIP）                               |
+| `git push`   | pre-push / full         | Lines + Functions ≥ `settings.coverageThreshold` |
+| `git merge`  | pre-merge-commit / full | 同上                                             |
+
+本地与 CI（`.github/workflows/test.yml`）可独立运行：`bun test --coverage`、`uv run pytest --cov=scripts/lib`、`bash scripts/run-shell-coverage.sh`（bats；未安装 kcov 时跳过 shell 覆盖率采集）。
+
 ## 已知副作用
 
 - `noUncheckedIndexedAccess`：数组/索引访问需显式守卫

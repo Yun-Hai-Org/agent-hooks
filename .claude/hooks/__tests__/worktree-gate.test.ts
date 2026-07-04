@@ -5,7 +5,7 @@ import { Readable } from 'stream';
 import { isFeatBranch, isWorktreeBootstrapCommand, main as worktreeMain } from '../worktree-gate.js';
 import { isInsideWorktree } from '../branch-gate.js';
 import { clearGateConfigCache } from '../gate-config.js';
-import { expectAllow, expectDeny, PROJECT_ROOT } from './helpers.js';
+import { expectAllow, expectDeny, createTempGitRepo, cleanupTempGitRepo, PROJECT_ROOT } from './helpers.js';
 
 describe('worktree-gate helpers', () => {
   it('isFeatBranch accepts feat/* and task branches', () => {
@@ -68,26 +68,36 @@ describe('worktree-gate main()', () => {
   });
 
   it('allows non Write/Shell tools', async () => {
-    process.stdin = Readable.from([
-      JSON.stringify({ tool_name: 'Read', tool_input: {}, session_id: 's1', cwd: PROJECT_ROOT }),
-    ]);
-    await worktreeMain();
-    expect(output).toHaveLength(1);
-    expect(expectAllow(output[0]!)).toBe(true);
+    const mainRepo = createTempGitRepo('main');
+    try {
+      process.stdin = Readable.from([
+        JSON.stringify({ tool_name: 'Read', tool_input: {}, session_id: 's1', cwd: mainRepo }),
+      ]);
+      await worktreeMain();
+      expect(output).toHaveLength(1);
+      expect(expectAllow(output[0]!)).toBe(true);
+    } finally {
+      cleanupTempGitRepo(mainRepo);
+    }
   });
 
   it('denies Write on main checkout when gate enabled', async () => {
-    process.stdin = Readable.from([
-      JSON.stringify({
-        tool_name: 'Write',
-        tool_input: { file_path: 'foo.txt', content: 'x' },
-        session_id: 's2',
-        cwd: PROJECT_ROOT,
-      }),
-    ]);
-    await worktreeMain();
-    expect(output).toHaveLength(1);
-    expect(expectDeny(output[0]!)).toBe(true);
+    const mainRepo = createTempGitRepo('main');
+    try {
+      process.stdin = Readable.from([
+        JSON.stringify({
+          tool_name: 'Write',
+          tool_input: { file_path: 'foo.txt', content: 'x' },
+          session_id: 's2',
+          cwd: mainRepo,
+        }),
+      ]);
+      await worktreeMain();
+      expect(output).toHaveLength(1);
+      expect(expectDeny(output[0]!)).toBe(true);
+    } finally {
+      cleanupTempGitRepo(mainRepo);
+    }
   });
 
   it('allows git worktree add bootstrap shell', async () => {

@@ -30,4 +30,13 @@ quote-style = "double"
 indent-style = "space"
 
 [dependency-groups]
-dev = ["pyright>=1.1.409", "pytest>=8.0.0", "ruff>=0.15.15"]
+dev = [
+  "pyright>=1.1.409",
+  "pytest>=8.0.0",
+  "pytest-cov>=6.0.0",
+  "ruff>=0.15.15",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

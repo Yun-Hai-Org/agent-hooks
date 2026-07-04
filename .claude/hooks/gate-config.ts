@@ -3,12 +3,14 @@ import { homedir } from 'os';
 import { join } from 'path';
 import yaml from 'js-yaml';
 import {
+  CORE_MODULE_PATHS,
   getHookRootPath,
   getRegistryDefaultTimeoutMs,
   getRegistryNode,
   nodeSupportsAutoFix,
   REGISTRY_COMMIT_TIMEOUT_MS,
   REGISTRY_FULL_TIMEOUT_MS,
+  SECURITY_HOOK_IDS,
 } from './gate-registry.js';
 import type { CoverageThresholdOptions } from './types.js';
 import { DEFAULT_COVERAGE_THRESHOLDS } from './checks/coverage.js';
@@ -66,8 +68,41 @@ export interface PushMergeBranchPolicy {
   exclude?: string[];
 }
 
+export type CoverageEnforceProfile = 'commit' | 'push';
+
+export interface DiffCoverageThresholdYaml {
+  lines?: number;
+  enforceOn?: CoverageEnforceProfile[];
+  scope?: 'merge-base';
+  baseRef?: 'auto' | string;
+  include?: string[];
+  exclude?: string[];
+}
+
+export interface TestFilePairingYaml {
+  enabled?: boolean;
+  enforceOn?: CoverageEnforceProfile[];
+  sourceGlobs?: string[];
+  exclude?: string[];
+}
+
+export interface CoreModuleCoverageYaml {
+  lines?: number;
+  functions?: number;
+  paths?: string[];
+}
+
+export interface SecurityRuleCoverageYaml {
+  requiredPercent?: number;
+  modules?: string[];
+}
+
 export interface GateSettings {
   coverageThreshold?: number | CoverageThresholdYaml;
+  diffCoverageThreshold?: DiffCoverageThresholdYaml;
+  testFilePairing?: TestFilePairingYaml;
+  coreModuleCoverage?: CoreModuleCoverageYaml;
+  securityRuleCoverage?: SecurityRuleCoverageYaml;
   scanScope?: ScanScopeConfig;
   pushMergeBranches?: PushMergeBranchPolicy;
   licenseDenylist?: string[];
@@ -150,12 +185,102 @@ function mergeCoverageThresholdYaml(
   return merged;
 }
 
+function mergeStringArrays(base: string[] | undefined, override: string[] | undefined): string[] | undefined {
+  if (!base && !override) return undefined;
+  return [...new Set([...(base ?? []), ...(override ?? [])])];
+}
+
+function mergeEnforceOn(
+  base?: CoverageEnforceProfile[],
+  override?: CoverageEnforceProfile[],
+): CoverageEnforceProfile[] | undefined {
+  if (override !== undefined) return [...override];
+  if (base !== undefined) return [...base];
+  return undefined;
+}
+
+function mergeDiffCoverageThresholdYaml(
+  base?: DiffCoverageThresholdYaml,
+  override?: DiffCoverageThresholdYaml,
+): DiffCoverageThresholdYaml | undefined {
+  if (!base) return override ? structuredClone(override) : undefined;
+  if (!override) return structuredClone(base);
+  const merged: DiffCoverageThresholdYaml = { ...base, ...override };
+  const lines = override.lines ?? base.lines;
+  if (lines !== undefined) merged.lines = lines;
+  const enforceOn = mergeEnforceOn(base.enforceOn, override.enforceOn);
+  if (enforceOn !== undefined) merged.enforceOn = enforceOn;
+  const include = mergeStringArrays(base.include, override.include);
+  if (include !== undefined) merged.include = include;
+  const exclude = mergeStringArrays(base.exclude, override.exclude);
+  if (exclude !== undefined) merged.exclude = exclude;
+  return merged;
+}
+
+function mergeTestFilePairingYaml(
+  base?: TestFilePairingYaml,
+  override?: TestFilePairingYaml,
+): TestFilePairingYaml | undefined {
+  if (!base) return override ? structuredClone(override) : undefined;
+  if (!override) return structuredClone(base);
+  const merged: TestFilePairingYaml = { ...base, ...override };
+  if (override.enabled !== undefined) merged.enabled = override.enabled;
+  const enforceOn = mergeEnforceOn(base.enforceOn, override.enforceOn);
+  if (enforceOn !== undefined) merged.enforceOn = enforceOn;
+  const sourceGlobs = mergeStringArrays(base.sourceGlobs, override.sourceGlobs);
+  if (sourceGlobs !== undefined) merged.sourceGlobs = sourceGlobs;
+  const exclude = mergeStringArrays(base.exclude, override.exclude);
+  if (exclude !== undefined) merged.exclude = exclude;
+  return merged;
+}
+
+function mergeCoreModuleCoverageYaml(
+  base?: CoreModuleCoverageYaml,
+  override?: CoreModuleCoverageYaml,
+): CoreModuleCoverageYaml | undefined {
+  if (!base) return override ? structuredClone(override) : undefined;
+  if (!override) return structuredClone(base);
+  const merged: CoreModuleCoverageYaml = { ...base, ...override };
+  const lines = override.lines ?? base.lines;
+  const functions = override.functions ?? base.functions;
+  if (lines !== undefined) merged.lines = lines;
+  if (functions !== undefined) merged.functions = functions;
+  const paths = mergeStringArrays(base.paths, override.paths);
+  if (paths !== undefined) merged.paths = paths;
+  return merged;
+}
+
+function mergeSecurityRuleCoverageYaml(
+  base?: SecurityRuleCoverageYaml,
+  override?: SecurityRuleCoverageYaml,
+): SecurityRuleCoverageYaml | undefined {
+  if (!base) return override ? structuredClone(override) : undefined;
+  if (!override) return structuredClone(base);
+  const merged: SecurityRuleCoverageYaml = { ...base, ...override };
+  const requiredPercent = override.requiredPercent ?? base.requiredPercent;
+  if (requiredPercent !== undefined) merged.requiredPercent = requiredPercent;
+  const modules = mergeStringArrays(base.modules, override.modules);
+  if (modules !== undefined) merged.modules = modules;
+  return merged;
+}
+
 function mergeSettings(base?: GateSettings, override?: GateSettings): GateSettings {
   if (!base) return structuredClone(override ?? {});
   if (!override) return structuredClone(base);
   const merged: GateSettings = { ...base, ...override };
   const coverageThreshold = mergeCoverageThresholdYaml(base.coverageThreshold, override.coverageThreshold);
   if (coverageThreshold !== undefined) merged.coverageThreshold = coverageThreshold;
+  const diffCoverageThreshold = mergeDiffCoverageThresholdYaml(
+    base.diffCoverageThreshold,
+    override.diffCoverageThreshold,
+  );
+  if (diffCoverageThreshold !== undefined) merged.diffCoverageThreshold = diffCoverageThreshold;
+  const testFilePairing = mergeTestFilePairingYaml(base.testFilePairing, override.testFilePairing);
+  if (testFilePairing !== undefined) merged.testFilePairing = testFilePairing;
+  const coreModuleCoverage = mergeCoreModuleCoverageYaml(base.coreModuleCoverage, override.coreModuleCoverage);
+  if (coreModuleCoverage !== undefined) merged.coreModuleCoverage = coreModuleCoverage;
+  const securityRuleCoverage = mergeSecurityRuleCoverageYaml(base.securityRuleCoverage, override.securityRuleCoverage);
+  if (securityRuleCoverage !== undefined) merged.securityRuleCoverage = securityRuleCoverage;
   if (base.scanScope || override.scanScope) {
     const include = override.scanScope?.include ?? base.scanScope?.include;
     const exclude = [...new Set([...(base.scanScope?.exclude ?? []), ...(override.scanScope?.exclude ?? [])])];
@@ -569,6 +694,98 @@ export function resolvePushMergeBranchPolicy(cwd: string = process.cwd()): Resol
 export function resolveLicenseDenylist(cwd: string = process.cwd()): string[] {
   const config = loadGateConfig(cwd);
   return config.settings?.licenseDenylist ?? [];
+}
+
+const DEFAULT_DIFF_COVERAGE_LINES = 80;
+const DEFAULT_DIFF_COVERAGE_ENFORCE_ON: CoverageEnforceProfile[] = ['push'];
+const DEFAULT_DIFF_COVERAGE_SCOPE = 'merge-base';
+const DEFAULT_DIFF_COVERAGE_BASE_REF = 'auto';
+const DEFAULT_DIFF_COVERAGE_INCLUDE = ['.claude/hooks/**', 'scripts/lib/**', 'scripts/cursor-yingmi-hooks/**'];
+const DEFAULT_DIFF_COVERAGE_EXCLUDE = ['**/*.test.ts', '**/__tests__/**', '**/*.d.ts', 'tests/**'];
+
+export interface ResolvedDiffCoverageThreshold {
+  lines: number;
+  enforceOn: CoverageEnforceProfile[];
+  scope: string;
+  baseRef: string;
+  include: string[];
+  exclude: string[];
+}
+
+export function resolveDiffCoverageThreshold(cwd: string = process.cwd()): ResolvedDiffCoverageThreshold {
+  const raw = loadGateConfig(cwd).settings?.diffCoverageThreshold;
+  return {
+    lines: raw?.lines ?? DEFAULT_DIFF_COVERAGE_LINES,
+    enforceOn: raw?.enforceOn?.length ? [...raw.enforceOn] : [...DEFAULT_DIFF_COVERAGE_ENFORCE_ON],
+    scope: raw?.scope ?? DEFAULT_DIFF_COVERAGE_SCOPE,
+    baseRef: raw?.baseRef ?? DEFAULT_DIFF_COVERAGE_BASE_REF,
+    include: raw?.include?.length ? [...raw.include] : [...DEFAULT_DIFF_COVERAGE_INCLUDE],
+    exclude: raw?.exclude?.length ? [...raw.exclude] : [...DEFAULT_DIFF_COVERAGE_EXCLUDE],
+  };
+}
+
+export function isDiffCoverageEnforcedFor(profile: CoverageEnforceProfile, cwd: string = process.cwd()): boolean {
+  return resolveDiffCoverageThreshold(cwd).enforceOn.includes(profile);
+}
+
+const DEFAULT_TEST_FILE_PAIRING_ENFORCE_ON: CoverageEnforceProfile[] = ['commit'];
+const DEFAULT_TEST_FILE_PAIRING_SOURCE_GLOBS = [
+  '.claude/hooks/**/*.ts',
+  'scripts/lib/**/*.py',
+  'scripts/cursor-yingmi-hooks/**/*.sh',
+];
+const DEFAULT_TEST_FILE_PAIRING_EXCLUDE = ['**/*.d.ts', '**/__tests__/**', '**/native/run-*.ts'];
+
+export interface ResolvedTestFilePairingConfig {
+  enabled: boolean;
+  enforceOn: CoverageEnforceProfile[];
+  sourceGlobs: string[];
+  exclude: string[];
+}
+
+export function resolveTestFilePairingConfig(cwd: string = process.cwd()): ResolvedTestFilePairingConfig {
+  const raw = loadGateConfig(cwd).settings?.testFilePairing;
+  return {
+    enabled: raw?.enabled ?? true,
+    enforceOn: raw?.enforceOn?.length ? [...raw.enforceOn] : [...DEFAULT_TEST_FILE_PAIRING_ENFORCE_ON],
+    sourceGlobs: raw?.sourceGlobs?.length ? [...raw.sourceGlobs] : [...DEFAULT_TEST_FILE_PAIRING_SOURCE_GLOBS],
+    exclude: raw?.exclude?.length ? [...raw.exclude] : [...DEFAULT_TEST_FILE_PAIRING_EXCLUDE],
+  };
+}
+
+const DEFAULT_CORE_MODULE_COVERAGE_LINES = 90;
+const DEFAULT_CORE_MODULE_COVERAGE_FUNCTIONS = 90;
+
+export interface ResolvedCoreModuleCoverageConfig {
+  lines: number;
+  functions: number;
+  paths: string[];
+}
+
+export function resolveCoreModuleCoverageConfig(cwd: string = process.cwd()): ResolvedCoreModuleCoverageConfig {
+  const raw = loadGateConfig(cwd).settings?.coreModuleCoverage;
+  const paths = raw?.paths?.length ? [...raw.paths] : [...CORE_MODULE_PATHS];
+  return {
+    lines: raw?.lines ?? DEFAULT_CORE_MODULE_COVERAGE_LINES,
+    functions: raw?.functions ?? DEFAULT_CORE_MODULE_COVERAGE_FUNCTIONS,
+    paths,
+  };
+}
+
+const DEFAULT_SECURITY_RULE_REQUIRED_PERCENT = 100;
+
+export interface ResolvedSecurityRuleCoverageConfig {
+  requiredPercent: number;
+  modules: string[];
+}
+
+export function resolveSecurityRuleCoverageConfig(cwd: string = process.cwd()): ResolvedSecurityRuleCoverageConfig {
+  const raw = loadGateConfig(cwd).settings?.securityRuleCoverage;
+  const modules = raw?.modules?.length ? [...raw.modules] : [...SECURITY_HOOK_IDS];
+  return {
+    requiredPercent: raw?.requiredPercent ?? DEFAULT_SECURITY_RULE_REQUIRED_PERCENT,
+    modules,
+  };
 }
 
 export interface ResolvedNotificationSettings {

@@ -10,6 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOKS_REPO="${1:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 HOOKS_JSON="$HOOKS_REPO/.cursor/hooks.json.example"
 MANIFEST="$HOOKS_REPO/.cursor/hooks-manifest.json"
+VALIDATOR="$SCRIPT_DIR/lib/hooks_manifest_validator.py"
 
 if [[ ! -f "$HOOKS_JSON" ]]; then
 	echo "error: missing $HOOKS_JSON" >&2
@@ -21,36 +22,12 @@ if [[ ! -f "$MANIFEST" ]]; then
 	exit 1
 fi
 
-validate_with_python() {
-	python3 - "$MANIFEST" "$HOOKS_JSON" <<'PY'
-import json
-import sys
+if [[ ! -f "$VALIDATOR" ]]; then
+	echo "error: missing $VALIDATOR" >&2
+	exit 1
+fi
 
-manifest_path, hooks_path = sys.argv[1], sys.argv[2]
-with open(manifest_path, encoding="utf-8") as f:
-    manifest = json.load(f)
-with open(hooks_path, encoding="utf-8") as f:
-    hooks_doc = json.load(f)
-content = open(hooks_path, encoding="utf-8").read()
-failed = False
-
-for token in manifest.get("requiredCommandTokens", []):
-    if token not in content:
-        print(f"error: hooks.json.example missing required token: {token}", file=sys.stderr)
-        failed = True
-
-hooks = hooks_doc.get("hooks", {})
-for event in manifest.get("requiredEvents", []):
-    entries = hooks.get(event)
-    if not isinstance(entries, list) or len(entries) == 0:
-        print(f"error: hooks.json.example missing required event: {event}", file=sys.stderr)
-        failed = True
-
-sys.exit(1 if failed else 0)
-PY
-}
-
-if ! validate_with_python; then
+if ! python3 "$VALIDATOR" "$MANIFEST" "$HOOKS_JSON"; then
 	exit 1
 fi
 

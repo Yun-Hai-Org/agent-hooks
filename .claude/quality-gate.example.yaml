@@ -29,11 +29,45 @@ settings:
     cooldown: 5m
     channels:
       wechat:
-        url: ''
+        url: ""
       feishu:
-        url: ''
+        url: ""
       slack:
-        url: ''
+        url: ""
+  diffCoverageThreshold:
+    lines: 80
+    enforceOn:
+      - push
+    scope: merge-base
+    baseRef: auto
+    include:
+      - .claude/hooks/**
+      - scripts/lib/**
+      - scripts/cursor-yingmi-hooks/**
+    exclude:
+      - "**/*.test.ts"
+      - "**/__tests__/**"
+      - "**/*.d.ts"
+      - tests/**
+  testFilePairing:
+    enabled: true
+    enforceOn:
+      - commit
+    sourceGlobs:
+      - .claude/hooks/**/*.ts
+      - scripts/lib/**/*.py
+      - scripts/cursor-yingmi-hooks/**/*.sh
+    exclude:
+      - "**/*.d.ts"
+      - "**/__tests__/**"
+      - "**/native/run-*.ts"
+  coreModuleCoverage:
+    lines: 90
+    functions: 90
+    paths: []
+  securityRuleCoverage:
+    requiredPercent: 100
+    modules: []
 
 ide:
   # beforeShellExecution：拦截灾难性/高风险 shell 命令与 hook 绕过
@@ -228,23 +262,23 @@ ide:
   branch-gate:
     enabled: true
 
-  # preToolUse：主 checkout 禁写；feat/* worktree 内允许
+  # preToolUse：主 checkout 禁写；feat/* worktree 内允许 Write/Shell
   worktree-gate:
     enabled: true
 
-  # beforeReadFile/preToolUse：Todo 先于 Read/Write
+  # beforeReadFile/preToolUse：Todo 先于 Read/Write；Orchestrator 禁直接读写
   workflow-gate:
     enabled: true
 
-  # Stop：并行后台 Task 审计
+  # Stop：pending≥2 时要求 ≥2 并行后台 Task
   workflow-stop-gate:
     enabled: true
 
-  # beforeReadFile/preToolUse：Orchestrator 禁直接 Read/Write
+  # beforeReadFile/preToolUse：Orchestrator 禁直接 Read/Write（complement workflow-gate）
   orchestrator-gate:
     enabled: true
 
-  # beforeShellExecution/preToolUse Shell：Orchestrator 禁 git commit/push/merge
+  # beforeShellExecution/preToolUse Shell：Orchestrator 禁 git commit/push/merge；仅 ship-sa 子代理
   git-ship-gate:
     enabled: true
 
@@ -410,7 +444,7 @@ ide:
         enabled: true
         timeout: 500ms
 
-  # SessionStart / watchdog：hooks 配置与部署完整性检查及自动恢复
+  # SessionStart / watchdog：hooks 配置与部署完整性检查及自动恢复（fail-open）
   hooks-doctor:
     enabled: true
     timeout: 2s
@@ -475,15 +509,6 @@ ide:
         trigger: both
 
 git:
-  # commit / push / merge 成功后 webhook 通知
-  git-operation-notify:
-    enabled: true
-    timeout: 5s
-    operations:
-      - commit
-      - push
-      - merge
-
   # commit-msg 钩子：校验 commit message 格式与语义
   commit-msg:
     enabled: true
@@ -514,6 +539,9 @@ git:
         enabled: true
       # 运行与暂存文件关联的 pytest/bun 测试
       related-tests:
+        enabled: true
+      # 暂存区源码变更须配对测试文件（C0）
+      test-file-pairing:
         enabled: true
       # 暂存区 lint 聚合门
       lint-staged:
@@ -639,6 +667,18 @@ git:
         timeout: 12m
       # 覆盖率检查（已并入 hook-unit-tests，占位 SKIP）
       coverage:
+        enabled: true
+      # PR merge-base 变更行覆盖率检查（L1b）
+      diff-coverage:
+        enabled: true
+      # 安全 hook 规则矩阵覆盖率检查（L2）
+      security-rule-coverage:
+        enabled: true
+      # 核心模块 per-file 覆盖率检查（L2.5）
+      core-module-coverage:
+        enabled: true
+      # 全仓 Shell bats 测试
+      full-test-sh:
         enabled: true
       # 全仓 TS/Python 类型检查
       type-check:
@@ -817,6 +857,18 @@ git:
       # 覆盖率检查（已并入 hook-unit-tests，占位 SKIP）
       coverage:
         enabled: true
+      # PR merge-base 变更行覆盖率检查（L1b）
+      diff-coverage:
+        enabled: true
+      # 安全 hook 规则矩阵覆盖率检查（L2）
+      security-rule-coverage:
+        enabled: true
+      # 核心模块 per-file 覆盖率检查（L2.5）
+      core-module-coverage:
+        enabled: true
+      # 全仓 Shell bats 测试
+      full-test-sh:
+        enabled: true
       # 全仓 TS/Python 类型检查
       type-check:
         enabled: true
@@ -981,3 +1033,12 @@ git:
       slsa-cosign:
         enabled: true
         timeout: 2m
+
+  # post-commit/post-merge/pre-push：Git 操作成功 webhook 通知
+  git-operation-notify:
+    enabled: true
+    timeout: 5s
+    operations:
+      - commit
+      - push
+      - merge

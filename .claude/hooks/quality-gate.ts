@@ -28,6 +28,10 @@ import {
   runHookAdversarialTests,
   runHookAdversarialIfStaged,
 } from './checks/tests.js';
+import { runTestFilePairing } from './checks/test-file-pairing.js';
+import { runCoreModuleCoverage } from './checks/core-module-coverage.js';
+import { runDiffCoverage } from './checks/diff-coverage.js';
+import { runSecurityRuleCoverage } from './checks/security-rule-coverage.js';
 import {
   runSemgrep,
   runSemgrepStaged,
@@ -124,6 +128,11 @@ function skipMergeOnlyCheck(checkId: string, gatePathPrefix: GatePathPrefix): Ch
     return formatResult(checkId, DECISION.SKIP, 'merge-only 检查，pre-push 跳过');
   }
   return null;
+}
+
+function readCoverageReport(result: CheckResult): string | undefined {
+  const raw = result.details?.['coverageReport'];
+  return typeof raw === 'string' && raw.trim() ? raw : undefined;
 }
 
 interface CheckFailureDetail {
@@ -227,6 +236,7 @@ export async function runQualityGate(
       auditResult,
       typeResult,
       testResult,
+      testFilePairing,
       lintStaged,
       formatStaged,
       gitleaksStaged,
@@ -260,6 +270,13 @@ export async function runQualityGate(
           ...checkOpts,
           checkId: 'related-tests',
           runner: (ms) => runRelatedTests(cwd, { timeoutMs: ms }),
+        }),
+      ),
+      timeCheck(
+        runConfiguredSyncCheck({
+          ...checkOpts,
+          checkId: 'test-file-pairing',
+          runner: () => runTestFilePairing(cwd),
         }),
       ),
       timeCheck(
@@ -359,6 +376,7 @@ export async function runQualityGate(
       auditResult,
       typeResult,
       testResult,
+      testFilePairing,
       lintStaged,
       formatStaged,
       gitleaksStaged,
@@ -395,6 +413,22 @@ export async function runQualityGate(
     ...checkOpts,
     checkId: 'coverage',
     runner: () => formatResult('coverage', DECISION.SKIP, '覆盖率已并入 hook-unit-tests（--coverage）'),
+  });
+  const hookCoverageReport = readCoverageReport(hookUnit);
+  const coreModuleCoverage = runConfiguredSyncCheck({
+    ...checkOpts,
+    checkId: 'core-module-coverage',
+    runner: () => runCoreModuleCoverage(cwd, hookCoverageReport, { coverageReport: hookCoverageReport }),
+  });
+  const diffCoverage = runConfiguredSyncCheck({
+    ...checkOpts,
+    checkId: 'diff-coverage',
+    runner: () => runDiffCoverage(cwd, { coverageReport: hookCoverageReport }),
+  });
+  const securityRuleCoverage = runConfiguredSyncCheck({
+    ...checkOpts,
+    checkId: 'security-rule-coverage',
+    runner: () => runSecurityRuleCoverage(cwd),
   });
 
   const [
@@ -590,6 +624,9 @@ export async function runQualityGate(
     lintResult,
     fullTests,
     hookUnit,
+    coreModuleCoverage,
+    diffCoverage,
+    securityRuleCoverage,
     hookAdv,
     depAudit,
     pyDepAudit,

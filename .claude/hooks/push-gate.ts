@@ -18,6 +18,9 @@ import { setPendingGateFailure, clearPendingGateFailure } from './gate-pending.j
 
 const HOOK_NAME = 'push-gate';
 
+/** 测试注入容器（默认调用 runQualityGate） */
+export const pushGateDeps = { runQualityGate };
+
 /**
  *
  */
@@ -57,7 +60,7 @@ async function main() {
       return;
     }
 
-    const gateResult = await runQualityGate({ profile: 'full', cwd: workingDir });
+    const gateResult = await pushGateDeps.runQualityGate({ profile: 'full', cwd: workingDir });
 
     logGateResult(HOOK_NAME, gateResult, {
       profile: 'full',

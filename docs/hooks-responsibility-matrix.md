@@ -135,6 +135,8 @@ settings:
 | `git merge`  | full (`pre-merge-commit`) | `hook-unit-tests` | 同上                                    |
 | `git commit` | commit                    | —                 | 不检查覆盖率（coverage 为 SKIP 占位）   |
 
+**commit vs push 摘要**：`git commit`（pre-commit / commit profile）只做暂存区 lint、测试与安全扫描，**不**跑 Bun/pytest 覆盖率阈值；`git push` 与 `git merge`（full profile）通过 `hook-unit-tests` 强制执行 Lines/Funcs 覆盖率下限。本地/CI 可用 `bun test --coverage`、`uv run pytest --cov`、`scripts/run-shell-coverage.sh`（bats；kcov 可选）独立验证。
+
 DENY 示例：`Hook 单测通过但覆盖率未达标：Lines 78% < 80%；Funcs 76% < 80%`
 
 非 hooks 项目（无 `.claude/hooks/quality-gate.ts`）对 `hook-unit-tests` **SKIP**。

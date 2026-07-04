@@ -169,6 +169,7 @@ export interface GateCheckRunOptions {
   staged?: boolean | undefined;
   base?: string | undefined;
   coverageThreshold?: CoverageThresholdOptions | undefined;
+  coverageReport?: string | undefined;
 }
 
 export function spreadTimeoutMs(timeoutMs?: number): Pick<GateCheckRunOptions, 'timeoutMs'> {

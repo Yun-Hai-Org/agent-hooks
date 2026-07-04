@@ -7,6 +7,11 @@ import {
   resolveScanScope,
   resolvePushMergeBranchPolicy,
   resolveLicenseDenylist,
+  resolveDiffCoverageThreshold,
+  resolveTestFilePairingConfig,
+  resolveCoreModuleCoverageConfig,
+  resolveSecurityRuleCoverageConfig,
+  isDiffCoverageEnforcedFor,
   parseDuration,
   normalizeTimeout,
   formatGateTimeoutLabel,
@@ -15,6 +20,7 @@ import {
   getGateNodeTimeout,
   isGateNodeAutoFixEnabled,
 } from '../gate-config.js';
+import { CORE_MODULE_PATHS, SECURITY_HOOK_IDS } from '../gate-registry.js';
 import { createTempGitRepo, cleanupTempGitRepo, PROJECT_ROOT } from './helpers.js';
 
 describe('gate-config settings', () => {
@@ -107,6 +113,56 @@ describe('gate-config settings', () => {
     const t = resolveCoverageThresholds(PROJECT_ROOT);
     expect(t.lines).toBeGreaterThanOrEqual(79);
     expect(t.functions).toBeGreaterThanOrEqual(80);
+  });
+
+  it('无 yaml 时 diffCoverage 默认 push-only 80%', () => {
+    const config = resolveDiffCoverageThreshold(repoDir);
+    expect(config.lines).toBe(80);
+    expect(config.enforceOn).toEqual(['push']);
+    expect(config.scope).toBe('merge-base');
+    expect(config.baseRef).toBe('auto');
+    expect(config.include.length).toBeGreaterThan(0);
+    expect(isDiffCoverageEnforcedFor('push', repoDir)).toBe(true);
+    expect(isDiffCoverageEnforcedFor('commit', repoDir)).toBe(false);
+  });
+
+  it('diffCoverageThreshold 可从 yaml 覆盖', () => {
+    mkdirSync(join(repoDir, '.claude'), { recursive: true });
+    writeFileSync(
+      join(repoDir, '.claude/quality-gate.yaml'),
+      `settings:
+  diffCoverageThreshold:
+    lines: 85
+    enforceOn:
+      - push
+    include:
+      - src/**
+`,
+    );
+    clearGateConfigCache();
+    const config = resolveDiffCoverageThreshold(repoDir);
+    expect(config.lines).toBe(85);
+    expect(config.include).toContain('src/**');
+  });
+
+  it('无 yaml 时 testFilePairing 默认 commit 启用', () => {
+    const config = resolveTestFilePairingConfig(repoDir);
+    expect(config.enabled).toBe(true);
+    expect(config.enforceOn).toEqual(['commit']);
+    expect(config.sourceGlobs.some((g) => g.includes('.claude/hooks'))).toBe(true);
+  });
+
+  it('无 yaml 时 coreModuleCoverage 默认 90% 与 CORE_MODULE_PATHS', () => {
+    const config = resolveCoreModuleCoverageConfig(repoDir);
+    expect(config.lines).toBe(90);
+    expect(config.functions).toBe(90);
+    expect(config.paths).toEqual([...CORE_MODULE_PATHS]);
+  });
+
+  it('无 yaml 时 securityRuleCoverage 默认 100% 与 SECURITY_HOOK_IDS', () => {
+    const config = resolveSecurityRuleCoverageConfig(repoDir);
+    expect(config.requiredPercent).toBe(100);
+    expect(config.modules).toEqual([...SECURITY_HOOK_IDS]);
   });
 });
 
