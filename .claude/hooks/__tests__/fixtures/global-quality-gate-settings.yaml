@@ -1,0 +1,39 @@
+settings:
+  coverageThreshold:
+    lines: 80
+    functions: 80
+  diffCoverageThreshold:
+    lines: 80
+    enforceOn:
+      - push
+  testFilePairing:
+    enabled: true
+    enforceOn:
+      - commit
+  coreModuleCoverage:
+    lines: 90
+    functions: 90
+  securityRuleCoverage:
+    requiredPercent: 100
+  scanScope:
+    include:
+      - .claude/hooks/**
+  pushMergeBranches:
+    mode: all
+  licenseDenylist:
+    - GPL-3.0
+  notifications:
+    channels:
+      wechat:
+        url: https://global.example/hook
+      slack:
+        url: https://slack.example/hook
+ide:
+  worktree-gate:
+    enabled: true
+git:
+  pre-commit:
+    enabled: true
+    checks:
+      branch-check:
+        enabled: true

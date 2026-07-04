@@ -1,0 +1,110 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:83fda30c-e672-4a45-8dee-e1f71a44eac4",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-07-03T23:23:42+00:00",
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "manufacturer": {
+            "name": "Aqua Security Software Ltd."
+          },
+          "group": "aquasecurity",
+          "name": "trivy",
+          "version": "0.70.0"
+        }
+      ]
+    },
+    "component": {
+      "bom-ref": "4148a4c4-1e1f-4733-b885-bbc7fa8896f4",
+      "type": "application",
+      "name": ".",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:SchemaVersion",
+          "value": "2"
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "bom-ref": "7b3114d9-5035-4ad3-9f51-70c71bc060ac",
+      "type": "application",
+      "name": "uv.lock",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:Class",
+          "value": "lang-pkgs"
+        },
+        {
+          "name": "aquasecurity:trivy:Type",
+          "value": "uv"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:pypi/hooks-demo@0.1.0",
+      "type": "library",
+      "name": "hooks-demo",
+      "version": "0.1.0",
+      "purl": "pkg:pypi/hooks-demo@0.1.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "hooks-demo@0.1.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "uv"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:pypi/ruff@0.15.15",
+      "type": "library",
+      "name": "ruff",
+      "version": "0.15.15",
+      "purl": "pkg:pypi/ruff@0.15.15",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "ruff@0.15.15"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "uv"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "4148a4c4-1e1f-4733-b885-bbc7fa8896f4",
+      "dependsOn": [
+        "7b3114d9-5035-4ad3-9f51-70c71bc060ac"
+      ]
+    },
+    {
+      "ref": "7b3114d9-5035-4ad3-9f51-70c71bc060ac",
+      "dependsOn": [
+        "pkg:pypi/hooks-demo@0.1.0"
+      ]
+    },
+    {
+      "ref": "pkg:pypi/hooks-demo@0.1.0",
+      "dependsOn": [
+        "pkg:pypi/ruff@0.15.15"
+      ]
+    },
+    {
+      "ref": "pkg:pypi/ruff@0.15.15",
+      "dependsOn": []
+    }
+  ],
+  "vulnerabilities": []
+}

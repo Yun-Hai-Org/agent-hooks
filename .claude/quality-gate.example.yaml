@@ -1,0 +1,1044 @@
+# 质量门全量白名单配置 — 由 gate-registry.generateExampleYaml() 生成
+
+settings:
+  coverageThreshold:
+    lines: 79
+    functions: 80
+  scanScope:
+    include: []
+    exclude:
+      - _bmad-output/
+      - .github/
+      - data/evals/
+      - data/
+      - dist/
+      - build/
+      - .pytest_cache/
+      - .mypy_cache/
+      - htmlcov/
+      - coverage/
+  pushMergeBranches:
+    mode: all
+    include: []
+    exclude: []
+  licenseDenylist:
+    - GPL-3.0
+    - AGPL-3.0
+  notifications:
+    timeout: 5s
+    cooldown: 5m
+    channels:
+      wechat:
+        url: ""
+      feishu:
+        url: ""
+      slack:
+        url: ""
+  diffCoverageThreshold:
+    lines: 80
+    enforceOn:
+      - push
+    scope: merge-base
+    baseRef: auto
+    include:
+      - .claude/hooks/**
+      - scripts/lib/**
+      - scripts/cursor-yingmi-hooks/**
+    exclude:
+      - "**/*.test.ts"
+      - "**/__tests__/**"
+      - "**/*.d.ts"
+      - tests/**
+  testFilePairing:
+    enabled: true
+    enforceOn:
+      - commit
+    sourceGlobs:
+      - .claude/hooks/**/*.ts
+      - scripts/lib/**/*.py
+      - scripts/cursor-yingmi-hooks/**/*.sh
+    exclude:
+      - "**/*.d.ts"
+      - "**/__tests__/**"
+      - "**/native/run-*.ts"
+  coreModuleCoverage:
+    lines: 90
+    functions: 90
+    paths: []
+  securityRuleCoverage:
+    requiredPercent: 100
+    modules: []
+
+ide:
+  # beforeShellExecution：拦截灾难性/高风险 shell 命令与 hook 绕过
+  block-dangerous-commands:
+    enabled: true
+    rules:
+      # 拦截 rm 删除 home 目录
+      rm-home:
+        enabled: true
+      # 拦截 rm 删除 $HOME
+      rm-home-var:
+        enabled: true
+      # 拦截 rm 尾随 ~/ 或 $HOME 路径
+      rm-home-trailing:
+        enabled: true
+      # 拦截 rm 删除根文件系统
+      rm-root:
+        enabled: true
+      # 拦截 rm 删除 /etc /usr 等系统目录
+      rm-system:
+        enabled: true
+      # 拦截 rm 删除当前目录内容
+      rm-cwd:
+        enabled: true
+      # 拦截 dd 写入磁盘设备
+      dd-disk:
+        enabled: true
+      # 拦截 mkfs 格式化磁盘
+      mkfs:
+        enabled: true
+      # 拦截 fork bomb 模式
+      fork-bomb:
+        enabled: true
+      # 拦截 curl|bash 远程执行
+      curl-pipe-sh:
+        enabled: true
+      # 拦截 base64 解码后 pipe shell
+      base64-pipe-sh:
+        enabled: true
+      # 拦截 eval/exec 动态执行
+      eval-exec:
+        enabled: true
+      # 拦截 sh -c 子 shell 危险用法
+      sh-c-subshell:
+        enabled: true
+      # 拦截下载后立即执行
+      download-exec:
+        enabled: true
+      # 拦截 /dev/tcp 反弹 shell
+      reverse-shell-devtcp:
+        enabled: true
+      # 拦截 nc 反弹 shell
+      reverse-shell-netcat:
+        enabled: true
+      # 拦截对 main 的 force push
+      git-force-main:
+        enabled: true
+      # 拦截 git reset --hard
+      git-reset-hard:
+        enabled: true
+      # 拦截 git clean -f 强制清理
+      git-clean-f:
+        enabled: true
+      # 拦截 chmod 777
+      chmod-777:
+        enabled: true
+      # 拦截 chmod setuid/setgid
+      chmod-setuid:
+        enabled: true
+      # 拦截 cat .env 泄露密钥
+      cat-env:
+        enabled: true
+      # 拦截 cat 敏感文件
+      cat-secrets:
+        enabled: true
+      # 拦截 env/printenv 导出环境变量
+      env-dump:
+        enabled: true
+      # 拦截 echo 输出密钥变量
+      echo-secret:
+        enabled: true
+      # 拦截 docker volume rm
+      docker-vol-rm:
+        enabled: true
+      # 拦截 podman volume rm
+      podman-vol-rm:
+        enabled: true
+      # 拦截删除 ~/.ssh
+      rm-ssh:
+        enabled: true
+      # 拦截对 main 的 force-with-lease
+      git-force-lease-main:
+        enabled: true
+      # 拦截 kubectl get secret
+      kubectl-get-secret:
+        enabled: true
+      # 拦截 kubectl describe secret
+      kubectl-describe-secret:
+        enabled: true
+      # 拦截 docker exec 带 -e 传环境变量
+      docker-exec-env:
+        enabled: true
+      # 拦截 podman exec 带 -e 传环境变量
+      podman-exec-env:
+        enabled: true
+      # 拦截 pip install，请用 uv
+      pip-install:
+        enabled: true
+      # 拦截 npm install，请用 bun
+      npm-install:
+        enabled: true
+      # 拦截 npm ci，请用 bun install --frozen-lockfile
+      npm-ci:
+        enabled: true
+      # 拦截 pnpm install，请用 bun
+      pnpm-install:
+        enabled: true
+      # 拦截 yarn install，请用 bun
+      yarn-install:
+        enabled: true
+      # 拦截 npx，请用 bunx
+      npx:
+        enabled: true
+      # 拦截 python script.py，请用 uv run
+      python-script:
+        enabled: true
+      # 拦截 python3 script.py，请用 uv run
+      python3-script:
+        enabled: true
+      # 拦截 node script.js，请用 bun
+      node-script:
+        enabled: true
+      # 拦截修改 hooks 路径绕过
+      hook-bypass-path:
+        enabled: true
+      # 拦截修改 core.hooksPath 绕过
+      hook-bypass-config:
+        enabled: true
+      # 拦截 git commit --no-verify
+      no-verify:
+        enabled: true
+      # 拦截 git commit -n 绕过 hook
+      no-verify-short:
+        enabled: true
+      # 拦截 git push --no-verify
+      push-no-verify:
+        enabled: true
+      # 拦截 git merge --no-verify
+      merge-no-verify:
+        enabled: true
+      # 拦截 gh pr merge 绕过本地门
+      gh-pr-merge:
+        enabled: true
+      # 拦截 git pull 产生 merge commit 绕过
+      git-pull-merge:
+        enabled: true
+      # 拦截 git update-ref -d 删分支
+      git-update-ref-delete:
+        enabled: true
+      # 拦截 git push --force 到任意分支
+      git-force-any:
+        enabled: true
+      # 拦截 git checkout . 丢弃工作区
+      git-checkout-dot:
+        enabled: true
+      # 拦截 sudo rm
+      sudo-rm:
+        enabled: true
+      # 拦截 docker system/volume prune
+      docker-prune:
+        enabled: true
+      # 拦截 podman system/volume prune
+      podman-prune:
+        enabled: true
+      # 拦截 crontab -r 删除全部 cron
+      crontab-r:
+        enabled: true
+      # main/master 上拦截无 --no-ff 的 merge
+      merge-ff-bypass:
+        enabled: true
+      # main/master 上拦截 squash merge 绕过 pre-merge-commit
+      merge-squash-bypass:
+        enabled: true
+      # 拦截 merge --continue 绕过 full 门
+      merge-conclude-bypass:
+        enabled: true
+      # 拦截删除 main/master 等保护分支
+      protected-branch-delete:
+        enabled: true
+
+  # preToolUse：非 Git 仓库或功能分支策略下的分支操作门控
+  branch-gate:
+    enabled: true
+
+  # preToolUse：主 checkout 禁写；feat/* worktree 内允许 Write/Shell
+  worktree-gate:
+    enabled: true
+
+  # beforeReadFile/preToolUse：Todo 先于 Read/Write；Orchestrator 禁直接读写
+  workflow-gate:
+    enabled: true
+
+  # Stop：pending≥2 时要求 ≥2 并行后台 Task
+  workflow-stop-gate:
+    enabled: true
+
+  # beforeReadFile/preToolUse：Orchestrator 禁直接 Read/Write（complement workflow-gate）
+  orchestrator-gate:
+    enabled: true
+
+  # beforeShellExecution/preToolUse Shell：Orchestrator 禁 git commit/push/merge；仅 ship-sa 子代理
+  git-ship-gate:
+    enabled: true
+
+  # beforeShellExecution：限制删除未 merge 分支与 worktree prune
+  branch-delete-gate:
+    enabled: true
+    checks:
+      # 拦截删除 main/master 等保护分支
+      protected-branch-delete:
+        enabled: true
+      # 拦截删除未 merge 进基准分支的本地/远程分支
+      unmerged-branch-delete:
+        enabled: true
+      # 拦截 git worktree prune
+      worktree-prune:
+        enabled: true
+
+  # preToolUse/beforeReadFile：阻止读写/外传敏感文件与 embedded secrets
+  protect-secrets:
+    enabled: true
+    checks:
+      # Read/Write/Edit 路径匹配敏感文件模式
+      file-path:
+        enabled: true
+      # Write/Edit 内容扫描 embedded secrets
+      content:
+        enabled: true
+      # Bash 命令外传/读取敏感数据模式
+      bash-command:
+        enabled: true
+
+  # beforeSubmitPrompt：过滤用户 prompt 中的敏感/违规内容
+  user-prompt-filter:
+    enabled: true
+
+  # SessionStart：检测 hook 依赖 CLI 工具可用性（fail-open）
+  session-start:
+    enabled: true
+    timeout: 2s
+    checks:
+      # 检测 Bun 运行时是否可用
+      bun:
+        enabled: true
+        timeout: 500ms
+      # 检测 uv Python 工具链是否可用
+      uv:
+        enabled: true
+        timeout: 500ms
+      # 检测 gitleaks 密钥扫描是否可用
+      gitleaks:
+        enabled: true
+        timeout: 500ms
+      # 检测 shellcheck 是否可用
+      shellcheck:
+        enabled: true
+        timeout: 500ms
+      # 检测 shfmt 是否可用
+      shfmt:
+        enabled: true
+        timeout: 500ms
+      # 检测 hadolint 是否可用
+      hadolint:
+        enabled: true
+        timeout: 500ms
+      # 检测 podman/docker 是否可用
+      container-runtime:
+        enabled: true
+        timeout: 500ms
+      # 检测 kubeconform 是否可用
+      kubeconform:
+        enabled: true
+        timeout: 500ms
+      # 检测 kube-linter 是否可用
+      kube-linter:
+        enabled: true
+        timeout: 500ms
+      # 检测 oasdiff OpenAPI diff 是否可用
+      oasdiff:
+        enabled: true
+        timeout: 500ms
+      # 检测 taplo TOML 工具是否可用
+      taplo:
+        enabled: true
+        timeout: 500ms
+      # 检测 sqlfluff 是否可用
+      sqlfluff:
+        enabled: true
+        timeout: 500ms
+      # 检测 stylelint 是否可用
+      stylelint:
+        enabled: true
+        timeout: 500ms
+      # 检测 prettier 是否可用
+      prettier:
+        enabled: true
+        timeout: 500ms
+      # 检测 eslint 是否可用
+      eslint:
+        enabled: true
+        timeout: 500ms
+      # 检测 ruff 是否可用
+      ruff:
+        enabled: true
+        timeout: 500ms
+      # 检测 pyright 是否可用
+      pyright:
+        enabled: true
+        timeout: 500ms
+      # 检测 markdownlint 是否可用
+      markdownlint:
+        enabled: true
+        timeout: 500ms
+      # 检测 jq 是否可用
+      jq:
+        enabled: true
+        timeout: 500ms
+      # 检测 yq 是否可用
+      yq:
+        enabled: true
+        timeout: 500ms
+      # 检测 check-jsonschema 是否可用
+      check-jsonschema:
+        enabled: true
+        timeout: 500ms
+      # 检测 semgrep 是否可用
+      semgrep:
+        enabled: true
+        timeout: 500ms
+      # 检测 trivy 是否可用
+      trivy:
+        enabled: true
+        timeout: 500ms
+      # 检测 osv-scanner 是否可用
+      osv-scanner:
+        enabled: true
+        timeout: 500ms
+      # 检测 pip-audit 是否可用
+      pip-audit:
+        enabled: true
+        timeout: 500ms
+      # 检测 knip 是否可用
+      knip:
+        enabled: true
+        timeout: 500ms
+      # 检测 syft SBOM 工具是否可用
+      syft:
+        enabled: true
+        timeout: 500ms
+      # 检测 OWASP ZAP 是否可用
+      zap:
+        enabled: true
+        timeout: 500ms
+      # 检测 conftest OPA 策略工具是否可用
+      conftest:
+        enabled: true
+        timeout: 500ms
+      # 检测 cosign 签名验证工具是否可用
+      cosign:
+        enabled: true
+        timeout: 500ms
+      # 检测 checkov IaC 扫描是否可用
+      checkov:
+        enabled: true
+        timeout: 500ms
+
+  # SessionStart / watchdog：hooks 配置与部署完整性检查及自动恢复（fail-open）
+  hooks-doctor:
+    enabled: true
+    timeout: 2s
+
+  # afterFileEdit：写后自动 format（prettier/ruff 等）
+  format-on-write:
+    enabled: true
+    autoFix: true
+    timeout: 30s
+    checks:
+      # 对 JS/TS/JSON/Markdown/CSS 等执行 prettier --write
+      prettier:
+        enabled: true
+        autoFix: true
+      # 对 .md/.mdx 执行 markdownlint-cli2 --fix
+      markdownlint:
+        enabled: true
+        autoFix: true
+      # 对 .py 执行 ruff format（需 pyproject.toml）
+      ruff:
+        enabled: true
+        autoFix: true
+      # 对 shell 脚本执行 shfmt -w
+      shfmt:
+        enabled: true
+        autoFix: true
+      # 对 .toml 执行 taplo format
+      taplo:
+        enabled: true
+        autoFix: true
+
+  # afterFileEdit：Agent 编辑后自动 git add 相关文件
+  auto-stage:
+    enabled: true
+
+  # Stop：会话结束前提示/执行 git commit
+  auto-commit:
+    enabled: true
+
+  # Stop：质量门失败后阻止 Agent 无限重试
+  gate-retry-stop:
+    enabled: true
+    timeout: 2m
+
+  # Notification：安全/质量事件 webhook 通知
+  notification:
+    enabled: true
+    timeout: 5s
+
+  # sessionEnd/Stop：对话结束 webhook 通知（Cursor/Claude/Kiro）
+  session-end-notify:
+    enabled: true
+    timeout: 5s
+    trigger: both
+    maxSummaryChars: 1500
+    platforms:
+      cursor:
+        trigger: both
+      claude:
+        trigger: both
+      kiro:
+        trigger: both
+
+git:
+  # commit-msg 钩子：校验 commit message 格式与语义
+  commit-msg:
+    enabled: true
+    checks:
+      # Conventional commit 类型前缀与描述非空/非笼统
+      commit-msg:
+        enabled: true
+
+  # pre-commit 钩子：暂存区 commit profile 质量门（单项默认 5 分钟）
+  pre-commit:
+    enabled: true
+    autoFix: true
+    timeout: 5m
+    checks:
+      # 禁止在 main/master 等功能分支策略不允许的分支上提交
+      branch-check:
+        enabled: true
+      # 暂存区不得包含 .env、密钥等敏感文件
+      # controlIds: PIPL-Min, SOX-404
+      sensitive-files:
+        enabled: true
+      # 暂存区依赖文件变更时 bun audit 审计
+      # controlIds: PCI-6.3.2, PCI-6.3.3
+      dep-audit:
+        enabled: true
+      # 暂存区 TS/Python 类型检查（tsc/pyright）
+      type-check:
+        enabled: true
+      # 运行与暂存文件关联的 pytest/bun 测试
+      related-tests:
+        enabled: true
+      # 暂存区源码变更须配对测试文件（C0）
+      test-file-pairing:
+        enabled: true
+      # 暂存区 lint 聚合门
+      lint-staged:
+        enabled: true
+      # 暂存区 ESLint（JS/TS，不含 __tests__）
+      lint-staged-eslint:
+        enabled: true
+        autoFix: true
+      # 暂存区 Ruff lint（Python）
+      lint-staged-ruff:
+        enabled: true
+        autoFix: true
+      # 暂存区 format 聚合门
+      format-staged:
+        enabled: true
+      # 暂存区 Prettier format check
+      format-staged-prettier:
+        enabled: true
+        autoFix: true
+      # 暂存区 Ruff format check
+      format-staged-ruff:
+        enabled: true
+        autoFix: true
+      # 暂存区 gitleaks diff 密钥扫描
+      # controlIds: PCI-6.3.3, SOX-404
+      gitleaks-staged:
+        enabled: true
+      # 暂存区 Semgrep 安全扫描
+      # controlIds: PCI-6.3.3, PCI-6.5
+      semgrep-staged:
+        enabled: true
+      # 暂存区 AI code review（若配置）
+      code-review-staged:
+        enabled: true
+      # hooks 变更时运行对抗性测试
+      hook-adversarial:
+        enabled: true
+      # 暂存区扩展 lint 聚合门
+      extended-staged:
+        enabled: true
+      # 暂存区扩展 lint 汇总结果
+      extended-staged-extended:
+        enabled: true
+      # 暂存区 markdownlint
+      lint-staged-markdownlint:
+        enabled: true
+        autoFix: true
+      # 暂存区 shfmt 格式检查
+      format-staged-shfmt:
+        enabled: true
+        autoFix: true
+      # 暂存区 shellcheck
+      lint-staged-shellcheck:
+        enabled: true
+      # 暂存区 hadolint Dockerfile 检查
+      lint-staged-hadolint:
+        enabled: true
+      # 暂存区 docker/podman compose 配置检查
+      lint-staged-compose:
+        enabled: true
+      # 暂存区 taplo TOML 格式检查
+      format-staged-taplo:
+        enabled: true
+        autoFix: true
+      # 暂存区 sqlfluff SQL lint
+      lint-staged-sqlfluff:
+        enabled: true
+        autoFix: true
+      # 暂存区 stylelint CSS 检查
+      lint-staged-stylelint:
+        enabled: true
+        autoFix: true
+      # 暂存区 JSON/YAML schema 聚合门
+      schema-staged:
+        enabled: true
+      # 暂存区 schema 检查汇总
+      schema-staged-schema:
+        enabled: true
+      # 暂存区 check-jsonschema 验证
+      schema-staged-check-jsonschema:
+        enabled: true
+      # 暂存区 jq JSON 语法校验
+      schema-staged-jq:
+        enabled: true
+      # 暂存区 yq YAML 语法校验
+      schema-staged-yq:
+        enabled: true
+      # 暂存区 K8s manifest 聚合门
+      k8s-staged:
+        enabled: true
+      # 暂存区 kubeconform 校验
+      k8s-staged-kubeconform:
+        enabled: true
+      # 暂存区 kube-linter 校验
+      k8s-staged-kube-linter:
+        enabled: true
+      # 暂存区 OpenAPI 契约聚合门
+      openapi-staged:
+        enabled: true
+      # 暂存区 oasdiff breaking change 检测
+      openapi-staged-oasdiff:
+        enabled: true
+      # 暂存区 lockfile 与 manifest 一致性
+      lockfile-freshness:
+        enabled: true
+      # 暂存区 Semgrep PCI/OWASP 金融规则包
+      # controlIds: PCI-6.3.3, PCI-6.5
+      semgrep-pci-staged:
+        enabled: true
+      # 暂存区支付页脚本授权/SRI/CSP 检查
+      # controlIds: PCI-6.4.3
+      payment-page-staged:
+        enabled: true
+
+  # pre-push 钩子：full profile 质量门（总项默认 15 分钟）
+  pre-push:
+    enabled: true
+    timeout: 15m
+    checks:
+      # Hook 项目 bun test --coverage 全量单测
+      hook-unit-tests:
+        enabled: true
+        timeout: 12m
+      # 覆盖率检查（已并入 hook-unit-tests，占位 SKIP）
+      coverage:
+        enabled: true
+      # PR merge-base 变更行覆盖率检查（L1b）
+      diff-coverage:
+        enabled: true
+      # 安全 hook 规则矩阵覆盖率检查（L2）
+      security-rule-coverage:
+        enabled: true
+      # 核心模块 per-file 覆盖率检查（L2.5）
+      core-module-coverage:
+        enabled: true
+      # 全仓 Shell bats 测试
+      full-test-sh:
+        enabled: true
+      # 全仓 TS/Python 类型检查
+      type-check:
+        enabled: true
+      # 全仓 lint 聚合门
+      lint-full:
+        enabled: true
+      # 全仓 ESLint
+      lint-eslint:
+        enabled: true
+      # 全仓 Ruff lint
+      lint-ruff:
+        enabled: true
+      # 全仓测试聚合门
+      full-tests:
+        enabled: true
+      # 全仓 pytest
+      full-test-py:
+        enabled: true
+      # 全仓 bun 项目级测试
+      full-test-js:
+        enabled: true
+      # Hook 对抗性测试全量运行
+      hook-adversarial:
+        enabled: true
+      # 全仓 JS 依赖 bun audit
+      # controlIds: PCI-6.3.2, PCI-6.3.3
+      dep-audit:
+        enabled: true
+      # Python 依赖 osv-scanner/pip-audit
+      # controlIds: PCI-6.3.2, PCI-6.3.3
+      py-dep-audit:
+        enabled: true
+      # 全仓 gitleaks 扫描
+      # controlIds: PCI-6.3.3, SOX-404
+      gitleaks:
+        enabled: true
+      # 全仓 Semgrep 安全扫描
+      # controlIds: PCI-6.3.3, PCI-6.5
+      semgrep:
+        enabled: true
+      # 全仓 knip 死代码检测
+      knip:
+        enabled: true
+      # 全仓 Trivy 漏洞/配置扫描
+      # controlIds: PCI-6.3.2, PCI-6.3.3
+      trivy:
+        enabled: true
+      # 全仓 format 聚合门
+      format-full:
+        enabled: true
+      # 全仓 Prettier format check
+      format-prettier:
+        enabled: true
+      # 全仓 Ruff format check
+      format-ruff:
+        enabled: true
+      # 全仓 AI code review
+      code-review:
+        enabled: true
+      # 全仓扩展 lint 聚合门
+      extended-full:
+        enabled: true
+      # 全仓扩展 lint 汇总结果
+      extended-full-extended:
+        enabled: true
+      # 全仓 markdownlint
+      lint-markdownlint:
+        enabled: true
+      # 全仓 shfmt 格式检查
+      format-shfmt:
+        enabled: true
+      # 全仓 shellcheck
+      lint-shellcheck:
+        enabled: true
+      # 全仓 hadolint
+      lint-hadolint:
+        enabled: true
+      # 全仓 compose 配置检查
+      lint-compose:
+        enabled: true
+      # 全仓 taplo 格式检查
+      format-taplo:
+        enabled: true
+      # 全仓 sqlfluff
+      lint-sqlfluff:
+        enabled: true
+      # 全仓 stylelint
+      lint-stylelint:
+        enabled: true
+      # 全仓 JSON/YAML schema 聚合门
+      schema-full:
+        enabled: true
+      # 全仓 schema 检查汇总
+      schema-full-schema:
+        enabled: true
+      # 全仓 check-jsonschema 验证
+      schema-full-check-jsonschema:
+        enabled: true
+      # 全仓 jq JSON 语法校验
+      schema-full-jq:
+        enabled: true
+      # 全仓 yq YAML 语法校验
+      schema-full-yq:
+        enabled: true
+      # 全仓 K8s manifest 聚合门
+      k8s-full:
+        enabled: true
+      # 全仓 kubeconform 校验
+      k8s-full-kubeconform:
+        enabled: true
+      # 全仓 kube-linter 校验
+      k8s-full-kube-linter:
+        enabled: true
+      # Kind 集群 smoke 测试（若脚本存在）
+      k8s-kind-smoke:
+        enabled: true
+      # 全仓 OpenAPI 契约聚合门
+      openapi-full:
+        enabled: true
+      # 全仓 oasdiff 检查
+      openapi-full-oasdiff:
+        enabled: true
+      # 全仓 lockfile 新鲜度校验
+      lockfile-freshness:
+        enabled: true
+      # CycloneDX SBOM 生成与不可变归档
+      # controlIds: PCI-6.3.2, DORA-Art6
+      sbom-archive:
+        enabled: true
+        timeout: 5m
+      # 全仓 Semgrep PCI/OWASP 金融规则
+      # controlIds: PCI-6.3.3
+      semgrep-pci:
+        enabled: true
+      # 全仓支付页脚本/SRI 检查
+      # controlIds: PCI-6.4.3, PCI-11.6.1
+      payment-page-full:
+        enabled: true
+        timeout: 3m
+      # OWASP ZAP API baseline（OpenAPI 驱动）
+      # controlIds: PCI-11.3
+      zap-api-dast:
+        enabled: true
+        timeout: 10m
+      # OpenAPI 越权负向用例（无/无效 token 期望 401/403）
+      # controlIds: PCI-11.3
+      openapi-auth-negative:
+        enabled: true
+        timeout: 3m
+      # Conftest/OPA 策略（PCI-DORA Rego）
+      # controlIds: DORA-Art6, SOX-404
+      opa-conftest:
+        enabled: true
+        timeout: 3m
+      # Checkov IaC 扫描（Terraform/K8s/Dockerfile）
+      # controlIds: PCI-6.3.3
+      iac-checkov:
+        enabled: true
+        timeout: 5m
+      # SLSA/Cosign 制品 provenance 校验
+      # controlIds: PCI-6.3.2, SLSA-L3
+      slsa-cosign:
+        enabled: true
+        timeout: 2m
+
+  # pre-merge-commit 钩子：与 pre-push 相同的 full profile 质量门
+  pre-merge-commit:
+    enabled: true
+    timeout: 15m
+    checks:
+      # Hook 项目 bun test --coverage 全量单测
+      hook-unit-tests:
+        enabled: true
+        timeout: 12m
+      # 覆盖率检查（已并入 hook-unit-tests，占位 SKIP）
+      coverage:
+        enabled: true
+      # PR merge-base 变更行覆盖率检查（L1b）
+      diff-coverage:
+        enabled: true
+      # 安全 hook 规则矩阵覆盖率检查（L2）
+      security-rule-coverage:
+        enabled: true
+      # 核心模块 per-file 覆盖率检查（L2.5）
+      core-module-coverage:
+        enabled: true
+      # 全仓 Shell bats 测试
+      full-test-sh:
+        enabled: true
+      # 全仓 TS/Python 类型检查
+      type-check:
+        enabled: true
+      # 全仓 lint 聚合门
+      lint-full:
+        enabled: true
+      # 全仓 ESLint
+      lint-eslint:
+        enabled: true
+      # 全仓 Ruff lint
+      lint-ruff:
+        enabled: true
+      # 全仓测试聚合门
+      full-tests:
+        enabled: true
+      # 全仓 pytest
+      full-test-py:
+        enabled: true
+      # 全仓 bun 项目级测试
+      full-test-js:
+        enabled: true
+      # Hook 对抗性测试全量运行
+      hook-adversarial:
+        enabled: true
+      # 全仓 JS 依赖 bun audit
+      # controlIds: PCI-6.3.2, PCI-6.3.3
+      dep-audit:
+        enabled: true
+      # Python 依赖 osv-scanner/pip-audit
+      # controlIds: PCI-6.3.2, PCI-6.3.3
+      py-dep-audit:
+        enabled: true
+      # 全仓 gitleaks 扫描
+      # controlIds: PCI-6.3.3, SOX-404
+      gitleaks:
+        enabled: true
+      # 全仓 Semgrep 安全扫描
+      # controlIds: PCI-6.3.3, PCI-6.5
+      semgrep:
+        enabled: true
+      # 全仓 knip 死代码检测
+      knip:
+        enabled: true
+      # 全仓 Trivy 漏洞/配置扫描
+      # controlIds: PCI-6.3.2, PCI-6.3.3
+      trivy:
+        enabled: true
+      # 全仓 format 聚合门
+      format-full:
+        enabled: true
+      # 全仓 Prettier format check
+      format-prettier:
+        enabled: true
+      # 全仓 Ruff format check
+      format-ruff:
+        enabled: true
+      # 全仓 AI code review
+      code-review:
+        enabled: true
+      # 全仓扩展 lint 聚合门
+      extended-full:
+        enabled: true
+      # 全仓扩展 lint 汇总结果
+      extended-full-extended:
+        enabled: true
+      # 全仓 markdownlint
+      lint-markdownlint:
+        enabled: true
+      # 全仓 shfmt 格式检查
+      format-shfmt:
+        enabled: true
+      # 全仓 shellcheck
+      lint-shellcheck:
+        enabled: true
+      # 全仓 hadolint
+      lint-hadolint:
+        enabled: true
+      # 全仓 compose 配置检查
+      lint-compose:
+        enabled: true
+      # 全仓 taplo 格式检查
+      format-taplo:
+        enabled: true
+      # 全仓 sqlfluff
+      lint-sqlfluff:
+        enabled: true
+      # 全仓 stylelint
+      lint-stylelint:
+        enabled: true
+      # 全仓 JSON/YAML schema 聚合门
+      schema-full:
+        enabled: true
+      # 全仓 schema 检查汇总
+      schema-full-schema:
+        enabled: true
+      # 全仓 check-jsonschema 验证
+      schema-full-check-jsonschema:
+        enabled: true
+      # 全仓 jq JSON 语法校验
+      schema-full-jq:
+        enabled: true
+      # 全仓 yq YAML 语法校验
+      schema-full-yq:
+        enabled: true
+      # 全仓 K8s manifest 聚合门
+      k8s-full:
+        enabled: true
+      # 全仓 kubeconform 校验
+      k8s-full-kubeconform:
+        enabled: true
+      # 全仓 kube-linter 校验
+      k8s-full-kube-linter:
+        enabled: true
+      # Kind 集群 smoke 测试（若脚本存在）
+      k8s-kind-smoke:
+        enabled: true
+      # 全仓 OpenAPI 契约聚合门
+      openapi-full:
+        enabled: true
+      # 全仓 oasdiff 检查
+      openapi-full-oasdiff:
+        enabled: true
+      # 全仓 lockfile 新鲜度校验
+      lockfile-freshness:
+        enabled: true
+      # CycloneDX SBOM 生成与不可变归档
+      # controlIds: PCI-6.3.2, DORA-Art6
+      sbom-archive:
+        enabled: true
+        timeout: 5m
+      # 全仓 Semgrep PCI/OWASP 金融规则
+      # controlIds: PCI-6.3.3
+      semgrep-pci:
+        enabled: true
+      # 全仓支付页脚本/SRI 检查
+      # controlIds: PCI-6.4.3, PCI-11.6.1
+      payment-page-full:
+        enabled: true
+        timeout: 3m
+      # OWASP ZAP API baseline（OpenAPI 驱动）
+      # controlIds: PCI-11.3
+      zap-api-dast:
+        enabled: true
+        timeout: 10m
+      # OpenAPI 越权负向用例（无/无效 token 期望 401/403）
+      # controlIds: PCI-11.3
+      openapi-auth-negative:
+        enabled: true
+        timeout: 3m
+      # Conftest/OPA 策略（PCI-DORA Rego）
+      # controlIds: DORA-Art6, SOX-404
+      opa-conftest:
+        enabled: true
+        timeout: 3m
+      # Checkov IaC 扫描（Terraform/K8s/Dockerfile）
+      # controlIds: PCI-6.3.3
+      iac-checkov:
+        enabled: true
+        timeout: 5m
+      # SLSA/Cosign 制品 provenance 校验
+      # controlIds: PCI-6.3.2, SLSA-L3
+      slsa-cosign:
+        enabled: true
+        timeout: 2m
+
+  # post-commit/post-merge/pre-push：Git 操作成功 webhook 通知
+  git-operation-notify:
+    enabled: true
+    timeout: 5s
+    operations:
+      - commit
+      - push
+      - merge
