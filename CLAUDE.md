@@ -126,7 +126,8 @@ Claude 可以直接执行 `git commit` 和 `git merge`，以下检查由 hook **
 | ---- | ---------------- |
 | git commit | 分支 + msg + 暂存敏感 + dep audit + 增量 typecheck + 关联测试 |
 | git push | quality-gate full（typecheck/lint/扫描/测试/对抗性等） |
-| git merge | quality-gate full @ 合并树（须 `--no-ff` 以触发 pre-merge-commit） |
+| git merge → main/master | quality-gate full @ 合并树（须 `--no-ff` 以触发 pre-merge-commit） |
+| git merge → feat/* | 跳过 full 门（pushMergeBranches.mode=selected, include=[main, master]） |
 
 **原则：提交门和合并门是安全最终保障，Claude 只需写好代码和提交信息，直接 commit/merge 即可。**
 **禁止 Claude 在提交前手动运行 `bun test` 或其他质量检查 — 这些由 hook 自动完成，手动运行会导致重复执行。**
