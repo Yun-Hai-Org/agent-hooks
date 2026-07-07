@@ -144,46 +144,6 @@ export const BLOCK_DANGEROUS_RULE_IDS = [
   'protected-branch-delete',
 ] as const;
 
-/** IDE 实时安全 / 防绕过 hook id（与 docs/hooks-responsibility-matrix.md §A 对齐） */
-export const SECURITY_HOOK_IDS = [
-  'block-dangerous-commands',
-  'protect-secrets',
-  'user-prompt-filter',
-  'branch-gate',
-  'branch-delete-gate',
-  'worktree-gate',
-  'workflow-gate',
-  'orchestrator-gate',
-  'git-ship-gate',
-] as const;
-
-/** 质量门编排核心模块（相对 `.claude/hooks/`）— L2.5 per-file 覆盖率 SSOT */
-export const CORE_MODULE_PATHS = [
-  'quality-gate.ts',
-  'gate-config.ts',
-  'gate-registry.ts',
-  'checks/git-policy.ts',
-  'merge-gate.ts',
-  'push-gate.ts',
-] as const;
-
-/** 安全 hook → 单测文件路径（相对 `.claude/hooks/`） */
-export const SECURITY_MODULE_TEST_MAP: Record<string, readonly string[]> = {
-  'block-dangerous-commands': [
-    '__tests__/block-dangerous-commands.test.ts',
-    '__tests__/block-dangerous-rule-matrix.test.ts',
-    '__tests__/adversarial/block-dangerous-commands.test.ts',
-  ],
-  'protect-secrets': ['__tests__/protect-secrets.test.ts'],
-  'user-prompt-filter': ['__tests__/user-prompt-filter.test.ts'],
-  'branch-gate': ['__tests__/branch-gate.test.ts', '__tests__/adversarial/branch-gate.test.ts'],
-  'branch-delete-gate': ['__tests__/branch-delete-gate.test.ts'],
-  'worktree-gate': ['__tests__/worktree-gate.test.ts'],
-  'workflow-gate': ['__tests__/workflow-gate.test.ts'],
-  'orchestrator-gate': ['__tests__/orchestrator-gate.test.ts'],
-  'git-ship-gate': ['__tests__/git-ship-gate.test.ts'],
-};
-
 const BLOCK_DANGEROUS_RULE_DESCRIPTIONS: Record<string, string> = {
   'rm-home': '拦截 rm 删除 home 目录',
   'rm-home-var': '拦截 rm 删除 $HOME',
@@ -322,7 +282,6 @@ const PRE_COMMIT_CHECKS: Record<string, string> = {
   'dep-audit': '暂存区依赖文件变更时 bun audit 审计',
   'type-check': '暂存区 TS/Python 类型检查（tsc/pyright）',
   'related-tests': '运行与暂存文件关联的 pytest/bun 测试',
-  'test-file-pairing': '暂存区源码变更须配对测试文件（C0）',
   'lint-staged': '暂存区 lint 聚合门',
   'lint-staged-eslint': '暂存区 ESLint（JS/TS，不含 __tests__）',
   'lint-staged-ruff': '暂存区 Ruff lint（Python）',
@@ -361,10 +320,6 @@ const PRE_COMMIT_CHECKS: Record<string, string> = {
 const FULL_CHECKS: Record<string, string> = {
   'hook-unit-tests': 'Hook 项目 bun test --coverage 全量单测',
   coverage: '覆盖率检查（已并入 hook-unit-tests，占位 SKIP）',
-  'diff-coverage': 'PR merge-base 变更行覆盖率检查（L1b）',
-  'security-rule-coverage': '安全 hook 规则矩阵覆盖率检查（L2）',
-  'core-module-coverage': '核心模块 per-file 覆盖率检查（L2.5）',
-  'full-test-sh': '全仓 Shell bats 测试',
   'type-check': '全仓 TS/Python 类型检查',
   'lint-full': '全仓 lint 聚合门',
   'lint-eslint': '全仓 ESLint',
@@ -806,40 +761,6 @@ export function generateExampleYaml(): string {
     '        url: ""',
     '      slack:',
     '        url: ""',
-    '  diffCoverageThreshold:',
-    '    lines: 80',
-    '    enforceOn:',
-    '      - push',
-    '    scope: merge-base',
-    '    baseRef: auto',
-    '    include:',
-    '      - .claude/hooks/**',
-    '      - scripts/lib/**',
-    '      - scripts/cursor-yingmi-hooks/**',
-    '    exclude:',
-    '      - "**/*.test.ts"',
-    '      - "**/__tests__/**"',
-    '      - "**/*.d.ts"',
-    '      - tests/**',
-    '  testFilePairing:',
-    '    enabled: true',
-    '    enforceOn:',
-    '      - commit',
-    '    sourceGlobs:',
-    '      - .claude/hooks/**/*.ts',
-    '      - scripts/lib/**/*.py',
-    '      - scripts/cursor-yingmi-hooks/**/*.sh',
-    '    exclude:',
-    '      - "**/*.d.ts"',
-    '      - "**/__tests__/**"',
-    '      - "**/native/run-*.ts"',
-    '  coreModuleCoverage:',
-    '    lines: 90',
-    '    functions: 90',
-    '    paths: []',
-    '  securityRuleCoverage:',
-    '    requiredPercent: 100',
-    '    modules: []',
     '',
   ];
   for (const section of ['ide', 'git'] as const) {

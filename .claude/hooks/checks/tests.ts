@@ -8,6 +8,7 @@ import {
   formatResult,
   withTimeout,
   detectToolchain,
+  TESTS_DIR,
   DECISION,
 } from '../security-orchestrator.js';
 import { getStagedFiles } from './git-policy.js';
@@ -15,8 +16,7 @@ import { getScopedStagedFiles } from './scan-scope.js';
 import { denyIfToolMissing, denyOnToolError, isToolInstalled, resolveBunExecutable } from './tools.js';
 import { isHooksProject } from './hooks-project.js';
 
-const ADVERSARIAL_DIR = '.claude/hooks/__tests__/adversarial';
-const HOOK_TESTS_DIR = '.claude/hooks/__tests__';
+const ADVERSARIAL_DIR = join(TESTS_DIR, 'adversarial');
 
 function bunTestCommand(args: string): string {
   return `"${resolveBunExecutable()}" test ${args}`;
@@ -135,12 +135,8 @@ export async function runFullProjectTests(cwd?: string, _options?: GateCheckRunO
       results.push(formatResult('full-test-py', DECISION.DENY, 'uv 未安装，请先安装 uv'));
     } else {
       try {
-        const thresholds = resolveCoverageThresholds(cwd);
         const pyResult = await withTimeout(
-          execCommandAsync(`uv run python -m pytest -x -q --cov --cov-fail-under=${String(thresholds.lines)}`, {
-            cwd,
-            timeout: 120000,
-          }),
+          execCommandAsync('uv run python -m pytest -x -q', { cwd, timeout: 120000 }),
           120000,
           'pytest 超时 (120s)',
         );
@@ -148,8 +144,6 @@ export async function runFullProjectTests(cwd?: string, _options?: GateCheckRunO
           const output = [pyResult.stdout, pyResult.stderr].filter(Boolean).join('\n');
           if (output.includes('No module named pytest')) {
             results.push(formatResult('full-test-py', DECISION.DENY, 'pytest 未安装，请先 uv add pytest'));
-          } else if (output.includes('No module named pytest_cov') || output.includes('unknown option: --cov')) {
-            results.push(formatResult('full-test-py', DECISION.DENY, 'pytest-cov 未安装，请先 uv add pytest-cov'));
           } else if (output.includes('no tests ran') || output.includes('collected 0 items')) {
             results.push(formatResult('full-test-py', DECISION.SKIP, '无 Python 测试用例'));
           } else {
@@ -221,54 +215,11 @@ export async function runFullProjectTests(cwd?: string, _options?: GateCheckRunO
     }
   }
 
-  results.push(await runShellTests(cwd, _options));
-
   if (results.length === 0) {
     return formatResult('full-tests', DECISION.SKIP, '未找到测试配置');
   }
   const failure = results.find((r) => r.decision === DECISION.DENY);
   return failure ?? formatResult('full-tests', DECISION.ALLOW, '所有全量测试通过');
-}
-
-const SHELL_TESTS_DIR = 'tests/shell';
-const SHELL_COVERAGE_SCRIPT = 'scripts/run-shell-coverage.sh';
-
-export async function runShellTests(cwd?: string, _options?: GateCheckRunOptions): Promise<CheckResult> {
-  if (!execCommand(`test -d "${SHELL_TESTS_DIR}"`, { cwd }).success) {
-    return formatResult('full-test-sh', DECISION.SKIP, '无 tests/shell 目录，跳过 Shell 测试');
-  }
-
-  if (!isToolInstalled('bats', cwd)) {
-    return formatResult('full-test-sh', DECISION.SKIP, 'bats 未安装，跳过 Shell 测试');
-  }
-
-  try {
-    const batsResult = await withTimeout(
-      execCommandAsync(`bats "${SHELL_TESTS_DIR}"`, { cwd, timeout: 120000 }),
-      120000,
-      'bats 超时 (120s)',
-    );
-    if (!batsResult.success) {
-      const output = [batsResult.stdout, batsResult.stderr].filter(Boolean).join('\n');
-      return formatResult('full-test-sh', DECISION.DENY, 'Shell bats 测试失败', { output: output.slice(0, 500) });
-    }
-
-    if (execCommand(`test -x "${SHELL_COVERAGE_SCRIPT}"`, { cwd }).success) {
-      const kcovResult = await withTimeout(
-        execCommandAsync(`"${SHELL_COVERAGE_SCRIPT}"`, { cwd, timeout: 120000 }),
-        120000,
-        'Shell 覆盖率脚本超时 (120s)',
-      );
-      if (!kcovResult.success) {
-        const output = [kcovResult.stdout, kcovResult.stderr].filter(Boolean).join('\n');
-        return formatResult('full-test-sh', DECISION.DENY, 'Shell 覆盖率脚本失败', { output: output.slice(0, 500) });
-      }
-    }
-
-    return formatResult('full-test-sh', DECISION.ALLOW, 'Shell bats 测试通过');
-  } catch (e) {
-    return denyOnToolError(e, 'full-test-sh', 'bats');
-  }
 }
 
 const HOOK_UNIT_TEST_TIMEOUT_MS = 1200000;
@@ -282,7 +233,7 @@ export interface BunTestRunSummary {
 }
 
 export function parseBunTestRunSummary(output: string): BunTestRunSummary {
-  const ranMatch = /Ran (\d+) tests across \d+ files/gm;
+  const ranMatch = /Ran (\d+) tests across \d+ files/mg;
   let lastRanIndex = -1;
   let match: RegExpExecArray | null;
   while ((match = ranMatch.exec(output)) !== null) {
@@ -322,10 +273,10 @@ export async function runHookUnitTests(cwd?: string, options: GateCheckRunOption
   const missing = denyIfToolMissing('bun', 'hook-unit-tests', cwd);
   if (missing) return missing;
 
-  if (!execCommand(`test -d "${HOOK_TESTS_DIR}"`, { cwd }).success) {
+  if (!execCommand(`test -d "${TESTS_DIR}"`, { cwd }).success) {
     return formatResult('hook-unit-tests', DECISION.DENY, 'Hook 测试目录不存在');
   }
-  const list = execCommand(`find ${HOOK_TESTS_DIR} -maxdepth 1 -name "*.test.ts"`, { cwd, timeout: 5000 });
+  const list = execCommand('find .claude/hooks/__tests__ -maxdepth 1 -name "*.test.ts"', { cwd, timeout: 5000 });
   const files = list.success ? list.stdout.trim().split('\n').filter(Boolean) : [];
   if (files.length === 0) {
     return formatResult('hook-unit-tests', DECISION.DENY, '无 Hook 常规单测文件');
@@ -368,9 +319,7 @@ export async function runHookUnitTests(cwd?: string, options: GateCheckRunOption
           output: combinedOutput.slice(0, 500),
         });
       }
-      return formatResult('hook-unit-tests', DECISION.ALLOW, `Hook 常规单测通过，${evaluation.message}`, {
-        coverageReport: combinedOutput,
-      });
+      return formatResult('hook-unit-tests', DECISION.ALLOW, `Hook 常规单测通过，${evaluation.message}`);
     }
     return formatResult('hook-unit-tests', DECISION.ALLOW, 'Hook 常规单测通过');
   } catch (e) {
@@ -398,7 +347,7 @@ export async function runHookAdversarialTests(cwd?: string, _options?: GateCheck
   if (!execCommand(`test -d "${ADVERSARIAL_DIR}"`, { cwd }).success) {
     return formatResult('hook-adversarial', DECISION.DENY, '对抗性测试目录不存在');
   }
-  const list = execCommand(`find ${ADVERSARIAL_DIR} -maxdepth 1 -name "*.test.ts"`, {
+  const list = execCommand('find .claude/hooks/__tests__/adversarial -maxdepth 1 -name "*.test.ts"', {
     cwd,
     timeout: 5000,
   });

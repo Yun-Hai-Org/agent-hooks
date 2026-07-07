@@ -26,9 +26,6 @@ import { setPendingGateFailure, clearPendingGateFailure } from './gate-pending.j
 
 const HOOK_NAME = 'merge-gate';
 
-/** 测试注入容器（默认调用 runQualityGate） */
-export const mergeGateDeps = { runQualityGate };
-
 async function runFullOnSourceBranch(repoCwd: string, sourceBranch: string) {
   const worktreeDir = mkdtempSync(join(tmpdir(), 'merge-gate-'));
   try {
@@ -43,7 +40,7 @@ async function runFullOnSourceBranch(repoCwd: string, sourceBranch: string) {
         results: [],
       };
     }
-    return await mergeGateDeps.runQualityGate({ profile: 'full', cwd: worktreeDir });
+    return await runQualityGate({ profile: 'full', cwd: worktreeDir });
   } finally {
     execCommand(`git worktree remove --force "${worktreeDir}"`, { cwd: repoCwd, timeout: 30000 });
     try {

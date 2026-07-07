@@ -177,9 +177,9 @@ describe('checks skip/allow paths', () => {
     expect((await runOpenApiAuthNegative(repoDir)).decision).toBe(DECISION.SKIP);
   });
 
-  it('runFullProjectTests 空仓库 SKIP 或 ALLOW', async () => {
+  it('runFullProjectTests 无测试配置 SKIP', async () => {
     const r = await runFullProjectTests(repoDir);
-    expect([DECISION.SKIP, DECISION.ALLOW]).toContain(r.decision);
+    expect(r.decision).toBe(DECISION.SKIP);
   });
 
   it('runHookAdversarialTests 非 hooks 项目 SKIP', async () => {

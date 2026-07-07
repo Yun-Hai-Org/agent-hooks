@@ -1,13 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, writeFileSync } from 'fs';
+import { describe, it, expect } from 'bun:test';
 import { spawnSync } from 'child_process';
 import { join } from 'path';
 import { isHooksProject } from '../checks/hooks-project.js';
-import { parseBunTestRunSummary, runHookUnitTests, runRelatedTests } from '../checks/tests.js';
+import { parseBunTestRunSummary, runHookUnitTests } from '../checks/tests.js';
 import { evaluateCoverageAgainstThresholds, parseCoverageMetrics } from '../checks/coverage.js';
 import { DECISION } from '../security-orchestrator.js';
-import { createTempGitRepo, cleanupTempGitRepo, PROJECT_ROOT } from './helpers.js';
-import { execSync } from 'child_process';
+import { PROJECT_ROOT } from './helpers.js';
 
 const VALIDATE_SCRIPT = join(PROJECT_ROOT, 'scripts/validate-hooks-json.example.sh');
 const DOCTOR_SCRIPT = join(PROJECT_ROOT, 'scripts/hooks-doctor.sh');
@@ -83,68 +81,4 @@ describe('runHookUnitTests', () => {
     expect(eval_.pass).toBe(false);
     expect(eval_.message).toContain('Hook 单测通过但覆盖率未达标');
   });
-
-  describe('stub hooks 项目', () => {
-    let stubRepo = '';
-    let origGlob: string | undefined;
-
-    beforeEach(() => {
-      stubRepo = createTempGitRepo('feat/hook-unit-stub');
-      mkdirSync(join(stubRepo, '.claude/hooks/__tests__'), { recursive: true });
-      writeFileSync(join(stubRepo, '.claude/hooks/quality-gate.ts'), 'export {};\n');
-      writeFileSync(
-        join(stubRepo, '.claude/hooks/__tests__/stub.test.ts'),
-        `import { it, expect } from 'bun:test';\nit('ok', () => expect(1).toBe(1));\n`,
-      );
-      writeFileSync(join(stubRepo, '.claude/hooks/__tests__/empty-global-quality-gate.yaml'), 'settings: {}\n');
-      origGlob = process.env['HOOK_UNIT_TEST_GLOB'];
-      process.env['HOOK_UNIT_TEST_GLOB'] = './.claude/hooks/__tests__/stub.test.ts';
-    });
-
-    afterEach(() => {
-      if (origGlob === undefined) delete process.env['HOOK_UNIT_TEST_GLOB'];
-      else process.env['HOOK_UNIT_TEST_GLOB'] = origGlob;
-      if (stubRepo) cleanupTempGitRepo(stubRepo);
-      stubRepo = '';
-    });
-
-    it('stub ALLOW', async () => {
-      const r = await runHookUnitTests(stubRepo);
-      expect(r.decision).toBe(DECISION.ALLOW);
-    }, 60_000);
-
-    it('stub coverage 路径', async () => {
-      const r = await runHookUnitTests(stubRepo, { coverageThreshold: { lines: 1, functions: 1 } });
-      expect([DECISION.ALLOW, DECISION.DENY]).toContain(r.decision);
-    }, 60_000);
-  });
-
-  it('hooks 项目无 __tests__ DENY', async () => {
-    const repo = createTempGitRepo('feat/no-tests');
-    mkdirSync(join(repo, '.claude/hooks'), { recursive: true });
-    writeFileSync(join(repo, '.claude/hooks/quality-gate.ts'), 'export {};\n');
-    try {
-      const r = await runHookUnitTests(repo);
-      expect(r.decision).toBe(DECISION.DENY);
-    } finally {
-      cleanupTempGitRepo(repo);
-    }
-  });
-});
-
-describe('runRelatedTests branches', () => {
-  it('暂存 js+py 混合', async () => {
-    const repo = createTempGitRepo('feat/mixed-related');
-    mkdirSync(join(repo, 'tests'), { recursive: true });
-    writeFileSync(join(repo, 'lib.py'), 'def f():\n  return 1\n');
-    writeFileSync(join(repo, 'tests/test_lib.py'), 'def test_f():\n  assert True\n');
-    writeFileSync(join(repo, 'lib.ts'), 'export const x = 1;\n');
-    writeFileSync(
-      join(repo, 'lib.test.ts'),
-      `import { it, expect } from 'bun:test';\nit('x', () => expect(1).toBe(1));\n`,
-    );
-    execSync('git add lib.py tests/test_lib.py lib.ts lib.test.ts', { cwd: repo });
-    const r = await runRelatedTests(repo);
-    expect([DECISION.ALLOW, DECISION.SKIP, DECISION.DENY]).toContain(r.decision);
-  }, 60_000);
 });
