@@ -1,5 +1,0 @@
-[test]
-# 启用覆盖率收集；阈值由 runHookUnitTests(coverageThreshold) 在 full 门判定（不设 coverageThreshold 以免子集测试误失败）
-coverage = true
-coverageSkipTestFiles = true
-preload = ["./.claude/hooks/__tests__/preload.ts"]

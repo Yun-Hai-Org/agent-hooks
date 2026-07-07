@@ -1,3 +1,0 @@
-#!/bin/sh
-export PATH="${HOME}/.cursor:${HOME}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}"
-exec "${HOME}/.cursor/bun" "${HOME}/.claude/hooks/native/run-pre-push.ts"
