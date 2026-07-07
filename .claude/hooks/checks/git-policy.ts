@@ -1,6 +1,6 @@
 import { execCommand, formatResult, DECISION } from '../security-orchestrator.js';
 import { existsSync, readFileSync, realpathSync } from 'fs';
-import { join } from 'path';
+import { join, isAbsolute } from 'path';
 import type { CheckResult } from '../types.js';
 
 const COMMIT_TYPES = [
@@ -237,9 +237,18 @@ export function isGitMergeCommand(cmd: string): boolean {
   return /\bgit\s+merge\b/.test(cmd);
 }
 
+export function resolveMergeHeadPath(cwd: string): string | null {
+  const result = execCommand('git rev-parse --git-path MERGE_HEAD', { cwd });
+  if (!result.success) return null;
+  const mergeHeadPath = result.stdout.trim();
+  if (mergeHeadPath.length === 0) return null;
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- mergeHeadPath 来自 git rev-parse --git-path，cwd 为受信仓库根
+  return isAbsolute(mergeHeadPath) ? mergeHeadPath : join(cwd, mergeHeadPath);
+}
+
 export function isMergeConclude(cwd: string): boolean {
-  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- cwd 为 git 仓库根，拼接常量 MERGE_HEAD
-  return existsSync(join(cwd, '.git', 'MERGE_HEAD'));
+  const mergeHeadPath = resolveMergeHeadPath(cwd);
+  return mergeHeadPath !== null && existsSync(mergeHeadPath);
 }
 
 const PROTECTED_BRANCHES = ['main', 'master'] as const;

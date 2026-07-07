@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { isMergeConclude } from '../checks/git-policy.js';
+import { execSync } from 'child_process';
+import { isMergeConclude, resolveMergeHeadPath } from '../checks/git-policy.js';
 
 describe('merge-conclude-gate', () => {
   let tempDir: string;
@@ -10,7 +11,8 @@ describe('merge-conclude-gate', () => {
   beforeEach(() => {
     tempDir = join('/tmp', `merge-conclude-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
     repoPath = join(tempDir, 'repo');
-    mkdirSync(join(repoPath, '.git'), { recursive: true });
+    mkdirSync(repoPath, { recursive: true });
+    execSync('git init', { cwd: repoPath, stdio: 'ignore' });
   });
 
   afterEach(() => {
@@ -22,7 +24,9 @@ describe('merge-conclude-gate', () => {
   });
 
   it('存在 MERGE_HEAD 时 isMergeConclude 为 true', () => {
-    writeFileSync(join(repoPath, '.git', 'MERGE_HEAD'), 'abc123\n');
+    const mergeHeadPath = resolveMergeHeadPath(repoPath);
+    expect(mergeHeadPath).not.toBeNull();
+    writeFileSync(mergeHeadPath!, 'abc123\n');
     expect(isMergeConclude(repoPath)).toBe(true);
   });
 });
