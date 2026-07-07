@@ -97,6 +97,11 @@ export interface SecurityRuleCoverageYaml {
   modules?: string[];
 }
 
+export interface WorktreeSettings {
+  forbidCreateFromMain?: boolean;
+  integratorMergeRequiresFull?: boolean;
+}
+
 export interface GateSettings {
   coverageThreshold?: number | CoverageThresholdYaml;
   diffCoverageThreshold?: DiffCoverageThresholdYaml;
@@ -105,6 +110,7 @@ export interface GateSettings {
   securityRuleCoverage?: SecurityRuleCoverageYaml;
   scanScope?: ScanScopeConfig;
   pushMergeBranches?: PushMergeBranchPolicy;
+  worktree?: WorktreeSettings;
   licenseDenylist?: string[];
   notifications?: NotificationSettings;
 }
@@ -299,6 +305,16 @@ function mergeSettings(base?: GateSettings, override?: GateSettings): GateSettin
       ...(include.length > 0 ? { include } : {}),
       ...(exclude.length > 0 ? { exclude } : {}),
     };
+  }
+  if (base.worktree || override.worktree) {
+    const worktree: WorktreeSettings = {};
+    const forbidCreateFromMain =
+      override.worktree?.forbidCreateFromMain ?? base.worktree?.forbidCreateFromMain;
+    const integratorMergeRequiresFull =
+      override.worktree?.integratorMergeRequiresFull ?? base.worktree?.integratorMergeRequiresFull;
+    if (forbidCreateFromMain !== undefined) worktree.forbidCreateFromMain = forbidCreateFromMain;
+    if (integratorMergeRequiresFull !== undefined) worktree.integratorMergeRequiresFull = integratorMergeRequiresFull;
+    merged.worktree = worktree;
   }
   if (base.licenseDenylist || override.licenseDenylist) {
     merged.licenseDenylist = [...new Set([...(base.licenseDenylist ?? []), ...(override.licenseDenylist ?? [])])];
@@ -688,6 +704,20 @@ export function resolvePushMergeBranchPolicy(cwd: string = process.cwd()): Resol
     mode: raw?.mode ?? 'all',
     include: [...(raw?.include ?? [])],
     exclude: [...(raw?.exclude ?? [])],
+  };
+}
+
+export interface ResolvedWorktreeSettings {
+  forbidCreateFromMain: boolean;
+  integratorMergeRequiresFull: boolean;
+}
+
+export function resolveWorktreeSettings(cwd: string = process.cwd()): ResolvedWorktreeSettings {
+  const config = loadGateConfig(cwd);
+  const raw = config.settings?.worktree;
+  return {
+    forbidCreateFromMain: raw?.forbidCreateFromMain ?? true,
+    integratorMergeRequiresFull: raw?.integratorMergeRequiresFull ?? false,
   };
 }
 

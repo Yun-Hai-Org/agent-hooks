@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, writeFileSync } from 'fs';
+import { spawnSync } from 'child_process';
 import { join } from 'path';
 import { isHooksProject } from '../checks/hooks-project.js';
 import { parseBunTestRunSummary, runHookUnitTests, runRelatedTests } from '../checks/tests.js';
@@ -7,6 +8,9 @@ import { evaluateCoverageAgainstThresholds, parseCoverageMetrics } from '../chec
 import { DECISION } from '../security-orchestrator.js';
 import { createTempGitRepo, cleanupTempGitRepo, PROJECT_ROOT } from './helpers.js';
 import { execSync } from 'child_process';
+
+const VALIDATE_SCRIPT = join(PROJECT_ROOT, 'scripts/validate-hooks-json.example.sh');
+const DOCTOR_SCRIPT = join(PROJECT_ROOT, 'scripts/hooks-doctor.sh');
 
 describe('parseBunTestRunSummary', () => {
   it('应取末行 fail 计数而非 coverage 行', () => {
@@ -37,6 +41,28 @@ describe('parseBunTestRunSummary', () => {
 
   it('无摘要时 failCount 为 0 且 parsed false', () => {
     expect(parseBunTestRunSummary('random output')).toEqual({ failCount: 0, parsed: false });
+  });
+});
+
+describe('hooks repo integrity scripts', () => {
+  it('validate-hooks-json.example.sh passes for PROJECT_ROOT', () => {
+    const result = spawnSync('bash', [VALIDATE_SCRIPT, PROJECT_ROOT], { encoding: 'utf-8' });
+    expect(result.status).toBe(0);
+  });
+
+  it('hooks-doctor --json (no repair) runs against PROJECT_ROOT', () => {
+    const result = spawnSync('bash', [DOCTOR_SCRIPT, '--json', '--quiet', PROJECT_ROOT], {
+      encoding: 'utf-8',
+    });
+    const jsonLine = (result.stdout ?? '')
+      .trim()
+      .split('\n')
+      .reverse()
+      .find((line) => line.startsWith('{'));
+    expect(jsonLine).toBeTruthy();
+    const report = JSON.parse(jsonLine ?? '{}') as { ok: boolean; errors: number };
+    expect(typeof report.errors).toBe('number');
+    expect(typeof report.ok).toBe('boolean');
   });
 });
 
