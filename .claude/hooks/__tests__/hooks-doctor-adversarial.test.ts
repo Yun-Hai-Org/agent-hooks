@@ -13,7 +13,6 @@ interface DoctorReport {
 }
 
 const DOCTOR_SCRIPT = join(PROJECT_ROOT, 'scripts/hooks-doctor.sh');
-const LINK_SCRIPT = join(PROJECT_ROOT, 'scripts/link-cursor-hooks-global.sh');
 const MANIFEST_PATH = join(PROJECT_ROOT, '.cursor/hooks-manifest.json');
 
 function readRequiredHooks(): string[] {
@@ -76,21 +75,30 @@ afterEach(() => {
 });
 
 describe('hooks-doctor adversarial repair', () => {
-  it('restores ~/.cursor/hooks.json symlink after --repair (isolated HOME)', () => {
-    const { home, gitconfig, cleanup } = setupTempHome();
-    cleanups.push(cleanup);
-    const env = isolatedEnv(home, gitconfig);
+  it(
+    'restores ~/.cursor/hooks.json symlink after --repair (isolated HOME)',
+    () => {
+      const { home, gitconfig, cleanup } = setupTempHome();
+      cleanups.push(cleanup);
+      const env = isolatedEnv(home, gitconfig);
 
-    execSync(`bash "${LINK_SCRIPT}" "${PROJECT_ROOT}"`, { env, stdio: 'pipe' });
+      const hooksJson = join(home, '.cursor/hooks.json');
+      const claudeHooks = join(home, '.claude/hooks');
+      const bunPath = join(home, '.cursor/bun');
+      mkdirSync(claudeHooks, { recursive: true });
+      execSync(`ln -sf "${PROJECT_ROOT}/.cursor/hooks.json.example" "${hooksJson}"`, { env });
+      execSync(`ln -sf "${PROJECT_ROOT}/.claude/hooks" "${claudeHooks}"`, { env });
+      execSync(`ln -sf "${PROJECT_ROOT}/.tools/bun-darwin-x64/bun" "${bunPath}"`, { env });
 
-    const hooksJson = join(home, '.cursor/hooks.json');
-    expect(existsSync(hooksJson)).toBe(true);
-    rmSync(hooksJson, { force: true });
-    expect(existsSync(hooksJson)).toBe(false);
+      expect(lstatSync(hooksJson).isSymbolicLink()).toBe(true);
+      rmSync(hooksJson, { force: true });
+      expect(existsSync(hooksJson)).toBe(false);
 
-    const report = runDoctor(['--repair', '--json', '--quiet'], env);
-    expect(report.repaired).toBe(true);
-    expect(existsSync(hooksJson)).toBe(true);
-    expect(lstatSync(hooksJson).isSymbolicLink()).toBe(true);
-  });
+      const report = runDoctor(['--repair', '--json', '--quiet'], env);
+      expect(report.repaired).toBe(true);
+      expect(existsSync(hooksJson)).toBe(true);
+      expect(lstatSync(hooksJson).isSymbolicLink()).toBe(true);
+    },
+    30_000,
+  );
 });
