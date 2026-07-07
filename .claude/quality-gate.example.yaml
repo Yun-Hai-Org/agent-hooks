@@ -18,9 +18,14 @@ settings:
       - htmlcov/
       - coverage/
   pushMergeBranches:
-    mode: all
-    include: []
+    mode: selected
+    include:
+      - main
+      - master
     exclude: []
+  worktree:
+    forbidCreateFromMain: true
+    integratorMergeRequiresFull: false
   licenseDenylist:
     - GPL-3.0
     - AGPL-3.0
@@ -246,6 +251,9 @@ ide:
 
   # beforeShellExecution/preToolUse Shell：Orchestrator 禁 git commit/push/merge
   git-ship-gate:
+    enabled: true
+
+  workflow-subagent-sync:
     enabled: true
 
   # beforeShellExecution：限制删除未 merge 分支与 worktree prune

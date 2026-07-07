@@ -262,6 +262,33 @@ export function resolveParentEpicBranch(taskBranch: string): string | null {
   return normalized.slice(0, taskIdx);
 }
 
+export function resolveMergeHeadBranch(cwd: string): string | null {
+  if (!isMergeConclude(cwd)) return null;
+
+  const decorated = execCommand('git log -1 --format=%D MERGE_HEAD', { cwd });
+  if (decorated.success && decorated.stdout.trim()) {
+    for (const part of decorated.stdout.split(',')) {
+      const trimmed = part.trim().replace(/^HEAD\s*->\s*/, '');
+      const branch = normalizeBranchRef(trimmed.replace(/^origin\//, ''));
+      if (branch && branch !== 'HEAD') return branch;
+    }
+  }
+
+  const nameRev = execCommand('git name-rev --name-only --exclude=tags/* MERGE_HEAD', { cwd });
+  if (nameRev.success && nameRev.stdout.trim()) {
+    const branch = normalizeBranchRef(nameRev.stdout.trim().replace(/[~^].*$/, ''));
+    if (branch && branch !== 'undefined') return branch;
+  }
+
+  return null;
+}
+
+export function isIntegratorMerge(currentBranch: string, mergeSourceBranch: string | null): boolean {
+  if (!mergeSourceBranch || !isFeatTaskBranch(mergeSourceBranch)) return false;
+  const parent = resolveParentEpicBranch(mergeSourceBranch);
+  return parent === normalizeBranchRef(currentBranch);
+}
+
 export function isTaskBranchMergedIntoEpicOrBase(branch: string, base: string, cwd?: string): boolean {
   if (isBranchMergedInto(branch, base, cwd)) return true;
   if (!isFeatTaskBranch(branch)) return false;

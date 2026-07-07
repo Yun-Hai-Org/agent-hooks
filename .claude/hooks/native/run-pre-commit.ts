@@ -7,6 +7,7 @@ import { execCommand, log } from '../security-orchestrator.js';
 import { runQualityGate, logGateResult } from '../quality-gate.js';
 import { getIndexTreeSha, hasFreshFullPass, recordFullPass } from '../gate-cache.js';
 import { clearPendingGateFailure } from '../gate-pending.js';
+import { syncShipStatusFromNativeHook } from '../ship-status-sync.js';
 import { exitIfQualityGateExcluded, exitIfGateHookDisabled } from './native-common.js';
 import { isMergeConclude } from '../checks/git-policy.js';
 
@@ -38,6 +39,7 @@ async function runMergeConcludeGate(cwd: string): Promise<void> {
   logGateResult(HOOK_NAME, gateResult, { profile: 'full', cwd, hook: 'merge-conclude' });
 
   if (!gateResult.passed) {
+    syncShipStatusFromNativeHook('failed', cwd, gateResult.decision.reason);
     console.error(gateResult.decision.reason ?? 'merge conclude quality gate failed');
     process.exit(1);
   }
@@ -63,6 +65,7 @@ async function main() {
   logGateResult(HOOK_NAME, gateResult, { profile: 'commit', cwd });
 
   if (!gateResult.passed) {
+    syncShipStatusFromNativeHook('failed', cwd, gateResult.decision.reason);
     console.error(gateResult.decision.reason ?? 'pre-commit quality gate failed');
     process.exit(1);
   }

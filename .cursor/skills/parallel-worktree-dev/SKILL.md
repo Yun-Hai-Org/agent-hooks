@@ -23,11 +23,16 @@ Orchestrator coordinates only. Hooks enforce worktree isolation, Todo-before-Rea
 
 ### 1. Bootstrap epic worktree
 
+默认 `settings.worktree.forbidCreateFromMain: true` 时，**在 main/master checkout 上执行任意 `git worktree add` 都会被 branch-gate 拒绝**（含 `-b feat/x`）。须先离开 main：
+
 ```bash
-git worktree add .worktrees/feat-<name> -b feat/<name>
+git checkout -b feat/<name>
+git worktree add .worktrees/feat-<name>-task-json -b feat/<name>-task-json
 ```
 
-Orchestrator stays in main checkout; all writes happen in task worktrees.
+Orchestrator 留在 main checkout（只读协调）；所有写入在 task worktree 内完成。Epic 集成分支 `feat/<name>` 可在上述 checkout 后继续添加更多 task worktree。
+
+若要允许从 main 建 worktree，在 `quality-gate.yaml` 设置 `settings.worktree.forbidCreateFromMain: false`。
 
 ### 2. TodoWrite first
 
@@ -35,7 +40,10 @@ Create ≥1 todo before any Read/Write. Explore items include plan reads, e.g.�
 
 ### 3. Add parallel task worktrees
 
+从 epic 分支 checkout（非 main/master）添加 task worktree：
+
 ```bash
+git checkout feat/<name>
 git worktree add .worktrees/feat-<name>-task-json -b feat/<name>-task-json
 git worktree add .worktrees/feat-<name>-task-scripts -b feat/<name>-task-scripts
 ```
@@ -78,7 +86,7 @@ git worktree remove .worktrees/feat-<name>-task-<id>
 When impl todos are complete:
 
 1. **ship-sa** — `git add` + `git commit` until pre-commit passes (`ship_status=commit_ok`)
-2. **merge-sa** — merge epic into main/master + push (`ship_status=merge_ok`)
+2. **merge-sa** — merge epic into main/master + push (`ship_status=merge_ok`); **必须先** `./scripts/verify-ship-readiness.sh`
 3. **ci-fixer-sa** — fix CI/gate failures and retry
 
 Stop is blocked until `ship_status=merge_ok`. Read the hook reason and dispatch the matching background SA.

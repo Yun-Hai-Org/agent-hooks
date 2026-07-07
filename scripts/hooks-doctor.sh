@@ -2,9 +2,9 @@
 # hooks-doctor.sh - hooks 完整性检查与自动恢复
 #
 # 用法:
-#   ./scripts/hooks-doctor.sh [HOOKS_REPO]              # L1+L2 检查
+#   ./scripts/hooks-doctor.sh [HOOKS_REPO]              # L1+L2+L3+L5 检查
 #   ./scripts/hooks-doctor.sh --repair [HOOKS_REPO]     # 检查并修复
-#   ./scripts/hooks-doctor.sh --watch --repair          # 含 L4 存活检查
+#   ./scripts/hooks-doctor.sh --watch --repair          # 含 L4 存活与通知指标
 #   ./scripts/hooks-doctor.sh --json                    # JSON 报告
 #   ./scripts/hooks-doctor.sh --quiet                   # 抑制非错误输出
 #
@@ -71,7 +71,7 @@ expand_path() {
 	local p="$1"
 	if [[ "$p" == "$HOME" ]]; then
 		echo "$HOME"
-	elif [[ ${p:0:1} = ~ ]]; then
+	elif [[ ${p:0:1} == '~' ]]; then
 		echo "${HOME}${p:1}"
 	else
 		echo "$p"
@@ -249,6 +249,263 @@ PY
 	return "$failed"
 }
 
+is_strategy_b_repo() {
+	python3 - "$MANIFEST" "$HOOKS_REPO" <<'PY'
+import json, os, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    manifest = json.load(f)
+repo = os.path.basename(os.path.normpath(sys.argv[2]))
+repos = manifest.get("gitHooks", {}).get("strategyBRepos", [])
+sys.exit(0 if repo in repos else 1)
+PY
+}
+
+is_hooks_trap() {
+	local hooks_path="$1"
+	[[ -n "$hooks_path" ]] || return 1
+	[[ "$hooks_path" == *"/.git/hooks" ]] || return 1
+	[[ -d "$hooks_path" ]] || return 1
+	python3 - "$hooks_path" <<'PY'
+import os, sys
+path = sys.argv[1]
+entries = [e for e in os.listdir(path) if not e.startswith(".")]
+real = [e for e in entries if not e.endswith(".sample")]
+sys.exit(0 if len(real) == 0 else 1)
+PY
+}
+
+check_l3_git_hooks() {
+	local failed=0
+	local global_path expected_global local_path hook hook_path repo_name
+
+	if [[ ! -f "$MANIFEST" ]]; then
+		report ERROR "L3 missing manifest: $MANIFEST"
+		return 1
+	fi
+
+	expected_global="$(python3 - "$MANIFEST" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    manifest = json.load(f)
+print(manifest.get("gitHooks", {}).get("globalPath", "~/.git-hooks"))
+PY
+)"
+	global_path="$(git config --global --get core.hooksPath 2>/dev/null || true)"
+	expected_global_expanded="$(expand_path "$expected_global")"
+
+	if [[ -z "$global_path" ]]; then
+		report ERROR "L3 global core.hooksPath not set (expected $expected_global_expanded)"
+		failed=1
+	elif [[ "$(expand_path "$global_path")" != "$expected_global_expanded" ]]; then
+		report ERROR "L3 global core.hooksPath=$global_path (expected $expected_global_expanded)"
+		failed=1
+	fi
+
+	while IFS= read -r hook; do
+		[[ -z "$hook" ]] && continue
+		hook_path="$expected_global_expanded/$hook"
+		if [[ ! -f "$hook_path" ]]; then
+			report ERROR "L3 missing global git hook: $hook_path"
+			failed=1
+		elif [[ ! -x "$hook_path" ]]; then
+			report ERROR "L3 global git hook not executable: $hook_path"
+			failed=1
+		fi
+	done < <(
+		python3 - "$MANIFEST" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    manifest = json.load(f)
+for hook in manifest.get("gitHooks", {}).get("requiredHooks", []):
+    print(hook)
+PY
+	)
+
+	if is_strategy_b_repo; then
+		local_path="$(git -C "$HOOKS_REPO" config --local --get core.hooksPath 2>/dev/null || true)"
+		if [[ -n "$local_path" ]]; then
+			report ERROR "L3 strategy B repo local core.hooksPath must be unset (got $local_path)"
+			failed=1
+			local_path_expanded="$(expand_path "$local_path")"
+			if [[ ${local_path_expanded:0:1} != '/' ]]; then
+				local_path_expanded="$HOOKS_REPO/$local_path_expanded"
+			fi
+			if is_hooks_trap "$local_path_expanded"; then
+				report ERROR "L3 hooks_trap: local core.hooksPath points to .git/hooks with only sample files"
+			fi
+		fi
+	fi
+
+	if is_hooks_trap "$(expand_path "$global_path")"; then
+		report ERROR "L3 hooks_trap: global core.hooksPath points to .git/hooks with only sample files"
+		failed=1
+	fi
+
+	if [[ "$failed" -eq 0 ]]; then
+		report OK "L3 git hooks integrity passed"
+	fi
+	return "$failed"
+}
+
+check_l5_platform_config() {
+	local failed=0
+
+	if [[ ! -f "$MANIFEST" ]]; then
+		report ERROR "L5 missing manifest: $MANIFEST"
+		return 1
+	fi
+
+	if ! "$SCRIPT_DIR/validate-claude-kiro-hooks.sh" "$HOOKS_REPO" >/dev/null 2>&1; then
+		report ERROR "L5 validate-claude-kiro-hooks.sh failed"
+		failed=1
+	fi
+
+	if [[ "$failed" -eq 0 ]]; then
+		report OK "L5 platform config integrity passed"
+	fi
+	return "$failed"
+}
+
+check_l4_notification_metrics() {
+	local log_file metrics_msg notify_msg
+	log_file="${HOME}/.claude/hooks-logs/$(date +%Y-%m-%d).jsonl"
+	if [[ ! -f "$log_file" ]]; then
+		report OK "L4 notification metrics skipped (no log today)"
+		return 0
+	fi
+
+	metrics_msg="$(python3 - "$log_file" <<'PY'
+import json, sys, time
+from datetime import datetime, timezone
+
+path = sys.argv[1]
+cutoff = time.time() - 3600
+errors = []
+
+empty_summary = 0
+session_success = 0
+no_channels = 0
+send_failed = 0
+git_ops_1h = 0
+git_notify_1h = 0
+
+def parse_ts(raw):
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except ValueError:
+        return None
+
+with open(path, encoding="utf-8") as f:
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        hook = str(row.get("hook", ""))
+        reason = str(row.get("reason", ""))
+        level = str(row.get("level", ""))
+        ts = parse_ts(row.get("ts", ""))
+        recent = ts is not None and ts >= cutoff
+
+        if hook == "session-end-notify":
+            if level == "SKIP" and ("empty_summary" in reason or "empty summary" in reason):
+                empty_summary += 1
+            if level in ("INFO", "METRIC") and int(row.get("success", 0) or 0) > 0:
+                session_success += 1
+
+        if "no_channels" in reason or "未配置任何 Webhook URL" in reason:
+            no_channels += 1
+        if "send_failed" in reason or (
+            hook.endswith("-notify")
+            and level == "WARN"
+            and int(row.get("failed", 0) or 0) > 0
+            and int(row.get("success", 0) or 0) == 0
+        ):
+            send_failed += 1
+
+        if recent and hook in ("post-commit", "pre-push", "run-post-commit", "run-pre-push"):
+            if level not in ("SKIP",):
+                git_ops_1h += 1
+        if recent and hook == "git-operation-notify" and level in ("INFO", "METRIC"):
+            if int(row.get("success", 0) or 0) > 0:
+                git_notify_1h += 1
+
+if empty_summary > session_success:
+    errors.append(
+        f"empty_summary_rate: empty_summary={empty_summary} > session_success={session_success}"
+    )
+if no_channels > 0:
+    errors.append(f"no_channels: count={no_channels}")
+if send_failed > 0:
+    errors.append(f"send_failed: count={send_failed}")
+if git_ops_1h > 0 and git_notify_1h == 0:
+    errors.append(
+        f"git_operation_absence: git_ops_1h={git_ops_1h} git_notify_1h={git_notify_1h}"
+    )
+
+for err in errors:
+    print(err)
+PY
+)"
+
+	if [[ -n "$metrics_msg" ]]; then
+		while IFS= read -r line; do
+			[[ -z "$line" ]] && continue
+			report ERROR "L4 notification metric: $line"
+		done <<<"$metrics_msg"
+		notify_msg="hooks-doctor L4 notification alerts: $(echo "$metrics_msg" | tr '\n' '; ')"
+		send_notification "$notify_msg"
+		return 1
+	fi
+
+	report OK "L4 notification metrics passed"
+	return 0
+}
+
+restore_platform_configs_from_git() {
+	local claude_ref kiro_ref claude_path kiro_path restored=0
+
+	read -r claude_ref kiro_ref claude_path kiro_path < <(
+		python3 - "$MANIFEST" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    manifest = json.load(f)
+
+def split_ref(raw, default_path):
+    if ":" in raw:
+        _, path = raw.split(":", 1)
+        return raw, path
+    return f"HEAD:{raw}", raw
+
+claude_raw = manifest.get("claudeSettingsRef", ".claude/settings.json")
+kiro_raw = manifest.get("kiroHooksRef", ".kiro/hooks/hooks.json")
+claude_ref, claude_path = split_ref(claude_raw, ".claude/settings.json")
+kiro_ref, kiro_path = split_ref(kiro_raw, ".kiro/hooks/hooks.json")
+print(claude_ref, kiro_ref, claude_path, kiro_path)
+PY
+	)
+
+	if git -C "$HOOKS_REPO" rev-parse --git-dir >/dev/null 2>&1; then
+		git -C "$HOOKS_REPO" checkout HEAD -- "$claude_path" "$kiro_path"
+		log_msg "hooks-doctor: restored $claude_path and $kiro_path from HEAD"
+		restored=1
+	else
+		report ERROR "cannot git restore platform configs: not a git repo at $HOOKS_REPO"
+		return 1
+	fi
+
+	[[ "$restored" -eq 1 ]]
+}
+
 check_l4_liveness() {
 	local log_file
 	log_file="${HOME}/.claude/hooks-logs/$(date +%Y-%m-%d).jsonl"
@@ -326,6 +583,8 @@ do_repair() {
 
 	local l1_failed=0
 	local l2_failed=0
+	local l3_failed=0
+	local l5_failed=0
 	local repair_reason=""
 
 	if ! check_l1_config; then
@@ -345,9 +604,33 @@ do_repair() {
 		[[ -z "$repair_reason" ]] && repair_reason="L2"
 	fi
 
+	if ! check_l3_git_hooks; then
+		l3_failed=1
+		[[ -z "$repair_reason" ]] && repair_reason="L3"
+	fi
+
+	if ! check_l5_platform_config; then
+		l5_failed=1
+		[[ -z "$repair_reason" ]] && repair_reason="L5"
+	fi
+
 	if [[ "$l1_failed" -eq 1 || "$l2_failed" -eq 1 ]]; then
 		"$SCRIPT_DIR/install-cursor-yingmi-hooks.sh"
 		"$SCRIPT_DIR/link-cursor-hooks-global.sh" "$HOOKS_REPO"
+	fi
+
+	if [[ "$l3_failed" -eq 1 ]]; then
+		"$SCRIPT_DIR/install-git-hooks-global.sh"
+		if is_strategy_b_repo; then
+			"$SCRIPT_DIR/apply-hooks-repo-strategy-b.sh" "$HOOKS_REPO"
+		fi
+	fi
+
+	if [[ "$l5_failed" -eq 1 ]]; then
+		restore_platform_configs_from_git || true
+	fi
+
+	if [[ "$l1_failed" -eq 1 || "$l2_failed" -eq 1 || "$l3_failed" -eq 1 || "$l5_failed" -eq 1 ]]; then
 		REPAIRED=1
 		record_repair_state "${repair_reason:-repair}"
 		append_audit "$(python3 -c "import json,datetime; print(json.dumps({'ts':datetime.datetime.now(datetime.timezone.utc).isoformat(),'action':'repair','reason':'${repair_reason:-repair}','repaired':True}))")"
@@ -387,9 +670,12 @@ main() {
 
 	check_l1_config || true
 	check_l2_deployment || true
+	check_l3_git_hooks || true
+	check_l5_platform_config || true
 
 	if [[ "$WATCH" -eq 1 ]]; then
 		check_l4_liveness || true
+		check_l4_notification_metrics || true
 	fi
 
 	if [[ "$JSON" -eq 1 ]]; then

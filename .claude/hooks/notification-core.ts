@@ -516,6 +516,7 @@ export async function notifyAllChannels(event: NotificationEvent, timestamp: str
 }
 
 export async function dispatchSecurityNotification(input: DispatchInput, logHookName = 'notify-security-event') {
+  const startedAt = Date.now();
   const cwd = input.cwd ?? process.cwd();
   const message = input.message ?? input.reason ?? '';
   const event =
@@ -537,12 +538,14 @@ export async function dispatchSecurityNotification(input: DispatchInput, logHook
 
   if (isCoolingDown(eventKey, cooldownMs)) {
     log(logHookName, { level: 'SKIP', reason: '频控冷却期内', eventKey, session_id });
+    logDispatchMetric(logHookName, startedAt, 'skipped', 'cooldown', []);
     return { sent: false, reason: 'cooldown' };
   }
 
   const channels = getConfiguredChannels(cwd);
   if (channels.length === 0) {
     log(logHookName, { level: 'SKIP', reason: '未配置任何 Webhook URL', session_id, eventKey });
+    logDispatchMetric(logHookName, startedAt, 'skipped', 'no_channels', []);
     return { sent: false, reason: 'no_channels' };
   }
 
@@ -561,6 +564,10 @@ export async function dispatchSecurityNotification(input: DispatchInput, logHook
     session_id,
   });
 
+  const channelNames = channels.map((c) => c.name);
+  const outcome: DispatchOutcome = successCount > 0 ? 'sent' : 'failed';
+  logDispatchMetric(logHookName, startedAt, outcome, successCount > 0 ? undefined : 'send_failed', channelNames);
+
   return { sent: successCount > 0, results, reason: successCount > 0 ? undefined : 'send_failed' };
 }
 
@@ -570,6 +577,7 @@ export async function dispatchGitOperationNotification(
   options: { maxSummaryChars?: number; timeoutMs?: number } = {},
   logHookName = 'git-operation-notify',
 ) {
+  const startedAt = Date.now();
   const settings = getNotificationSettings(cwd);
   const maxSummaryChars = options.maxSummaryChars ?? 1500;
   const timeoutMs = options.timeoutMs ?? settings.timeoutMs;
@@ -577,6 +585,7 @@ export async function dispatchGitOperationNotification(
 
   if (isCoolingDown(eventKey, settings.cooldownMs)) {
     log(logHookName, { level: 'SKIP', reason: '频控冷却期内', eventKey, operation: event.operation });
+    logDispatchMetric(logHookName, startedAt, 'skipped', 'cooldown', []);
     return { sent: false, reason: 'cooldown' };
   }
 
@@ -607,6 +616,7 @@ export async function dispatchGitOperationNotification(
 
   if (targets.length === 0) {
     log(logHookName, { level: 'SKIP', reason: '未配置任何 Webhook URL', operation: event.operation, eventKey });
+    logDispatchMetric(logHookName, startedAt, 'skipped', 'no_channels', []);
     return { sent: false, reason: 'no_channels' };
   }
 
@@ -638,6 +648,10 @@ export async function dispatchGitOperationNotification(
     branch: event.branch,
   });
 
+  const channelNames = targets.map((c) => c.name);
+  const outcome: DispatchOutcome = successCount > 0 ? 'sent' : 'failed';
+  logDispatchMetric(logHookName, startedAt, outcome, successCount > 0 ? undefined : 'send_failed', channelNames);
+
   return { sent: successCount > 0, results: mapped, reason: successCount > 0 ? undefined : 'send_failed' };
 }
 
@@ -651,6 +665,7 @@ export async function dispatchConversationEndNotification(
   options: { maxSummaryChars?: number; timeoutMs?: number } = {},
   logHookName = 'session-end-notify',
 ) {
+  const startedAt = Date.now();
   const settings = getNotificationSettings(cwd);
   const maxSummaryChars = options.maxSummaryChars ?? 1500;
   const timeoutMs = options.timeoutMs ?? settings.timeoutMs;
@@ -658,6 +673,7 @@ export async function dispatchConversationEndNotification(
 
   if (isCoolingDown(eventKey, settings.cooldownMs)) {
     log(logHookName, { level: 'SKIP', reason: '频控冷却期内', eventKey, session_id: event.sessionId });
+    logDispatchMetric(logHookName, startedAt, 'skipped', 'cooldown', []);
     return { sent: false, reason: 'cooldown' };
   }
 
@@ -688,6 +704,7 @@ export async function dispatchConversationEndNotification(
 
   if (targets.length === 0) {
     log(logHookName, { level: 'SKIP', reason: '未配置任何 Webhook URL', session_id: event.sessionId, eventKey });
+    logDispatchMetric(logHookName, startedAt, 'skipped', 'no_channels', []);
     return { sent: false, reason: 'no_channels' };
   }
 
@@ -719,9 +736,31 @@ export async function dispatchConversationEndNotification(
     project: event.projectName,
   });
 
+  const channelNames = targets.map((c) => c.name);
+  const outcome: DispatchOutcome = successCount > 0 ? 'sent' : 'failed';
+  logDispatchMetric(logHookName, startedAt, outcome, successCount > 0 ? undefined : 'send_failed', channelNames);
+
   return { sent: successCount > 0, results: mapped, reason: successCount > 0 ? undefined : 'send_failed' };
 }
 
 function timestampForNotify(): string {
   return new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+}
+
+type DispatchOutcome = 'sent' | 'skipped' | 'failed';
+
+function logDispatchMetric(
+  logHookName: string,
+  startedAt: number,
+  outcome: DispatchOutcome,
+  reason: string | undefined,
+  channels: string[],
+): void {
+  log(logHookName, {
+    level: 'METRIC',
+    outcome,
+    reason: reason ?? '',
+    channels,
+    latency_ms: Date.now() - startedAt,
+  });
 }

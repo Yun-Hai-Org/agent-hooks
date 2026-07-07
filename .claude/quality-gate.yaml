@@ -18,9 +18,14 @@ settings:
       - htmlcov/
       - coverage/
   pushMergeBranches:
-    mode: all
-    include: []
+    mode: selected
+    include:
+      - main
+      - master
     exclude: []
+  worktree:
+    forbidCreateFromMain: true
+    integratorMergeRequiresFull: false
   licenseDenylist:
     - GPL-3.0
     - AGPL-3.0
@@ -228,6 +233,24 @@ ide:
   branch-gate:
     enabled: true
 
+  worktree-gate:
+    enabled: true
+
+  workflow-gate:
+    enabled: true
+
+  workflow-stop-gate:
+    enabled: true
+
+  orchestrator-gate:
+    enabled: true
+
+  git-ship-gate:
+    enabled: true
+
+  workflow-subagent-sync:
+    enabled: true
+
   # beforeShellExecution?????? merge ??? worktree prune
   branch-delete-gate:
     enabled: true
@@ -389,6 +412,10 @@ ide:
       checkov:
         enabled: true
         timeout: 500ms
+
+  hooks-doctor:
+    enabled: true
+    timeout: 2s
 
   # afterFileEdit????? format?prettier/ruff ??
   format-on-write:
