@@ -49,7 +49,8 @@ export function getMaxGateRetryLoops() {
 }
 
 export async function rerunPendingGate(pending: GatePendingEntry) {
-  return runQualityGate({ profile: 'full', cwd: pending.cwd });
+  const gatePathPrefix = pending.type === 'merge' ? 'git.pre-merge-commit' : 'git.pre-push';
+  return runQualityGate({ profile: 'full', cwd: pending.cwd, gatePathPrefix });
 }
 
 export function executePendingMerge(pending: GatePendingEntry) {

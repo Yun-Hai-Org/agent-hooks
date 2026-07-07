@@ -17,7 +17,7 @@ import {
   getPlatform,
 } from './hook-adapter.js';
 import { notifySecurityEventAsync } from './notify-security-event.js';
-import { isGateNodeEnabled } from './gate-config.js';
+import { isGateNodeEnabled, resolveWorktreeSettings } from './gate-config.js';
 
 const MAIN_BRANCHES = ['main', 'master'];
 const ALLOWED_PATHS_ON_MAIN = ['_bmad-output/'];
@@ -199,16 +199,19 @@ async function main() {
     if (tool_name === 'Bash') {
       const command = 'command' in tool_input ? (tool_input.command ?? '') : '';
 
-      if (/\bgit\s+worktree\s+add\b/.test(command) && /\b(main|master)\b/.test(command)) {
-        log({ level: 'BLOCKED', reason: 'worktree add on main/master', command: command.slice(0, 200), session_id });
-        console.log(
-          deny(
-            `🔒 [branch-gate] 禁止在 main/master 上创建 worktree 进行开发。请使用 feature 分支 worktree。`,
-            session_id,
-            workingDir,
-          ),
-        );
-        return;
+      if (/\bgit\s+worktree\s+add\b/.test(command)) {
+        const { forbidCreateFromMain } = resolveWorktreeSettings(workingDir);
+        if (forbidCreateFromMain) {
+          log({ level: 'BLOCKED', reason: 'worktree add on main/master', command: command.slice(0, 200), session_id });
+          console.log(
+            deny(
+              `🔒 [branch-gate] 禁止在 main/master checkout 上创建 worktree（settings.worktree.forbidCreateFromMain）。请先 checkout 到 feat/* 分支再建 worktree。`,
+              session_id,
+              workingDir,
+            ),
+          );
+          return;
+        }
       }
 
       if (isSafeCommand(command)) {

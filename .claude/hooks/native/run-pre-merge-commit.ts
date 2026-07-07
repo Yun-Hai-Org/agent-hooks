@@ -9,10 +9,13 @@ import {
   resolvePushMergeBranchPolicyForCwd,
   shouldRunFullGateForBranch,
 } from '../checks/branch-policy.js';
+import { isIntegratorMerge, resolveMergeHeadBranch } from '../checks/git-policy.js';
+import { resolveWorktreeSettings } from '../gate-config.js';
 import { runQualityGate, logGateResult } from '../quality-gate.js';
 import { exportFullAuditBundle } from '../audit-export.js';
 import { setPendingGateFailure, clearPendingGateFailure } from '../gate-pending.js';
 import { getIndexTreeSha, hasFreshFullPass, recordFullPass } from '../gate-cache.js';
+import { syncShipStatusFromNativeHook } from '../ship-status-sync.js';
 import { exitIfQualityGateExcluded, exitIfGateHookDisabled } from './native-common.js';
 
 const HOOK_NAME = 'native-pre-merge-commit';
@@ -33,6 +36,23 @@ async function main() {
 
   const branchPolicy = resolvePushMergeBranchPolicyForCwd(cwd);
   const currentBranch = getCurrentBranch(cwd) ?? '';
+  const worktreeSettings = resolveWorktreeSettings(cwd);
+  const mergeSourceBranch = resolveMergeHeadBranch(cwd);
+
+  if (
+    isIntegratorMerge(currentBranch, mergeSourceBranch) &&
+    !worktreeSettings.integratorMergeRequiresFull
+  ) {
+    log(HOOK_NAME, {
+      level: 'SKIP',
+      reason: 'integrator merge skip full gate',
+      source: mergeSourceBranch,
+      branch: currentBranch,
+      cwd,
+    });
+    process.exit(0);
+  }
+
   if (!shouldRunFullGateForBranch(currentBranch, branchPolicy)) {
     log(HOOK_NAME, {
       level: 'SKIP',
@@ -59,6 +79,7 @@ async function main() {
   logGateResult(HOOK_NAME, gateResult, { profile: 'full', cwd, hook: 'pre-merge-commit' });
 
   if (!gateResult.passed) {
+    syncShipStatusFromNativeHook('failed', cwd, gateResult.decision.reason);
     setPendingGateFailure('', {
       type: 'merge',
       command: 'git merge',

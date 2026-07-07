@@ -437,6 +437,9 @@ export const GATE_REGISTRY: GateRegistryRoot = {
     'workflow-stop-gate': {
       description: 'Stop：pending≥2 时要求 ≥2 并行后台 Task',
     },
+    'workflow-subagent-sync': {
+      description: 'subagentStart/subagentStop：同步 active_background_tasks 供 workflow-stop-gate',
+    },
     'orchestrator-gate': {
       description: 'beforeReadFile/preToolUse：Orchestrator 禁直接 Read/Write（complement workflow-gate）',
     },
@@ -737,9 +740,14 @@ export function generateExampleYaml(): string {
     '      - htmlcov/',
     '      - coverage/',
     '  pushMergeBranches:',
-    '    mode: all',
-    '    include: []',
+    '    mode: selected',
+    '    include:',
+    '      - main',
+    '      - master',
     '    exclude: []',
+    '  worktree:',
+    '    forbidCreateFromMain: true',
+    '    integratorMergeRequiresFull: false',
     '  licenseDenylist:',
     '    - GPL-3.0',
     '    - AGPL-3.0',

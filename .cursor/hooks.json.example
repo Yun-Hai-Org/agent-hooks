@@ -30,27 +30,23 @@
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts worktree-gate.ts",
-        "matcher": "Shell|Write"
-      },
-      {
-        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-gate.ts",
-        "matcher": "Read|Write|Shell"
-      },
-      {
-        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts orchestrator-gate.ts",
-        "matcher": "Read|Write"
-      },
-      {
-        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts git-ship-gate.ts",
         "matcher": "Shell"
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts branch-gate.ts",
-        "matcher": "Shell|Write"
+        "matcher": "Shell"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-gate.ts",
+        "matcher": "Write|Edit|Read"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts orchestrator-gate.ts",
+        "matcher": "Write|Edit|Read"
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts protect-secrets.ts",
-        "matcher": "Shell|Write"
+        "matcher": "Write|Edit|Read"
       }
     ],
     "postToolUse": [
@@ -65,9 +61,6 @@
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts orchestrator-gate.ts"
-      },
-      {
-        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts protect-secrets.ts"
       }
     ],
     "afterFileEdit": [
@@ -92,6 +85,9 @@
         "loop_limit": 8
       },
       {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-response-cache.ts"
+      },
+      {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-end-notify.ts"
       }
     ],
@@ -103,6 +99,16 @@
     "sessionEnd": [
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-end-notify.ts"
+      }
+    ],
+    "subagentStart": [
+      {
+        "command": "HOOK_PLATFORM=cursor WORKFLOW_SUBAGENT_SYNC=start $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-subagent-sync.ts"
+      }
+    ],
+    "subagentStop": [
+      {
+        "command": "HOOK_PLATFORM=cursor WORKFLOW_SUBAGENT_SYNC=stop $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-subagent-sync.ts"
       }
     ],
     "beforeSubmitPrompt": [

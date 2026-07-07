@@ -17,6 +17,7 @@ import { setPendingGateFailure } from '../gate-pending.js';
 import { getHeadTreeSha, hasFreshFullPass, recordFullPass } from '../gate-cache.js';
 import { exitIfQualityGateExcluded, exitIfGateHookDisabled } from './native-common.js';
 import { handleGitOperationNotify } from '../git-operation-notify.js';
+import { syncShipStatusFromNativeHook } from '../ship-status-sync.js';
 
 const HOOK_NAME = 'native-pre-push';
 
@@ -63,6 +64,7 @@ async function main() {
       branches: pushBranches,
       cwd,
     });
+    syncShipStatusFromNativeHook('push_ok', cwd);
     await notifyPushSuccess(cwd);
     process.exit(0);
   }
@@ -75,6 +77,7 @@ async function main() {
   const headTree = getHeadTreeSha(cwd);
   if (headTree && hasFreshFullPass(cwd, headTree)) {
     log(HOOK_NAME, { level: 'SKIP', reason: 'full 门已在相同提交树通过，跳过重复扫描', tree: headTree, cwd });
+    syncShipStatusFromNativeHook('push_ok', cwd);
     await notifyPushSuccess(cwd);
     process.exit(0);
   }
@@ -83,6 +86,7 @@ async function main() {
   logGateResult(HOOK_NAME, gateResult, { profile: 'full', cwd, branches: pushBranches });
 
   if (!gateResult.passed) {
+    syncShipStatusFromNativeHook('failed', cwd, gateResult.decision.reason);
     setPendingGateFailure('', {
       type: 'push',
       command: 'git push',
@@ -96,6 +100,7 @@ async function main() {
     recordFullPass(cwd, headTree);
   }
 
+  syncShipStatusFromNativeHook('push_ok', cwd);
   await notifyPushSuccess(cwd);
   process.exit(0);
 }

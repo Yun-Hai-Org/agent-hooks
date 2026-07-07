@@ -66,10 +66,16 @@ export interface PushMergeBranchPolicy {
   exclude?: string[];
 }
 
+export interface WorktreeSettings {
+  forbidCreateFromMain?: boolean;
+  integratorMergeRequiresFull?: boolean;
+}
+
 export interface GateSettings {
   coverageThreshold?: number | CoverageThresholdYaml;
   scanScope?: ScanScopeConfig;
   pushMergeBranches?: PushMergeBranchPolicy;
+  worktree?: WorktreeSettings;
   licenseDenylist?: string[];
   notifications?: NotificationSettings;
 }
@@ -173,6 +179,13 @@ function mergeSettings(base?: GateSettings, override?: GateSettings): GateSettin
       ...(mode !== undefined ? { mode } : {}),
       ...(include.length > 0 ? { include } : {}),
       ...(exclude.length > 0 ? { exclude } : {}),
+    };
+  }
+  if (base.worktree || override.worktree) {
+    merged.worktree = {
+      forbidCreateFromMain: override.worktree?.forbidCreateFromMain ?? base.worktree?.forbidCreateFromMain,
+      integratorMergeRequiresFull:
+        override.worktree?.integratorMergeRequiresFull ?? base.worktree?.integratorMergeRequiresFull,
     };
   }
   if (base.licenseDenylist || override.licenseDenylist) {
@@ -563,6 +576,20 @@ export function resolvePushMergeBranchPolicy(cwd: string = process.cwd()): Resol
     mode: raw?.mode ?? 'all',
     include: [...(raw?.include ?? [])],
     exclude: [...(raw?.exclude ?? [])],
+  };
+}
+
+export interface ResolvedWorktreeSettings {
+  forbidCreateFromMain: boolean;
+  integratorMergeRequiresFull: boolean;
+}
+
+export function resolveWorktreeSettings(cwd: string = process.cwd()): ResolvedWorktreeSettings {
+  const config = loadGateConfig(cwd);
+  const raw = config.settings?.worktree;
+  return {
+    forbidCreateFromMain: raw?.forbidCreateFromMain ?? true,
+    integratorMergeRequiresFull: raw?.integratorMergeRequiresFull ?? false,
   };
 }
 

@@ -5,6 +5,7 @@
 
 import { handleGitOperationNotify } from '../git-operation-notify.js';
 import { execCommand } from '../security-orchestrator.js';
+import { syncShipStatusFromNativeHook } from '../ship-status-sync.js';
 import { exitIfQualityGateExcluded } from './native-common.js';
 
 const HOOK_NAME = 'native-post-merge';
@@ -26,6 +27,7 @@ async function main() {
   } catch {
     // fail-open
   }
+  syncShipStatusFromNativeHook('merge_ok', cwd);
   process.exit(0);
 }
 
