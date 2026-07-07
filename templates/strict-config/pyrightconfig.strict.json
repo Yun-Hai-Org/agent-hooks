@@ -1,0 +1,13 @@
+{
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.11",
+  "reportMissingTypeStubs": true,
+  "reportPrivateUsage": "error",
+  "reportImplicitOverride": "error",
+  "reportShadowedImports": "error",
+  "reportUnusedExcludes": "error",
+  "reportUnusedImport": "error",
+  "reportUnusedClass": "error",
+  "reportUnusedFunction": "error",
+  "reportUnusedVariable": "error"
+}

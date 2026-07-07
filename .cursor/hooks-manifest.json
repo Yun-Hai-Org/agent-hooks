@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "requiredEvents": ["stop", "sessionEnd", "afterFileEdit", "afterAgentResponse"],
+  "requiredCommandTokens": [
+    "session-end-notify",
+    "block-dangerous-commands",
+    "resolve-hook-path.ts",
+    "format-on-write",
+    "auto-stage",
+    "git-ship-gate",
+    "workflow-gate",
+    "orchestrator-gate",
+    "worktree-gate",
+    "workflow-stop-gate",
+    "workflow-subagent-sync",
+    "auto-commit",
+    "gate-retry-stop",
+    "session-response-cache",
+    "branch-gate",
+    "branch-delete-gate",
+    "protect-secrets"
+  ],
+  "requiredSymlinks": [
+    { "path": "~/.cursor/hooks.json", "targetSuffix": ".cursor/hooks.json.example" },
+    { "path": "~/.claude/hooks", "targetSuffix": ".claude/hooks" },
+    { "path": "~/.cursor/bun", "targetSuffix": ".tools/bun-darwin-x64/bun" }
+  ],
+  "yingmiAssets": [
+    "session-init.sh",
+    "dangerous-command-guard.sh",
+    "prohibited-content-pretool-guard.sh",
+    "security-standards.txt",
+    "prohibited-keywords.txt"
+  ],
+  "gitRestoreRef": "HEAD:.cursor/hooks.json.example",
+  "gitHooks": {
+    "globalPath": "~/.git-hooks",
+    "requiredHooks": ["pre-commit", "commit-msg", "pre-push", "pre-merge-commit", "post-commit", "post-merge"],
+    "strategyBRepos": ["20260531-hooks"]
+  },
+  "claudeSettingsRef": ".claude/settings.json",
+  "kiroHooksRef": ".kiro/hooks/hooks.json",
+  "claudeRequiredTokens": [
+    "resolve-hook-path.ts",
+    "session-start",
+    "user-prompt-filter",
+    "block-dangerous-commands",
+    "branch-delete-gate",
+    "branch-gate",
+    "protect-secrets",
+    "notification-hook",
+    "format-on-write",
+    "auto-stage",
+    "auto-commit",
+    "gate-retry-stop",
+    "session-response-cache",
+    "session-end-notify"
+  ],
+  "kiroRequiredTokens": [
+    "resolve-hook-path.ts",
+    "block-dangerous-commands",
+    "branch-delete-gate",
+    "commit-gate",
+    "merge-gate",
+    "push-gate",
+    "protect-secrets",
+    "branch-gate",
+    "auto-stage",
+    "session-response-cache",
+    "session-end-notify"
+  ]
+}

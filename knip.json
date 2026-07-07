@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [".claude/hooks/*.ts", ".claude/hooks/native/*.ts"],
+  "project": [".claude/hooks/**/*.ts"],
+  "ignore": ["**/__tests__/**", "**/fixtures/**", "**/*.test.*", "**/*.spec.*", "**/node_modules/**"],
+  "ignoreDependencies": ["@types/*", "typescript", "eslint-*", "bun-types"]
+}

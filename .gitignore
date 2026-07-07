@@ -1,0 +1,9 @@
+GitHub/
+node_modules/
+.hooks/
+.claude/hooks/__tests__/fixtures/
+.tools/
+.claude/worktrees/
+.worktrees/
+.claude/settings.backup.*.json
+_tsc-output.txt

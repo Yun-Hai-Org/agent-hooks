@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "$HOME/.cursor/hooks/session-init.sh"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-start.ts"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "$HOME/.cursor/hooks/dangerous-command-guard.sh"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts block-dangerous-commands.ts"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts branch-delete-gate.ts"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts git-ship-gate.ts"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "$HOME/.cursor/hooks/prohibited-content-pretool-guard.sh",
+        "matcher": "Write|TabWrite"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts worktree-gate.ts",
+        "matcher": "Shell"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts branch-gate.ts",
+        "matcher": "Shell"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-gate.ts",
+        "matcher": "Write|Edit|Read"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts orchestrator-gate.ts",
+        "matcher": "Write|Edit|Read"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts protect-secrets.ts",
+        "matcher": "Write|Edit|Read"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-todo-sync.ts",
+        "matcher": "TodoWrite"
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-gate.ts"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts orchestrator-gate.ts"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts format-on-write.ts"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts auto-stage.ts"
+      }
+    ],
+    "stop": [
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-stop-gate.ts",
+        "loop_limit": 8
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts auto-commit.ts",
+        "loop_limit": 8
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts gate-retry-stop.ts",
+        "loop_limit": 8
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-response-cache.ts"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-end-notify.ts"
+      }
+    ],
+    "afterAgentResponse": [
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-response-cache.ts"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-end-notify.ts"
+      }
+    ],
+    "subagentStart": [
+      {
+        "command": "HOOK_PLATFORM=cursor WORKFLOW_SUBAGENT_SYNC=start $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-subagent-sync.ts"
+      }
+    ],
+    "subagentStop": [
+      {
+        "command": "HOOK_PLATFORM=cursor WORKFLOW_SUBAGENT_SYNC=stop $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-subagent-sync.ts"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts user-prompt-filter.ts"
+      }
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+name: DAST
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'openapi*.yaml'
+      - 'openapi*.yml'
+      - '.hooks/openapi-auth-negative.yaml'
+      - 'openapi-auth-negative.yaml'
+
+jobs:
+  zap-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: ZAP API scan
+        if: ${{ secrets.ZAP_TARGET_URL != '' }}
+        uses: zaproxy/action-api-scan@v0.9.0
+        with:
+          target: ${{ secrets.ZAP_TARGET_URL }}
+          format: openapi
+          api_scan_file: openapi.yaml
+
+      - name: OpenAPI auth negative cases
+        if: ${{ secrets.ZAP_TARGET_URL != '' }}
+        env:
+          ZAP_TARGET_URL: ${{ secrets.ZAP_TARGET_URL }}
+        run: |
+          bun -e "
+          import { runOpenApiAuthNegative } from './.claude/hooks/checks/openapi-auth-negative.ts';
+          const r = await runOpenApiAuthNegative('.');
+          process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+          if (r.decision === 'deny') process.exit(1);
+          "
+
+      - name: Skip when ZAP_TARGET_URL unset
+        if: ${{ secrets.ZAP_TARGET_URL == '' }}
+        run: echo "Set repository secret ZAP_TARGET_URL to enable DAST and openapi-auth-negative"

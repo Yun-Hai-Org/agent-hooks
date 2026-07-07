@@ -1,0 +1,20 @@
+{
+  "hooks": {
+    "preToolUse": [
+      { "command": "HOOK_PLATFORM=kiro bun .claude/hooks/block-dangerous-commands.js", "matcher": "shell" },
+      { "command": "HOOK_PLATFORM=kiro bun .claude/hooks/branch-delete-gate.js", "matcher": "shell" },
+      { "command": "HOOK_PLATFORM=kiro bun .claude/hooks/commit-gate.js", "matcher": "shell" },
+      { "command": "HOOK_PLATFORM=kiro bun .claude/hooks/merge-gate.js", "matcher": "shell" },
+      { "command": "HOOK_PLATFORM=kiro bun .claude/hooks/push-gate.js", "matcher": "shell" },
+      { "command": "HOOK_PLATFORM=kiro bun .claude/hooks/protect-secrets.js", "matcher": "read" },
+      { "command": "HOOK_PLATFORM=kiro bun .claude/hooks/branch-gate.js", "matcher": "write" }
+    ],
+    "postToolUse": [
+      { "command": "HOOK_PLATFORM=kiro bun .claude/hooks/auto-stage.js", "matcher": "write" }
+    ],
+    "Stop": [
+      { "command": "HOOK_PLATFORM=kiro bun .claude/hooks/resolve-hook-path.ts session-response-cache.ts" },
+      { "command": "HOOK_PLATFORM=kiro bun .claude/hooks/resolve-hook-path.ts session-end-notify.ts" }
+    ]
+  }
+}
