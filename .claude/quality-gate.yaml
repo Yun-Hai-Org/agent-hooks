@@ -18,8 +18,10 @@ settings:
       - htmlcov/
       - coverage/
   pushMergeBranches:
-    mode: all
-    include: []
+    mode: selected
+    include:
+      - main
+      - master
     exclude: []
   licenseDenylist:
     - GPL-3.0
