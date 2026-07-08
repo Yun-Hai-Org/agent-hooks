@@ -8,10 +8,14 @@
 # 双触发说明: 在本 hooks 仓库内打开 Cursor 时，若同时存在项目级 hooks.json
 # 与全局 ~/.cursor/hooks.json，会各加载一次。策略 B：仅保留 .cursor/hooks.json.example
 # 作源，全局软链指向它；本仓库不设 .cursor/hooks.json。见 apply-hooks-repo-strategy-b.sh。
+#
+# 可从任意 git worktree 运行；vendored bun 若 worktree 内无 .tools/，会自动解析 bare 仓库路径。
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/resolve-vendored-bun.sh
+source "$SCRIPT_DIR/lib/resolve-vendored-bun.sh"
 WITH_PERMISSIONS_DENY=0
 HOOKS_REPO=""
 
@@ -48,6 +52,7 @@ fi
 if [[ -d "$HOME/.cursor/hooks" && ! -L "$HOME/.cursor/hooks" ]]; then
 	backup="$HOME/.cursor/hooks.bak-$(date +%Y%m%d)"
 	echo "backing up $HOME/.cursor/hooks -> $backup"
+	rm -rf "$backup"
 	mv "$HOME/.cursor/hooks" "$backup"
 fi
 
@@ -60,10 +65,24 @@ fi
 
 rm -f "$HOME/.cursor/hooks.json"
 
+mkdir -p "$HOME/.claude" "$HOME/.cursor"
+
 ln -sf "$HOOKS_REPO/.claude/hooks" "$HOME/.claude/hooks"
 ln -sf "$HOOKS_REPO/.cursor/hooks.json.example" "$HOME/.cursor/hooks.json"
-ln -sf "$HOOKS_REPO/.tools/bun-darwin-x64/bun" "$HOME/.cursor/bun"
+
+VENDORED_BUN_PATH=""
+if ! VENDORED_BUN_PATH="$(resolve_vendored_bun_path "$HOOKS_REPO")"; then
+	echo "error: vendored bun not found for $HOOKS_REPO" >&2
+	echo "hint: run ./scripts/install-vendored-bun.sh from the hooks repo (bare root or worktree)" >&2
+	exit 1
+fi
+ln -sf "$VENDORED_BUN_PATH" "$HOME/.cursor/bun"
 ln -sf "$HOME/.cursor/bun" "$HOME/.cursor/bunx"
+
+if [[ ! -x "$HOME/.cursor/bun" ]]; then
+	echo "error: ~/.cursor/bun is not executable after link (target: $VENDORED_BUN_PATH)" >&2
+	exit 1
+fi
 
 if [ ! -f "$HOME/.claude/quality-gate.yaml" ] && [ -f "$HOOKS_REPO/.claude/quality-gate.example.yaml" ]; then
 	cp "$HOOKS_REPO/.claude/quality-gate.example.yaml" "$HOME/.claude/quality-gate.yaml"
@@ -72,10 +91,10 @@ fi
 
 echo "linked ~/.claude/hooks -> $HOOKS_REPO/.claude/hooks"
 echo "linked ~/.cursor/hooks.json -> $HOOKS_REPO/.cursor/hooks.json.example"
-echo "linked ~/.cursor/bun -> $HOOKS_REPO/.tools/bun-darwin-x64/bun"
+echo "linked ~/.cursor/bun -> $VENDORED_BUN_PATH"
 echo "linked ~/.cursor/bunx -> ~/.cursor/bun"
 ls -la "$HOME/.claude/hooks" "$HOME/.cursor/hooks.json" "$HOME/.cursor/bun"
 
 if [[ "$WITH_PERMISSIONS_DENY" -eq 1 ]]; then
-	bun "$HOOKS_REPO/scripts/sync-claude-permissions-deny.ts"
+	"$HOME/.cursor/bun" "$HOOKS_REPO/scripts/sync-claude-permissions-deny.ts"
 fi

@@ -50,11 +50,13 @@ done
 
 if [[ -z "$HOOKS_REPO" ]]; then
 	if [[ -L "${HOME}/.claude/hooks" ]]; then
-		HOOKS_REPO="$(cd "$(readlink "${HOME}/.claude/hooks")/.." && pwd)"
-		HOOKS_REPO="$(cd "$HOOKS_REPO/.." && pwd)"
+		local_hooks="$(readlink "${HOME}/.claude/hooks")"
+		HOOKS_REPO="$(cd "$(dirname "$local_hooks")/.." && pwd)"
 	else
 		HOOKS_REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
 	fi
+else
+	HOOKS_REPO="$(cd "$HOOKS_REPO" && pwd)"
 fi
 
 MANIFEST="$HOOKS_REPO/.cursor/hooks-manifest.json"
@@ -283,13 +285,14 @@ check_l3_git_hooks() {
 		return 1
 	fi
 
-	expected_global="$(python3 - "$MANIFEST" <<'PY'
+	expected_global="$(
+		python3 - "$MANIFEST" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as f:
     manifest = json.load(f)
 print(manifest.get("gitHooks", {}).get("globalPath", "~/.git-hooks"))
 PY
-)"
+	)"
 	global_path="$(git config --global --get core.hooksPath 2>/dev/null || true)"
 	expected_global_expanded="$(expand_path "$expected_global")"
 
@@ -366,7 +369,6 @@ check_l5_platform_config() {
 	return "$failed"
 }
 
-
 check_l6_notification_sync() {
 	local audit_script="$SCRIPT_DIR/audit-notify-sync.sh"
 	if [[ ! -x "$audit_script" ]]; then
@@ -391,7 +393,8 @@ check_l4_notification_metrics() {
 		return 0
 	fi
 
-	metrics_msg="$(python3 - "$log_file" <<'PY'
+	metrics_msg="$(
+		python3 - "$log_file" <<'PY'
 import json, sys, time
 from datetime import datetime, timezone
 
@@ -472,7 +475,7 @@ if git_ops_1h > 0 and git_notify_1h == 0:
 for err in errors:
     print(err)
 PY
-)"
+	)"
 
 	if [[ -n "$metrics_msg" ]]; then
 		while IFS= read -r line; do
