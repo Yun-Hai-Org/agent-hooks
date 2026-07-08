@@ -366,6 +366,23 @@ check_l5_platform_config() {
 	return "$failed"
 }
 
+
+check_l6_notification_sync() {
+	local audit_script="$SCRIPT_DIR/audit-notify-sync.sh"
+	if [[ ! -x "$audit_script" ]]; then
+		report ERROR "L6 missing audit-notify-sync.sh"
+		return 1
+	fi
+	local audit_msg
+	if ! audit_msg="$("$audit_script" --date today --quiet 2>&1)"; then
+		report ERROR "L6 notification sync gap: $audit_msg"
+		send_notification "hooks-doctor L6 notification sync gaps detected"
+		return 1
+	fi
+	report OK "L6 notification sync passed"
+	return 0
+}
+
 check_l4_notification_metrics() {
 	local log_file metrics_msg notify_msg
 	log_file="${HOME}/.claude/hooks-logs/$(date +%Y-%m-%d).jsonl"
@@ -676,6 +693,7 @@ main() {
 	if [[ "$WATCH" -eq 1 ]]; then
 		check_l4_liveness || true
 		check_l4_notification_metrics || true
+		check_l6_notification_sync || true
 	fi
 
 	if [[ "$JSON" -eq 1 ]]; then

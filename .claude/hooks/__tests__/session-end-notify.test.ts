@@ -29,6 +29,7 @@ import {
   extractLastAssistantFromTranscript,
   handleSessionEndNotify,
   resolveSummaryText,
+  buildFallbackSummaryText,
 } from '../session-end-notify.js';
 import { createTempGitRepo, cleanupTempGitRepo } from './helpers.js';
 
@@ -303,6 +304,61 @@ ide:
       });
       expect(result.reason).not.toBe('trigger_filtered');
       clearSessionResponse('c-abort');
+    });
+
+
+    it('空 summary 且 fallbackOnEmptySummary 时应走 fallback 而非 empty_summary', async () => {
+      mkdirSync(join(repoDir, '.claude'), { recursive: true });
+      writeFileSync(
+        join(repoDir, '.claude/quality-gate.yaml'),
+        `settings:
+  notifications:
+    timeout: 5s
+    cooldown: 5m
+    channels:
+      wechat:
+        url: ""
+ide:
+  session-end-notify:
+    enabled: true
+    trigger: both
+    maxSummaryChars: 1500
+    fallbackOnEmptySummary: true
+    timeout: 5s
+    platforms:
+      cursor:
+        trigger: both
+      claude:
+        trigger: both
+      kiro:
+        trigger: both
+`,
+      );
+      clearGateConfigCache();
+      process.env.HOOK_PLATFORM = 'cursor';
+      const result = await handleSessionEndNotify({
+        hook_event_name: 'sessionEnd',
+        status: 'completed',
+        conversation_id: 'c-fallback',
+        cwd: repoDir,
+        text: '',
+      });
+      expect(result.reason).not.toBe('empty_summary');
+      expect(result.reason).not.toBe('trigger_filtered');
+    });
+
+    it('buildFallbackSummaryText 应包含项目与会话短码', () => {
+      const parsed = parseConversationEndInput({
+        hook_event_name: 'sessionEnd',
+        conversation_id: 'abcdef12-rest',
+        status: 'completed',
+        cwd: repoDir,
+        workspace_roots: [join(repoDir, 'demo-project')],
+      });
+      const fallback = buildFallbackSummaryText(parsed);
+      expect(fallback).toContain('demo-project');
+      expect(fallback).toContain('abcdef12');
+      expect(fallback).toContain('无可用摘要');
     });
 
     it('resolveSummaryText 应优先 inline 再读缓存', () => {

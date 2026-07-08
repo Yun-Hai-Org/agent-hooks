@@ -49,4 +49,21 @@ describe('hooks-json-example', () => {
     expect(manifest.requiredSymlinks.length).toBeGreaterThan(0);
     expect(manifest.yingmiAssets.length).toBe(5);
   });
+  it('stop 顺序：commit 检查先于对话结束通知', () => {
+    const hooksJson = JSON.parse(readFileSync(hooksJsonPath, 'utf-8')) as HooksJsonExample;
+    const stop = hooksJson.hooks['stop'] as { command?: string }[];
+    const indexOf = (token: string) =>
+      stop.findIndex((entry) => typeof entry.command === 'string' && entry.command.includes(token));
+
+    const notifyIdx = indexOf('session-end-notify.ts');
+    const autoCommitIdx = indexOf('auto-commit.ts');
+    const gateRetryIdx = indexOf('gate-retry-stop.ts');
+
+    expect(notifyIdx).toBeGreaterThanOrEqual(0);
+    expect(autoCommitIdx).toBeGreaterThanOrEqual(0);
+    expect(gateRetryIdx).toBeGreaterThanOrEqual(0);
+    expect(autoCommitIdx).toBeLessThan(notifyIdx);
+    expect(gateRetryIdx).toBeLessThan(notifyIdx);
+  });
+
 });

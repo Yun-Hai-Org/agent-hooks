@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import {
   attachControlIds,
   runConfiguredSyncCheck,
@@ -22,6 +22,11 @@ import { runK8sKindSmokeFull } from '../checks/k8s-kind-smoke.js';
 import { runOpenApiAuthNegative } from '../checks/openapi-auth-negative.js';
 import { formatResult, DECISION } from '../security-orchestrator.js';
 import { join } from 'path';
+
+const notifyBlockedMock = mock(() => undefined);
+mock.module('../gate-blocked-notify.js', () => ({
+  notifyGateBlockedAsync: notifyBlockedMock,
+}));
 import { createTempGitRepo, cleanupTempGitRepo, PROJECT_ROOT } from './helpers.js';
 
 describe('quality-gate configured checks', () => {
@@ -70,6 +75,25 @@ describe('quality-gate configured checks', () => {
   it('formatCheckSummaryLine 含 emoji', () => {
     const line = formatCheckSummaryLine(formatResult('x', DECISION.DENY, 'fail'));
     expect(line).toContain('❌');
+  });
+
+
+  it('logGateResult BLOCKED 应触发 notifyGateBlockedAsync', () => {
+    notifyBlockedMock.mockClear();
+    logGateResult(
+      'native-pre-commit',
+      {
+        passed: false,
+        results: [formatResult('lint', DECISION.DENY, 'lint failed')],
+        decision: { decision: DECISION.DENY, reason: 'lint failed' },
+        timing: { maxMs: 0, avgMs: 0, slowest: null, perCheck: [] },
+      },
+      { profile: 'commit', cwd: PROJECT_ROOT, session_id: 'sess-blocked' },
+    );
+    expect(notifyBlockedMock).toHaveBeenCalledTimes(1);
+    const arg = notifyBlockedMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.hook).toBe('native-pre-commit');
+    expect(String(arg.reason)).toContain('lint failed');
   });
 
   it('logGateResult 不抛错', () => {

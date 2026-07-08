@@ -806,6 +806,12 @@ export function generateExampleYaml(): string {
     '        url: ""',
     '      slack:',
     '        url: ""',
+    '    onBlocked:',
+    '      enabled: true',
+    '      excludeHooks:',
+    '        - workflow-gate',
+    '        - workflow-stop-gate',
+    '        - orchestrator-gate',
     '  diffCoverageThreshold:',
     '    lines: 80',
     '    enforceOn:',
@@ -849,6 +855,7 @@ export function generateExampleYaml(): string {
       if (hookId === 'session-end-notify') {
         lines.push('    trigger: both');
         lines.push('    maxSummaryChars: 1500');
+        lines.push('    fallbackOnEmptySummary: true');
         lines.push('    platforms:');
         lines.push('      cursor:');
         lines.push('        trigger: both');

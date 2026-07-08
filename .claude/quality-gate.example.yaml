@@ -39,6 +39,12 @@ settings:
         url: ""
       slack:
         url: ""
+    onBlocked:
+      enabled: true
+      excludeHooks:
+        - workflow-gate
+        - workflow-stop-gate
+        - orchestrator-gate
   diffCoverageThreshold:
     lines: 80
     enforceOn:
@@ -508,6 +514,7 @@ ide:
     timeout: 5s
     trigger: both
     maxSummaryChars: 1500
+    fallbackOnEmptySummary: true
     platforms:
       cursor:
         trigger: both

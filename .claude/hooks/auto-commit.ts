@@ -20,6 +20,7 @@ import type { CheckResult } from './types.js';
 import { getPlatform, formatStopContinueOutput, formatStopSuccessOutput } from './hook-adapter.js';
 import { isGateNodeEnabled } from './gate-config.js';
 import { buildShipStopDenyReason, loadWorkflowState, needsShipBeforeStop } from './workflow-state.js';
+import { notifyGateBlockedAsync } from './gate-blocked-notify.js';
 
 const HOOK_NAME = 'auto-commit';
 const MAIN_BRANCHES = ['main', 'master'];
@@ -256,6 +257,12 @@ async function main() {
         session_id: sessionId,
         cwd,
       });
+      notifyGateBlockedAsync({
+        hook: HOOK_NAME,
+        reason: 'ship incomplete',
+        cwd,
+        session_id: sessionId,
+      });
       process.stdout.write(`${formatStopContinueOutput(followup, hookEvent)}\n`);
       return;
     }
@@ -269,6 +276,12 @@ async function main() {
           mode: 'agent',
           session_id: sessionId,
           cwd,
+        });
+        notifyGateBlockedAsync({
+          hook: HOOK_NAME,
+          reason: 'uncommitted changes',
+          cwd,
+          session_id: sessionId,
         });
         console.log(formatStopContinueOutput(followup, hookEvent));
         return;
@@ -305,6 +318,12 @@ async function main() {
         mode: 'auto',
         session_id: sessionId,
         cwd,
+      });
+      notifyGateBlockedAsync({
+        hook: HOOK_NAME,
+        reason: result.reason ?? 'uncommitted changes',
+        cwd,
+        session_id: sessionId,
       });
       console.log(formatStopContinueOutput(followup, hookEvent));
       return;

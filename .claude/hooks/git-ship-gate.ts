@@ -12,6 +12,7 @@ import { asString } from './types.js';
 import { isGateNodeEnabled } from './gate-config.js';
 import { isGitCommitCommand, isGitPushCommand, isGitMergeCommand } from './checks/git-policy.js';
 import { loadWorkflowState } from './workflow-state.js';
+import { notifyGateBlockedAsync } from './gate-blocked-notify.js';
 
 const HOOK_NAME = 'git-ship-gate';
 const SHIP_ROLE_PATTERN = /ship-sa|integrator-sa|merge-sa|ci-fixer-sa/;
@@ -112,8 +113,15 @@ async function main() {
     }
 
     if (isOrchestrator(raw)) {
+      const reason = buildOrchestratorGitShipDenyReason(cmd);
       log({ level: 'BLOCKED', reason: 'orchestrator git write', cmd: cmd.slice(0, 200), session_id });
-      emit(deny(buildOrchestratorGitShipDenyReason(cmd)));
+      notifyGateBlockedAsync({
+        hook: HOOK_NAME,
+        reason,
+        cwd: workingDir,
+        ...(session_id !== undefined ? { session_id } : {}),
+      });
+      emit(deny(reason));
       return;
     }
 
@@ -122,8 +130,15 @@ async function main() {
       return;
     }
 
+    const subReason = buildSubagentGitShipDenyReason(cmd);
     log({ level: 'BLOCKED', reason: 'non-ship subagent git write', cmd: cmd.slice(0, 200), session_id });
-    emit(deny(buildSubagentGitShipDenyReason(cmd)));
+    notifyGateBlockedAsync({
+      hook: HOOK_NAME,
+      reason: subReason,
+      cwd: workingDir,
+      ...(session_id !== undefined ? { session_id } : {}),
+    });
+    emit(deny(subReason));
   } catch (e: unknown) {
     log({ level: 'ERROR', error: e instanceof Error ? e.message : String(e) });
     emit(allow());
