@@ -105,11 +105,11 @@ const PATTERNS = [
     regex: /\bbase64\b[^\n]*(-d|--decode)[^\n]*\|\s*(ba)?sh\b/,
     reason: 'base64 解码后管道执行（混淆 RCE 风险）',
   },
-  // 10b. eval 执行命令替换/反引号
+  // 10b. eval 执行命令替换/反引号（要求 eval 后空白，避免 dual-track-eval 路径误报）
   {
     level: 'high',
     id: 'eval-exec',
-    regex: /\beval\b[^\n]*(\$\(|\x60)/,
+    regex: /\beval\s+[^\n]*(\$\(|\x60)/,
     reason: 'eval 执行命令替换（RCE 风险）',
   },
   // 10c. sh -c "$(...)" / bash -c `...` 内联远程执行
