@@ -18,6 +18,7 @@ import { getPlatform, formatStopContinueOutput, formatStopSuccessOutput } from '
 import { isGateNodeEnabled } from './gate-config.js';
 import { loadWorkflowState, needsShipBeforeStop } from './workflow-state.js';
 import type { GatePendingEntry } from './types.js';
+import { notifyGateBlockedAsync } from './gate-blocked-notify.js';
 
 const HOOK_NAME = 'gate-retry-stop';
 const DEFAULT_MAX_LOOPS = 8;
@@ -163,6 +164,12 @@ async function main() {
           '2. 再 dispatch ship-sa / merge-sa 直至 ship_status=merge_ok',
         ].join('\n');
         log(HOOK_NAME, { level: 'BLOCKED', reason: 'ship gate retry', session_id: sessionId });
+        notifyGateBlockedAsync({
+          hook: HOOK_NAME,
+          reason: followup,
+          cwd,
+          session_id: sessionId,
+        });
         process.stdout.write(`${formatStopContinueOutput(followup, hookEvent)}\n`);
         return;
       }
@@ -176,6 +183,13 @@ async function main() {
         pendingType: result.pendingType,
       });
       log(HOOK_NAME, { level: 'BLOCKED', gate: result.gateName, session_id: sessionId });
+      notifyGateBlockedAsync({
+        hook: HOOK_NAME,
+        reason: followup,
+        cwd,
+        session_id: sessionId,
+        checks: result.gateResult.results,
+      });
       console.log(formatStopContinueOutput(followup, hookEvent));
       return;
     }

@@ -3,7 +3,8 @@
   "hooks": {
     "sessionStart": [
       {
-        "command": "$HOME/.cursor/hooks/session-init.sh"
+        "command": "~/.cursor/hooks/session-init.sh",
+        "timeout": 5
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-start.ts"
@@ -11,7 +12,8 @@
     ],
     "beforeShellExecution": [
       {
-        "command": "$HOME/.cursor/hooks/dangerous-command-guard.sh"
+        "command": "~/.cursor/hooks/dangerous-command-guard.sh",
+        "timeout": 5
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts block-dangerous-commands.ts"
@@ -21,38 +23,49 @@
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts git-ship-gate.ts"
+      },
+      {
+        "type": "prompt",
+        "prompt": "判断以下即将执行的 shell 命令是否会对**本地计算机**造成实质危害。\n仅在存在对本地主机明确有害或不可逆风险时拒绝，其余放行。\n允许：只读操作、本地开发（npm/yarn/pip、构建、测试、本地服务）、项目内文件读写、对外网络请求（API、webhook、企业微信/钉钉通知、git push、拉包等）。\n仅拒绝：删除系统关键目录或大量用户数据（如 rm -rf /）、格式化/写裸设备、对系统路径 chmod 777 等、从网络管道直接执行未审查脚本（如 curl url | bash）、向系统全局安装未经验证包等对本地有明确破坏性或不可逆风险的操作。\n若无法确定是否对本地有害，倾向于放行。\n输入：\n$ARGUMENTS",
+        "timeout": 15
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "type": "prompt",
+        "prompt": "请基于**整体语义与表达意图**判断以下用户输入是否涉及中国法律与监管禁止的违禁内容（涉黄、涉诈、涉恐、涉政等）。\n\n【判断原则】\n1. 必须结合上下文和完整语义判断，不得仅因出现某几个字母、缩写或子串就判定违规。例如：路径/文件名（如 /xxx/agents/sm）、变量名、技术缩写（如 SM 表示 state machine、small 等）、代码片段中的标识符，若在上下文中明显为技术或中性含义，则不应判为违禁。\n2. 仅当输入在整体上**明确表达、宣扬或请求**违禁内容（涉黄、涉诈、涉恐、涉政等）时，才返回 ok: false。\n3. 难以判断或仅为中性/技术用途时，应返回 ok: true。\n\n【输出格式】\n若违规：返回 ok: false 并简要说明 reason；否则返回 ok: true。\n\n输入：\n$ARGUMENTS",
+        "timeout": 10
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts user-prompt-filter.ts"
       }
     ],
     "preToolUse": [
       {
-        "command": "$HOME/.cursor/hooks/prohibited-content-pretool-guard.sh",
+        "command": "~/.cursor/hooks/prohibited-content-pretool-guard.sh",
+        "timeout": 10,
+        "failClosed": true,
         "matcher": "Write|TabWrite"
       },
       {
-        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts worktree-gate.ts",
-        "matcher": "Shell"
-      },
-      {
-        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts branch-gate.ts",
-        "matcher": "Shell"
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts orchestrator-gate.ts",
+        "matcher": "Read|Write"
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-gate.ts",
-        "matcher": "Write|Edit|Read"
+        "matcher": "Read|Write"
       },
       {
-        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts orchestrator-gate.ts",
-        "matcher": "Write|Edit|Read"
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts worktree-gate.ts",
+        "matcher": "Shell|Write"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts branch-gate.ts",
+        "matcher": "Shell|Write"
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts protect-secrets.ts",
-        "matcher": "Write|Edit|Read"
-      }
-    ],
-    "postToolUse": [
-      {
-        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-todo-sync.ts",
-        "matcher": "TodoWrite"
+        "matcher": "Shell|Write"
       }
     ],
     "beforeReadFile": [
@@ -61,6 +74,9 @@
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts orchestrator-gate.ts"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts protect-secrets.ts"
       }
     ],
     "afterFileEdit": [
@@ -77,15 +93,15 @@
         "loop_limit": 8
       },
       {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-response-cache.ts"
+      },
+      {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts auto-commit.ts",
         "loop_limit": 8
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts gate-retry-stop.ts",
         "loop_limit": 8
-      },
-      {
-        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-response-cache.ts"
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts session-end-notify.ts"
@@ -103,17 +119,12 @@
     ],
     "subagentStart": [
       {
-        "command": "HOOK_PLATFORM=cursor WORKFLOW_SUBAGENT_SYNC=start $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-subagent-sync.ts"
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-subagent-sync.ts"
       }
     ],
     "subagentStop": [
       {
-        "command": "HOOK_PLATFORM=cursor WORKFLOW_SUBAGENT_SYNC=stop $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-subagent-sync.ts"
-      }
-    ],
-    "beforeSubmitPrompt": [
-      {
-        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts user-prompt-filter.ts"
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-subagent-sync.ts"
       }
     ]
   }

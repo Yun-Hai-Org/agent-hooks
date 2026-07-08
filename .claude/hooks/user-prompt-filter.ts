@@ -9,6 +9,7 @@
 import { CONTENT_PATTERNS } from './protect-secrets.js';
 import { readStdin, log, safeMain } from './security-orchestrator.js';
 import { isGateNodeEnabled } from './gate-config.js';
+import { notifyGateBlockedAsync } from './gate-blocked-notify.js';
 import { asString } from './types.js';
 
 const HOOK_NAME = 'user-prompt-filter';
@@ -63,6 +64,13 @@ export function handleUserPromptSubmit(data: Record<string, unknown>): void {
       session_id,
       cwd,
       promptLength: prompt.length,
+    });
+    notifyGateBlockedAsync({
+      hook: HOOK_NAME,
+      reason: `提示中含有敏感信息（${p.reason}）`,
+      cwd,
+      ...(session_id !== undefined ? { session_id } : {}),
+      severity: p.level,
     });
 
     console.log(

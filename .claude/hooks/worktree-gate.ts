@@ -24,6 +24,7 @@ import {
   isFileWriteCommand,
   getWritePatternName,
 } from './branch-gate.js';
+import { notifyGateBlockedAsync } from './gate-blocked-notify.js';
 
 const HOOK_NAME = 'worktree-gate';
 const FEAT_BRANCH_PREFIX = 'feat/';
@@ -130,6 +131,12 @@ async function main() {
       ? `🔒 [worktree-gate] 当前 worktree 分支 ${branch ?? 'unknown'} 非 feat/*。请使用 feat/<name> 分支 worktree。`
       : `🔒 [worktree-gate] 禁止在主 checkout 修改代码${patternName ? ` (${patternName})` : ''}。请先 git worktree add .worktrees/<branch> -b feat/<name> 并在该目录工作。`;
 
+    notifyGateBlockedAsync({
+      hook: HOOK_NAME,
+      reason: msg,
+      cwd: workingDir,
+      ...(session_id !== undefined ? { session_id } : {}),
+    });
     emit(deny(msg));
   } catch (e: unknown) {
     log({ level: 'ERROR', error: e instanceof Error ? e.message : String(e) });

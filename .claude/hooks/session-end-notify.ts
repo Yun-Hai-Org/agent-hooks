@@ -71,6 +71,14 @@ export function resolveSummaryText(input: ConversationEndInput): string {
   return '';
 }
 
+export function buildFallbackSummaryText(input: ConversationEndInput): string {
+  const sessionShort = input.sessionId ? input.sessionId.slice(0, 8) : 'unknown';
+  const status = input.status ?? 'completed';
+  const duration =
+    input.durationMs !== undefined ? `，时长 ${String(Math.round(input.durationMs / 1000))}s` : '';
+  return `对话已结束（无可用摘要）。项目 ${input.projectName}，会话 ${sessionShort}，状态 ${status}${duration}。`;
+}
+
 export function shouldSendSessionEndNotify(input: ConversationEndInput, platformTrigger: string): boolean {
   return shouldNotifyForTrigger(platformTrigger as 'session_end' | 'stop' | 'both', input.hookEvent);
 }
@@ -92,9 +100,15 @@ export async function handleSessionEndNotify(data: Record<string, unknown>) {
     return { sent: false, reason: 'trigger_filtered' };
   }
   const summaryText = resolveSummaryText(input);
-  if (!summaryText) {
-    log(HOOK_NAME, { level: 'SKIP', reason: 'empty summary', session_id: input.sessionId });
-    return { sent: false, reason: 'empty_summary' };
+  let effectiveSummary = summaryText;
+  let summarySource: 'resolved' | 'fallback' = 'resolved';
+  if (!effectiveSummary) {
+    if (!config.fallbackOnEmptySummary) {
+      log(HOOK_NAME, { level: 'SKIP', reason: 'empty summary', session_id: input.sessionId });
+      return { sent: false, reason: 'empty_summary' };
+    }
+    effectiveSummary = buildFallbackSummaryText(input);
+    summarySource = 'fallback';
   }
   const uncommittedHint = hasUncommittedChanges(input.cwd) ? GENERIC_GITIGNORE_HINT : undefined;
   const result = await dispatchConversationEndNotification(
@@ -102,7 +116,7 @@ export async function handleSessionEndNotify(data: Record<string, unknown>) {
       platform: platformLabel(input.platform),
       projectName: input.projectName,
       sessionId: input.sessionId,
-      summaryText,
+      summaryText: effectiveSummary,
       ...(input.reason !== undefined ? { reason: input.reason } : {}),
       ...(input.durationMs !== undefined ? { durationMs: input.durationMs } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
@@ -112,6 +126,14 @@ export async function handleSessionEndNotify(data: Record<string, unknown>) {
     { maxSummaryChars: config.maxSummaryChars, timeoutMs: config.timeoutMs },
     HOOK_NAME,
   );
+  if (summarySource === 'fallback') {
+    log(HOOK_NAME, {
+      level: result.sent ? 'INFO' : 'SKIP',
+      reason: 'fallback_summary',
+      session_id: input.sessionId,
+      sent: result.sent,
+    });
+  }
   if (result.sent && input.sessionId) {
     clearSessionResponse(input.sessionId);
   }

@@ -13,6 +13,7 @@ import {
   isGatePassed,
   getRepoHeadSha,
 } from './security-orchestrator.js';
+import { notifyGateBlockedAsync } from './gate-blocked-notify.js';
 import {
   checkBranch,
   checkCommitMessage,
@@ -689,6 +690,16 @@ export function logGateResult(
     payload['reason'] = gateResult.decision.reason.slice(0, 500);
   }
   log(hookName, payload);
+  if (!gateResult.passed) {
+    const session_id = typeof extra['session_id'] === 'string' ? extra['session_id'] : undefined;
+    notifyGateBlockedAsync({
+      hook: hookName,
+      reason: gateResult.decision?.reason ?? '质量门检查失败',
+      cwd,
+      ...(session_id !== undefined ? { session_id } : {}),
+      checks: gateResult.results,
+    });
+  }
 }
 
 const DECISION_ICONS: Record<string, string> = { allow: '✅', deny: '❌', skip: '⏭️', warn: '⚠️' };

@@ -1,0 +1,5 @@
+{"ts":"2026-07-07T10:30:00.000Z","hook":"quality-gate","level":"BLOCKED","reason":"gitleaks timeout","cwd":"/Users/demo/proj-a","session_id":"sess-a1"}
+{"ts":"2026-07-07T10:30:05.000Z","hook":"notify-security-event","level":"METRIC","outcome":"sent","success":1,"cwd":"/Users/demo/proj-a","session_id":"sess-a1"}
+{"ts":"2026-07-07T11:00:00.000Z","hook":"auto-commit","level":"BLOCKED","reason":"uncommitted changes","cwd":"/Users/demo/proj-b","session_id":"sess-b1"}
+{"ts":"2026-07-07T11:05:00.000Z","hook":"workflow-stop-gate","level":"BLOCKED","reason":"pending todos","cwd":"/Users/demo/proj-b","session_id":"sess-b1"}
+{"ts":"2026-07-07T11:05:10.000Z","hook":"session-end-notify","level":"SKIP","reason":"empty_summary","session_id":"sess-b1","cwd":"/Users/demo/proj-b"}

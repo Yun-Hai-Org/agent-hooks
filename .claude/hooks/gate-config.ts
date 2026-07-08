@@ -25,6 +25,7 @@ export interface GateConfigEntry {
   timeoutMs?: number;
   trigger?: SessionEndTrigger;
   maxSummaryChars?: number;
+  fallbackOnEmptySummary?: boolean;
   checks?: Record<string, GateConfigEntry>;
   rules?: Record<string, GateConfigEntry>;
   platforms?: Record<string, GateConfigEntry>;
@@ -32,6 +33,11 @@ export interface GateConfigEntry {
 
 export interface NotificationChannelConfig {
   url?: string;
+}
+
+export interface OnBlockedNotificationSettings {
+  enabled?: boolean;
+  excludeHooks?: string[];
 }
 
 export interface NotificationSettings {
@@ -42,6 +48,7 @@ export interface NotificationSettings {
     feishu?: NotificationChannelConfig;
     slack?: NotificationChannelConfig;
   };
+  onBlocked?: OnBlockedNotificationSettings;
 }
 
 export type SessionEndNotifyEntry = GateConfigEntry;
@@ -354,6 +361,13 @@ function mergeNotificationSettings(base?: NotificationSettings, override?: Notif
     if (feishu !== undefined) channels.feishu = feishu;
     if (slack !== undefined) channels.slack = slack;
     merged.channels = channels;
+  }
+  if (base.onBlocked || override.onBlocked) {
+    merged.onBlocked = {
+      ...base.onBlocked,
+      ...override.onBlocked,
+      excludeHooks: mergeStringArrays(base.onBlocked?.excludeHooks, override.onBlocked?.excludeHooks),
+    };
   }
   return merged;
 }
@@ -828,6 +842,21 @@ export interface ResolvedNotificationSettings {
   };
 }
 
+export interface ResolvedOnBlockedNotificationSettings {
+  enabled: boolean;
+  excludeHooks: Set<string>;
+}
+
+const DEFAULT_ON_BLOCKED_EXCLUDE = [
+  'workflow-gate',
+  'workflow-stop-gate',
+  'orchestrator-gate',
+  'branch-gate',
+  'block-dangerous-commands',
+  'protect-secrets',
+  'hooks-doctor',
+] as const;
+
 const DEFAULT_NOTIFICATION_TIMEOUT_MS = 5000;
 const DEFAULT_NOTIFY_COOLDOWN_MS = 5 * 60 * 1000;
 const DEFAULT_SESSION_END_TRIGGER: SessionEndTrigger = 'session_end';
@@ -860,6 +889,18 @@ export function getNotificationSettings(cwd: string = process.cwd()): ResolvedNo
   return { channels: resolved, timeoutMs, cooldownMs };
 }
 
+export function getOnBlockedNotificationSettings(cwd: string = process.cwd()): ResolvedOnBlockedNotificationSettings {
+  const onBlocked = loadGateConfig(cwd).settings?.notifications?.onBlocked;
+  const excludeHooks = new Set<string>([
+    ...DEFAULT_ON_BLOCKED_EXCLUDE,
+    ...(onBlocked?.excludeHooks ?? []),
+  ]);
+  return {
+    enabled: onBlocked?.enabled !== false,
+    excludeHooks,
+  };
+}
+
 function parseSessionEndTrigger(value: unknown): SessionEndTrigger | undefined {
   if (value === 'session_end' || value === 'stop' || value === 'both') return value;
   return undefined;
@@ -875,6 +916,7 @@ export interface ResolvedSessionEndNotifyConfig {
   maxSummaryChars: number;
   timeoutMs: number;
   platformTrigger: SessionEndTrigger;
+  fallbackOnEmptySummary: boolean;
 }
 
 export function resolvePlatformSessionEndTrigger(
@@ -904,12 +946,14 @@ export function getSessionEndNotifyConfig(
       ? Math.round(entry.maxSummaryChars)
       : DEFAULT_MAX_SUMMARY_CHARS;
   const timeoutMs = node.timeoutMs ?? DEFAULT_NOTIFICATION_TIMEOUT_MS;
+  const fallbackOnEmptySummary = entry?.fallbackOnEmptySummary !== false;
   return {
     enabled: node.configured && node.enabled,
     trigger: globalTrigger,
     maxSummaryChars,
     timeoutMs,
     platformTrigger: resolvePlatformSessionEndTrigger(globalTrigger, platform, platformOverride),
+    fallbackOnEmptySummary,
   };
 }
 

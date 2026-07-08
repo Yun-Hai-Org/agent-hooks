@@ -9,6 +9,7 @@ import { exitIfQualityGateExcluded } from './native-common.js';
 import { resolveGateNode } from '../gate-config.js';
 import { existsSync } from 'fs';
 import { join } from 'path';
+import { notifyGateBlockedAsync } from '../gate-blocked-notify.js';
 
 const HOOK_NAME = 'native-commit-msg';
 
@@ -51,6 +52,11 @@ function main() {
   });
 
   if (result.decision === DECISION.DENY) {
+    notifyGateBlockedAsync({
+      hook: HOOK_NAME,
+      reason: result.message,
+      cwd,
+    });
     console.error(result.message);
     process.exit(1);
   }
