@@ -331,7 +331,7 @@ const PRE_COMMIT_CHECKS: Record<string, string> = {
   'format-staged-ruff': '暂存区 Ruff format check',
   'gitleaks-staged': '暂存区 gitleaks diff 密钥扫描',
   'semgrep-staged': '暂存区 Semgrep 安全扫描',
-  'code-review-staged': '暂存区 AI code review（若配置）',
+  'code-review-staged': '暂存区静态 diff 规则审查（debugger/console.log/TODO）',
   'hook-adversarial': 'hooks 变更时运行对抗性测试',
   'extended-staged': '暂存区扩展 lint 聚合门',
   'extended-staged-extended': '暂存区扩展 lint 汇总结果',
@@ -382,7 +382,7 @@ const FULL_CHECKS: Record<string, string> = {
   'format-full': '全仓 format 聚合门',
   'format-prettier': '全仓 Prettier format check',
   'format-ruff': '全仓 Ruff format check',
-  'code-review': '全仓 AI code review',
+  'code-review': '全仓静态 diff 规则审查（debugger/console.log/TODO）',
   'extended-full': '全仓扩展 lint 聚合门',
   'extended-full-extended': '全仓扩展 lint 汇总结果',
   'lint-markdownlint': '全仓 markdownlint',
@@ -512,7 +512,7 @@ export const GATE_REGISTRY: GateRegistryRoot = {
     },
     'session-start': {
       description: 'SessionStart：检测 hook 依赖 CLI 工具可用性（fail-open）',
-      defaultTimeoutMs: 2000,
+      defaultTimeoutMs: 5000,
       checks: buildSessionStartChecks(),
     },
     'hooks-doctor': {

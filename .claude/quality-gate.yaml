@@ -325,7 +325,7 @@ ide:
   # SessionStart：检测 hook 依赖 CLI 工具可用性（fail-open）
   session-start:
     enabled: true
-    timeout: 2s
+    timeout: 5s
     checks:
       # 检测 Bun 运行时是否可用
       bun:
@@ -581,7 +581,7 @@ git:
       # controlIds: PCI-6.3.3, PCI-6.5
       semgrep-staged:
         enabled: true
-      # 暂存区 AI code review（若配置）
+      # 暂存区静态 diff 规则审查（debugger/console.log/TODO）
       code-review-staged:
         enabled: true
       # hooks 变更时运行对抗性测试
@@ -744,7 +744,7 @@ git:
       # 全仓 Ruff format check
       format-ruff:
         enabled: true
-      # 全仓 AI code review
+      # 全仓静态 diff 规则审查（debugger/console.log/TODO）
       code-review:
         enabled: true
       # 全仓扩展 lint 聚合门
@@ -933,7 +933,7 @@ git:
       # 全仓 Ruff format check
       format-ruff:
         enabled: true
-      # 全仓 AI code review
+      # 全仓静态 diff 规则审查（debugger/console.log/TODO）
       code-review:
         enabled: true
       # 全仓扩展 lint 聚合门
