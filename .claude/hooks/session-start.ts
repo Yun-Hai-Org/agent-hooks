@@ -6,7 +6,7 @@
  * 功能：
  * 1. 扫描所有 hook 依赖的外部工具
  * 2. 输出健康检查报告（🟢 可用 / 🔴 不可用）
- * 3. 2 秒超时保护，优雅降级
+ * 3. 5 秒超时保护，优雅降级
  * 4. fail-open：永不阻止会话启动
  */
 
@@ -20,7 +20,7 @@ import { isToolInstalled, getBunxInvocation, resolveBunExecutable } from './chec
 import type { ToolStatus } from './types.js';
 import { isGateNodeEnabled } from './gate-config.js';
 const HOOK_NAME = 'session-start';
-const GLOBAL_TIMEOUT_MS = 2000;
+const GLOBAL_TIMEOUT_MS = 5000;
 const PER_TOOL_TIMEOUT_MS = 500;
 
 function log(data: Record<string, unknown>) {

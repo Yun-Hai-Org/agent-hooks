@@ -222,7 +222,7 @@ export async function runFullProjectTests(cwd?: string, _options?: GateCheckRunO
   return failure ?? formatResult('full-tests', DECISION.ALLOW, '所有全量测试通过');
 }
 
-const HOOK_UNIT_TEST_TIMEOUT_MS = 1200000;
+const HOOK_UNIT_TEST_TIMEOUT_MS = 12 * 60 * 1000;
 const HOOK_UNIT_TEST_GLOB = process.env['HOOK_UNIT_TEST_GLOB'] ?? './.claude/hooks/__tests__/*.test.ts';
 const HOOK_UNIT_TEST_EXEC_OPTS = { maxBuffer: 64 * 1024 * 1024, shell: '/bin/sh' as const };
 

@@ -408,6 +408,7 @@ export async function runGitleaksStaged(cwd?: string, options?: GateCheckRunOpti
   }
 }
 
+// 大仓全量扫描勿抬高 pre-push/pre-merge 总超时；用 .gitleaks.toml path 排除（settings.scanScope.exclude 不作用于 gitleaks）。
 export async function runGitleaks(cwd?: string, options?: GateCheckRunOptions): Promise<CheckResult> {
   const timeoutMs = options?.timeoutMs ?? FULL_GATE_TIMEOUT_MS;
   const missing = denyIfToolMissing('gitleaks', 'gitleaks', cwd);
