@@ -10,6 +10,9 @@ import {
 } from './file-patterns.js';
 import { denyIfToolMissing, denyOnToolError, getBunxInvocation } from './tools.js';
 import { denyIfContainerRuntimeMissing, getComposeConfigCmd, resolveContainerRuntime } from './container-runtime.js';
+import { gateTimeoutMessage } from '../gate-timeouts.js';
+
+const MARKDOWNLINT_TIMEOUT_MS = 5 * 60 * 1000;
 
 export const HADOLINT_SECURITY_RULES: Readonly<Record<string, string>> = Object.freeze({
   DL3006: 'HIGH',
@@ -102,10 +105,16 @@ function aggregateExtendedResults(
   return failure ?? formatResult(allowId, DECISION.ALLOW, allowMsg);
 }
 
-async function runExtendedChecks(classified: ReturnType<typeof classifyFiles>, idPrefix: string, cwd?: string) {
+async function runExtendedChecks(
+  classified: ReturnType<typeof classifyFiles>,
+  idPrefix: string,
+  cwd?: string,
+  options?: GateCheckRunOptions,
+) {
   const results: CheckResult[] = [];
   const stagedPrefix = idPrefix === 'extended-staged' ? 'lint-staged' : 'lint';
   const formatPrefix = idPrefix === 'extended-staged' ? 'format-staged' : 'format';
+  const markdownlintTimeoutMs = options?.timeoutMs ?? MARKDOWNLINT_TIMEOUT_MS;
 
   if (classified.md.length > 0) {
     const missing = denyIfToolMissing('bun', `${stagedPrefix}-markdownlint`, cwd);
@@ -113,9 +122,12 @@ async function runExtendedChecks(classified: ReturnType<typeof classifyFiles>, i
     const files = classified.md.map((f) => `"${f}"`).join(' ');
     try {
       const mdResult = await withTimeout(
-        execCommandAsync(`${getBunxInvocation(cwd)} markdownlint-cli2 ${files}`, { cwd, timeout: 120000 }),
-        120000,
-        'markdownlint 超时 (120s)',
+        execCommandAsync(`${getBunxInvocation(cwd)} markdownlint-cli2 ${files}`, {
+          cwd,
+          timeout: markdownlintTimeoutMs,
+        }),
+        markdownlintTimeoutMs,
+        gateTimeoutMessage('markdownlint', markdownlintTimeoutMs),
       );
       results.push(
         mdResult.success
@@ -318,7 +330,7 @@ async function runExtendedChecks(classified: ReturnType<typeof classifyFiles>, i
   );
 }
 
-export async function runExtendedLintStaged(cwd?: string, _options?: GateCheckRunOptions) {
+export async function runExtendedLintStaged(cwd?: string, options?: GateCheckRunOptions) {
   const staged = getStagedFiles(cwd);
   const classified = classifyFiles(staged, cwd);
   const hasTargets =
@@ -335,10 +347,10 @@ export async function runExtendedLintStaged(cwd?: string, _options?: GateCheckRu
     return formatResult('extended-staged', DECISION.SKIP, '暂存区无扩展 lint 目标文件，跳过');
   }
 
-  return runExtendedChecks(classified, 'extended-staged', cwd);
+  return runExtendedChecks(classified, 'extended-staged', cwd, options);
 }
 
-export async function runExtendedLintFull(cwd?: string, _options?: GateCheckRunOptions) {
+export async function runExtendedLintFull(cwd?: string, options?: GateCheckRunOptions) {
   const classified = classifyFiles(
     listTrackedFiles((f) => {
       if (f.startsWith('_bmad-output/') || f.startsWith('_bmad/') || f.startsWith('GitHub/')) return false;
@@ -367,5 +379,5 @@ export async function runExtendedLintFull(cwd?: string, _options?: GateCheckRunO
     return formatResult('extended-full', DECISION.SKIP, '仓库无扩展 lint 目标文件，跳过');
   }
 
-  return runExtendedChecks(classified, 'extended-full', cwd);
+  return runExtendedChecks(classified, 'extended-full', cwd, options);
 }
