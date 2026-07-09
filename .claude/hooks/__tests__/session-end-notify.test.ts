@@ -393,6 +393,70 @@ ide:
       rmSync(transcriptPath, { force: true });
     });
 
+    it('Cursor 会话目录应解析其中的同名 jsonl', () => {
+      const sessionDir = join(homedir(), '.claude', 'cache', 'test-transcripts', 'sess-dir-1');
+      mkdirSync(sessionDir, { recursive: true });
+      const transcriptPath = join(sessionDir, 'sess-dir-1.jsonl');
+      writeFileSync(
+        transcriptPath,
+        [
+          JSON.stringify({ role: 'user', message: { content: 'hi' } }),
+          JSON.stringify({
+            role: 'assistant',
+            message: { content: [{ type: 'text', text: 'from session dir' }] },
+          }),
+        ].join('\n'),
+      );
+      expect(extractLastAssistantFromTranscript(sessionDir)).toBe('from session dir');
+      rmSync(sessionDir, { recursive: true, force: true });
+    });
+
+    it('Stop 无缓存时应回退 transcript', () => {
+      const sessionDir = join(homedir(), '.claude', 'cache', 'test-transcripts', 'sess-stop-1');
+      mkdirSync(sessionDir, { recursive: true });
+      writeFileSync(
+        join(sessionDir, 'sess-stop-1.jsonl'),
+        JSON.stringify({
+          role: 'assistant',
+          message: { content: [{ type: 'text', text: 'stop fallback text' }] },
+        }) + '\n',
+      );
+      const parsed = parseConversationEndInput({
+        hook_event_name: 'stop',
+        conversation_id: 'sess-stop-1',
+        status: 'aborted',
+        transcript_path: sessionDir,
+        cwd: repoDir,
+      });
+      expect(resolveSummaryText(parsed)).toBe('stop fallback text');
+      rmSync(sessionDir, { recursive: true, force: true });
+    });
+
+    it('应跳过纯 [REDACTED] 并取更早的可用 assistant 文本', () => {
+      const transcriptDir = join(homedir(), '.claude', 'cache', 'test-transcripts');
+      mkdirSync(transcriptDir, { recursive: true });
+      const transcriptPath = join(transcriptDir, 'redacted.jsonl');
+      writeFileSync(
+        transcriptPath,
+        [
+          JSON.stringify({
+            role: 'assistant',
+            message: { content: [{ type: 'text', text: 'usable earlier reply' }] },
+          }),
+          JSON.stringify({
+            role: 'assistant',
+            message: { content: [{ type: 'text', text: 'partial\n\n[REDACTED]' }] },
+          }),
+          JSON.stringify({
+            role: 'assistant',
+            message: { content: [{ type: 'text', text: '[REDACTED]' }] },
+          }),
+        ].join('\n'),
+      );
+      expect(extractLastAssistantFromTranscript(transcriptPath)).toBe('partial');
+      rmSync(transcriptPath, { force: true });
+    });
+
     it('缺失文件应返回空字符串', () => {
       expect(extractLastAssistantFromTranscript('/nonexistent/path.jsonl')).toBe('');
     });
