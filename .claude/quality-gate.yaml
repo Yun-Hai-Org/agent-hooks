@@ -443,6 +443,15 @@ ide:
       taplo:
         enabled: true
         autoFix: true
+      # 写时 lint-only（不 fix）：shellcheck 默认开（脚本错误代价高）；stylelint/hadolint/sqlfluff 默认关
+      shellcheck:
+        enabled: true
+      stylelint:
+        enabled: false
+      hadolint:
+        enabled: false
+      sqlfluff:
+        enabled: false
 
   # afterFileEdit?Agent ????? git add ????
   auto-stage:

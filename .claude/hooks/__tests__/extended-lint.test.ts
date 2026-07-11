@@ -14,11 +14,18 @@ import {
   HADOLINT_SECURITY_RULES,
   getHadolintSeverity,
   parseHadolintOutput,
+  parseMarkdownlintOutput,
+  parseStylelintOutput,
+  parseShellcheckOutput,
+  parseSqlfluffOutput,
+  formatExtendedLintDenyOutput,
   runExtendedLintStaged,
   runExtendedLintFull,
 } from '../checks/extended-lint.js';
 import { DECISION } from '../security-orchestrator.js';
 import { getToolInstallHint } from '../checks/tools.js';
+import { isGateNodeAutoFixEnabled } from '../gate-config.js';
+import { buildGateCheckPath } from '../gate-autofix.js';
 
 describe('extended-lint', () => {
   describe('file-patterns', () => {
@@ -189,6 +196,157 @@ describe('extended-lint', () => {
       const shellcheckPos = content.indexOf('shellcheck ${files}', shellBlock);
       expect(shfmtPos).toBeGreaterThan(0);
       expect(shellcheckPos).toBeGreaterThan(shfmtPos);
+    });
+  });
+
+  describe('parseMarkdownlintOutput', () => {
+    it('应剥离 banner 并解析真实 markdownlint-cli2 v0.22.1 输出', () => {
+      const output = [
+        'markdownlint-cli2 v0.22.1 (markdownlint-cli2)',
+        'Finding: mdtest.md',
+        'Linting: 1 file(s)',
+        'Summary: 1 error(s)',
+        'mdtest.md:1:26 error MD009/no-trailing-spaces Trailing spaces [Expected: 0 or 2; Actual: 3]',
+      ].join('\n');
+      const results = parseMarkdownlintOutput(output);
+      expect(results).toHaveLength(1);
+      const r = results[0];
+      expect(r.file).toBe('mdtest.md');
+      expect(r.line).toBe(1);
+      expect(r.column).toBe(26);
+      expect(r.severity).toBe('ERROR');
+      expect(r.ruleId).toBe('MD009');
+      expect(r.message).toContain('Trailing spaces');
+    });
+
+    it('多违规应全部解析且不混入 banner 行', () => {
+      const output = [
+        'markdownlint-cli2 v0.22.1',
+        'Finding: a.md b.md',
+        'Linting: 2 file(s)',
+        'Summary: 3 error(s)',
+        'a.md:1:1 error MD041/first-line-h1 First line should be a top-level heading',
+        'b.md:3:5 warning MD012/no-multiple-blanks Multiple consecutive blank lines [Expected: 1; Actual: 2]',
+      ].join('\n');
+      const results = parseMarkdownlintOutput(output);
+      expect(results).toHaveLength(2);
+      expect(results[0].ruleId).toBe('MD041');
+      expect(results[0].severity).toBe('ERROR');
+      expect(results[1].ruleId).toBe('MD012');
+      expect(results[1].severity).toBe('WARN');
+    });
+
+    it('空输出应返回空数组', () => {
+      expect(parseMarkdownlintOutput('')).toHaveLength(0);
+    });
+
+    it('formatExtendedLintDenyOutput 渲染时剥离前导 error/warning token', () => {
+      const output = 'mdtest.md:1:26 error MD009/no-trailing-spaces Trailing spaces [Expected: 0 or 2; Actual: 3]';
+      const rendered = formatExtendedLintDenyOutput('markdownlint', output);
+      expect(rendered).toContain('MD009');
+      expect(rendered).toContain('mdtest.md:1');
+      expect(rendered).not.toMatch(/^error\s/);
+    });
+  });
+
+  describe('parseStylelintOutput', () => {
+    it('应解析 stylelint --formatter=json 输出', () => {
+      const output = JSON.stringify([
+        {
+          source: 'styles.css',
+          warnings: [
+            {
+              line: 1,
+              column: 2,
+              rule: 'color-no-invalid-hex',
+              text: 'Invalid hex color "#xxx" (color-no-invalid-hex)',
+            },
+          ],
+        },
+      ]);
+      const results = parseStylelintOutput(output);
+      expect(results).toHaveLength(1);
+      expect(results[0].file).toBe('styles.css');
+      expect(results[0].line).toBe(1);
+      expect(results[0].ruleId).toBe('color-no-invalid-hex');
+    });
+  });
+
+  describe('parseShellcheckOutput', () => {
+    it('应解析 `script.sh:1:1: note: ... [SC2155]` 格式', () => {
+      const output = 'deploy.sh:1:1: note: Declare and assign separately to avoid masking return values. [SC2155]';
+      const results = parseShellcheckOutput(output);
+      expect(results).toHaveLength(1);
+      expect(results[0].file).toBe('deploy.sh');
+      expect(results[0].line).toBe(1);
+      expect(results[0].ruleId).toBe('SC2155');
+      expect(results[0].severity).toBe('NOTE');
+    });
+  });
+
+  describe('parseSqlfluffOutput', () => {
+    it('应解析 `L:   1 | P:   7 | LT01 | ...` 管道格式', () => {
+      const output = 'L:   1 | P:   7 | LT01 | Expected only single space before naked identifier.';
+      const results = parseSqlfluffOutput(output);
+      expect(results).toHaveLength(1);
+      expect(results[0].line).toBe(1);
+      expect(results[0].column).toBe(7);
+      expect(results[0].ruleId).toBe('LT01');
+      expect(results[0].message).toContain('single space');
+    });
+  });
+
+  describe('buildGateCheckPath / autoFix 配置（F2）', () => {
+    it('buildGateCheckPath 应拼出无双重 .checks 的完整路径', () => {
+      expect(buildGateCheckPath('git.pre-commit', 'lint-staged-markdownlint')).toBe(
+        'git.pre-commit.checks.lint-staged-markdownlint',
+      );
+    });
+
+    it('项目仓库内 markdownlint autoFix 应被启用', () => {
+      const cwd = process.cwd();
+      const path = buildGateCheckPath('git.pre-commit', 'lint-staged-markdownlint');
+      expect(isGateNodeAutoFixEnabled(path, cwd)).toBe(true);
+    });
+  });
+
+  describe('formatExtendedLintDenyOutput（统一渲染器）', () => {
+    it('对 shellcheck 应渲染为 `[shellcheck][级别] SCxxx:文件:行 — 消息`', () => {
+      const output = 'deploy.sh:1:1: note: Declare and assign separately. [SC2155]';
+      const rendered = formatExtendedLintDenyOutput('shellcheck', output, 'deploy.sh');
+      expect(rendered).toContain('[shellcheck]');
+      expect(rendered).toContain('SC2155');
+      expect(rendered).toContain(':deploy.sh:1');
+    });
+
+    it('sqlfluff 渲染应携带文件名', () => {
+      const output = 'L:   1 | P:   7 | LT01 | Expected only single space before naked identifier.';
+      const rendered = formatExtendedLintDenyOutput('sqlfluff', output, 'query.sql');
+      expect(rendered).toContain('[sqlfluff]');
+      expect(rendered).toContain('LT01');
+      expect(rendered).toContain(':query.sql:1');
+    });
+
+    it('未知工具应回退到截断原始输出', () => {
+      const rendered = formatExtendedLintDenyOutput('unknown-tool', 'something went wrong');
+      expect(rendered).toBe('something went wrong');
+    });
+  });
+
+  describe('denyOnToolError（F10 窄化）', () => {
+    it('无 execResult 时退回 `工具执行失败: <msg>`', async () => {
+      const { denyOnToolError } = await import('../checks/tools.js');
+      const result = denyOnToolError(new Error('boom'), 'lint-staged-markdownlint', 'markdownlint');
+      expect(result.decision).toBe(DECISION.DENY);
+      expect(result.message).toContain('markdownlint 执行失败');
+      expect(result.message).toContain('boom');
+    });
+
+    it('裸字符串错误也能渲染', async () => {
+      const { denyOnToolError } = await import('../checks/tools.js');
+      const result = denyOnToolError('string error', 'lint-staged-shellcheck', 'shellcheck');
+      expect(result.message).toContain('shellcheck 执行失败');
+      expect(result.message).toContain('string error');
     });
   });
 });
