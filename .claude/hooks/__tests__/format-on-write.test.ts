@@ -7,18 +7,34 @@ import { PROJECT_ROOT } from './helpers.js';
 
 describe('format-on-write', () => {
   describe('classifyFormatOnWriteTarget', () => {
+    const FALSE_CLASSIFY = {
+      prettier: false,
+      markdownlint: false,
+      ruff: false,
+      shfmt: false,
+      taplo: false,
+      stylelint: false,
+      shellcheck: false,
+      hadolint: false,
+      sqlfluff: false,
+    };
+
     it('应对 prettier 扩展名返回 prettier', () => {
-      expect(classifyFormatOnWriteTarget('src/app.ts')).toEqual({
+      expect(classifyFormatOnWriteTarget('src/app.ts')).toMatchObject({
         prettier: true,
         markdownlint: false,
         ruff: false,
         shfmt: false,
         taplo: false,
+        stylelint: false,
+        shellcheck: false,
+        hadolint: false,
+        sqlfluff: false,
       });
     });
 
     it('应对 md 同时启用 prettier 与 markdownlint', () => {
-      expect(classifyFormatOnWriteTarget('README.md')).toEqual({
+      expect(classifyFormatOnWriteTarget('README.md')).toMatchObject({
         prettier: true,
         markdownlint: true,
         ruff: false,
@@ -37,14 +53,26 @@ describe('format-on-write', () => {
       expect(classifyFormatOnWriteTarget('bun.lock').prettier).toBe(false);
     });
 
+    it('应对 .css 启用 stylelint', () => {
+      expect(classifyFormatOnWriteTarget('styles/app.css').stylelint).toBe(true);
+      expect(classifyFormatOnWriteTarget('styles/app.scss').stylelint).toBe(true);
+    });
+
+    it('应对 .sh 启用 shellcheck', () => {
+      expect(classifyFormatOnWriteTarget('deploy.sh').shellcheck).toBe(true);
+    });
+
+    it('应对 Dockerfile 启用 hadolint', () => {
+      expect(classifyFormatOnWriteTarget('Dockerfile').hadolint).toBe(true);
+      expect(classifyFormatOnWriteTarget('build/Dockerfile.prod').hadolint).toBe(true);
+    });
+
+    it('应对 .sql 启用 sqlfluff', () => {
+      expect(classifyFormatOnWriteTarget('migrations/001.sql').sqlfluff).toBe(true);
+    });
+
     it('未知扩展名应全部 false', () => {
-      expect(classifyFormatOnWriteTarget('image.png')).toEqual({
-        prettier: false,
-        markdownlint: false,
-        ruff: false,
-        shfmt: false,
-        taplo: false,
-      });
+      expect(classifyFormatOnWriteTarget('image.png')).toEqual(FALSE_CLASSIFY);
     });
   });
 

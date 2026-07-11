@@ -81,6 +81,14 @@ async function main() {
       log({ level: 'SKIP', file: absPath, skipped: result.skipped, session_id });
     } else if (result.errors.length > 0) {
       log({ level: 'WARN', file: absPath, errors: result.errors, session_id });
+      // BEST-EFFORT / LOG-ONLY: stderr 仅到达终端/日志，Claude Code hook 协议不保证将其注入模型上下文。
+      // 可靠的结构化透传仍由提交门（extended-lint details.output）承担。绝不影响 stdout 放行语义。
+      try {
+        const errLines = result.errors.map((e) => `  ${e}`).join('\n');
+        process.stderr.write(`⚠️ [format-on-write] ${absPath}\n${errLines}\n`);
+      } catch {
+        // stderr 写入失败不应影响放行
+      }
     }
 
     console.log('{}');

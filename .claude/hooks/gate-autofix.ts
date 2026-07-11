@@ -1,4 +1,4 @@
-import { execCommandAsync, formatResult, withTimeout, DECISION } from './security-orchestrator.js';
+import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from './security-orchestrator.js';
 import { isGateNodeAutoFixEnabled } from './gate-config.js';
 import { nodeSupportsAutoFix } from './gate-registry.js';
 import { gateTimeoutMessage } from './gate-timeouts.js';
@@ -26,6 +26,19 @@ function quoteFiles(files: string[] | undefined): string {
   return (files ?? []).map((f) => `"${f}"`).join(' ');
 }
 
+/**
+ * fixer 改写工作树后需 `git add` 受影响文件，否则提交门提交的 blob 仍是未修复版本（F9）。
+ * 仅 re-stage 显式传入的文件，避免误把无关暂存变更卷入。
+ */
+function restageFixedFiles(ctx: AutoFixContext): void {
+  const files = ctx.files ?? [];
+  if (files.length === 0) return;
+  const addResult = execCommand(`git add -- ${files.map((f) => `"${f}"`).join(' ')}`, { cwd: ctx.cwd });
+  if (!addResult.success) {
+    // re-stage 失败不视为 fixer 失败（commit 门会在最终结果中再次拦截），仅作日志可见
+  }
+}
+
 async function runFixCommand(command: string, ctx: AutoFixContext, label: string): Promise<FixResult> {
   const timeoutMs = resolveFixTimeout(ctx);
   try {
@@ -34,7 +47,10 @@ async function runFixCommand(command: string, ctx: AutoFixContext, label: string
       timeoutMs,
       gateTimeoutMessage(label, timeoutMs),
     );
-    if (result.success) return { success: true };
+    if (result.success) {
+      restageFixedFiles(ctx);
+      return { success: true };
+    }
     return { success: false, error: (result.stderr || result.stdout).slice(0, 500) };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : String(e) };
@@ -147,7 +163,11 @@ export function getFixRunnerForPath(path: string): ((ctx: AutoFixContext) => Pro
 }
 
 export function buildGateCheckPath(gatePathPrefix: string, checkId: string): string {
-  return `${gatePathPrefix}.checks.${checkId}`;
+  // 防御双重 `.checks`：若调用方误传已含 `.checks` 的前缀，去掉尾段再拼接，避免 fail-open
+  const normalizedPrefix = gatePathPrefix.endsWith('.checks')
+    ? gatePathPrefix.slice(0, -'.checks'.length)
+    : gatePathPrefix;
+  return `${normalizedPrefix}.checks.${checkId}`;
 }
 
 export async function runAutoFixIfEnabled(path: string, ctx: AutoFixContext): Promise<{ ran: boolean } & FixResult> {
