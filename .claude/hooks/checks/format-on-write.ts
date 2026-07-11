@@ -213,22 +213,31 @@ export async function formatFileOnWrite(filePath: string, cwd?: string): Promise
       result.skipped.push('stylelint-no-config'); // F7 守卫
     } else if (!isToolInstalled('bun', repoCwd)) {
       result.skipped.push('stylelint-bun-missing'); // F5 守卫
+    } else if (!isToolInstalled('stylelint', repoCwd)) {
+      result.skipped.push('stylelint-pkg-missing'); // F5 守卫：缺 stylelint 包
     } else {
       try {
         const bunx = getBunxInvocation(repoCwd);
         const slResult = await withTimeout(
-          execCommandAsync(`${bunx} stylelint "${filePath}"`, { cwd: repoCwd, timeout: 60000 }),
+          execCommandAsync(`${bunx} stylelint --formatter=json "${filePath}"`, { cwd: repoCwd, timeout: 60000 }),
           60000,
           'stylelint lint 超时',
         );
         if (slResult.success) {
           result.tools.push('stylelint');
         } else {
-          const output = slResult.stderr || slResult.stdout;
-          if (output.includes('No configuration provided') || output.includes('ConfigurationError')) {
+          // --formatter=json 输出在 stdout；stderr 保留错误/配置问题
+          const stdout = slResult.stdout || '';
+          const stderr = slResult.stderr || '';
+          if (
+            stderr.includes('No configuration provided') ||
+            stderr.includes('ConfigurationError') ||
+            stdout.includes('No configuration provided') ||
+            stdout.includes('ConfigurationError')
+          ) {
             result.skipped.push('stylelint-no-config');
           } else {
-            const rendered = formatExtendedLintDenyOutput('stylelint', output, filePath);
+            const rendered = formatExtendedLintDenyOutput('stylelint', stdout, filePath);
             result.errors.push(rendered);
           }
         }

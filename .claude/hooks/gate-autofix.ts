@@ -163,7 +163,11 @@ export function getFixRunnerForPath(path: string): ((ctx: AutoFixContext) => Pro
 }
 
 export function buildGateCheckPath(gatePathPrefix: string, checkId: string): string {
-  return `${gatePathPrefix}.checks.${checkId}`;
+  // 防御双重 `.checks`：若调用方误传已含 `.checks` 的前缀，去掉尾段再拼接，避免 fail-open
+  const normalizedPrefix = gatePathPrefix.endsWith('.checks')
+    ? gatePathPrefix.slice(0, -'.checks'.length)
+    : gatePathPrefix;
+  return `${normalizedPrefix}.checks.${checkId}`;
 }
 
 export async function runAutoFixIfEnabled(path: string, ctx: AutoFixContext): Promise<{ ran: boolean } & FixResult> {

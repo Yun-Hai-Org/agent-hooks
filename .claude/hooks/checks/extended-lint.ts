@@ -93,7 +93,7 @@ function formatHadolintDenyOutput(output: string) {
 export interface LintIssue {
   file: string;
   line: number;
-  column?: number;
+  column?: number | undefined;
   severity: string;
   ruleId: string;
   message: string;
@@ -113,25 +113,27 @@ function stripMarkdownlintBanner(output: string): string {
 
 /**
  * 解析 markdownlint-cli2 v0.22.1 输出。
- * 真实样本: `mdtest.md:1:26 error MD009/no-trailing-spaces Trailing spaces [Expected: 0 or 2; Actual: 3]`
- * 注意: 第一个冒号后无空格；`error`/`warning` token 位于列号与规则之间；规则为 `MDxxx/规则名` 斜杠形式。
+ * 真实样本:
+ *   - `mdtest.md:1:26 error MD009/no-trailing-spaces Trailing spaces [Expected: 0 or 2; Actual: 3]`
+ *   - `mdtest.md:1 error MD041/first-line-heading/first-line-h1 First line ...`（列号可省）
+ * 注意: 第一个冒号后无空格；`error`/`warning` token 位于行号/列号与规则之间；规则为 `MDxxx/规则名` 斜杠形式。
  */
 export function parseMarkdownlintOutput(output: string): LintIssue[] {
   const results: LintIssue[] = [];
   // eslint-disable-next-line no-control-regex
   const cleanOutput = stripMarkdownlintBanner(output.replace(/\x1b\[[0-9;]*m/g, ''));
   const lines = cleanOutput.split('\n').filter((l) => l.trim());
-  const re = /^(.+?):(\d+):(\d+)\s+(error|warning)\s+(MD\d+)\/[\w-]+\s+(.+)$/;
+  // 列号可选：MD009 含列号，MD041 等仅含行号
+  const re = /^(.+?):(\d+)(?::(\d+))?\s+(error|warning)\s+(MD\d+)\/[\w/-]+\s+(.+)$/;
   for (const line of lines) {
     const match = re.exec(line);
     if (!match) continue;
     const [, file, lineNum, column, level, ruleId, message] = match;
-    if (!file || !lineNum || !column || !level || !ruleId || !message) continue;
-    // 渲染时剥离前导 `error `/`warning ` token，仅保留规则之后的消息文本
+    if (!file || !lineNum || !level || !ruleId || !message) continue;
     results.push({
       file,
       line: parseInt(lineNum, 10),
-      column: parseInt(column, 10),
+      column: column ? parseInt(column, 10) : undefined,
       severity: level === 'error' ? 'ERROR' : 'WARN',
       ruleId,
       message: message.trim(),
@@ -252,28 +254,33 @@ export function parseSqlfluffOutput(output: string): LintIssue[] {
 export function parseTaploOutput(output: string, defaultFile?: string): LintIssue[] {
   // eslint-disable-next-line no-control-regex
   const cleanOutput = output.replace(/\x1b\[[0-9;]*m/g, '');
-  const lines = cleanOutput.split('\n').filter((l) => l.trim());
+  const lines = cleanOutput.split('\n');
   if (lines.length === 0) return [];
-  // taplo 报头形如 `path/to/file.toml:`，每段对应一个文件
   const results: LintIssue[] = [];
   let currentFile = defaultFile ?? '';
+  let lastErrLineForFile: string | null = null;
   for (const line of lines) {
+    if (!line.trim()) continue;
     const headerMatch = /^(.+?\.toml):\s*$/.exec(line);
     if (headerMatch?.[1]) {
       currentFile = headerMatch[1];
+      lastErrLineForFile = null;
       continue;
     }
     // 错误行: `  N | content` 或 `> N | content` 形式
     const errLineMatch = /^[>\s]*\s*(\d+)\s*\|/.exec(line);
     if (errLineMatch?.[1]) {
-      results.push({
-        file: currentFile,
-        line: parseInt(errLineMatch[1], 10),
-        severity: 'ERROR',
-        ruleId: 'TAPLO_FORMAT',
-        message: 'taplo 格式检查未通过',
-      });
-      break; // 每个文件仅记一条
+      const lineKey = `${currentFile}:${errLineMatch[1]}`;
+      if (lastErrLineForFile !== lineKey) {
+        results.push({
+          file: currentFile,
+          line: parseInt(errLineMatch[1], 10),
+          severity: 'ERROR',
+          ruleId: 'TAPLO_FORMAT',
+          message: 'taplo 格式检查未通过',
+        });
+        lastErrLineForFile = lineKey;
+      }
     }
   }
   return results;
@@ -557,11 +564,12 @@ async function runExtendedChecks(
       try {
         const files = classified.css.map((f) => `"${f}"`).join(' ');
         const stylelintResult = await withTimeout(
-          execCommandAsync(`${getBunxInvocation(cwd)} stylelint ${files}`, { cwd, timeout: 60000 }),
+          execCommandAsync(`${getBunxInvocation(cwd)} stylelint --formatter=json ${files}`, { cwd, timeout: 60000 }),
           60000,
           'stylelint 超时 (60s)',
         );
-        const output = stylelintResult.stderr || stylelintResult.stdout;
+        // --formatter=json 输出在 stdout；stderr 保留错误/配置问题
+        const output = stylelintResult.stdout || stylelintResult.stderr;
         if (
           !stylelintResult.success &&
           (output.includes('No configuration provided') || output.includes('ConfigurationError'))

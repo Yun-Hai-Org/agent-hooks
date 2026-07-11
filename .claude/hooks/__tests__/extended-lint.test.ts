@@ -225,7 +225,7 @@ describe('extended-lint', () => {
         'Finding: a.md b.md',
         'Linting: 2 file(s)',
         'Summary: 3 error(s)',
-        'a.md:1:1 error MD041/first-line-h1 First line should be a top-level heading',
+        'a.md:1:1 error MD041/first-line-heading/first-line-h1 First line should be a top-level heading',
         'b.md:3:5 warning MD012/no-multiple-blanks Multiple consecutive blank lines [Expected: 1; Actual: 2]',
       ].join('\n');
       const results = parseMarkdownlintOutput(output);
@@ -234,6 +234,15 @@ describe('extended-lint', () => {
       expect(results[0].severity).toBe('ERROR');
       expect(results[1].ruleId).toBe('MD012');
       expect(results[1].severity).toBe('WARN');
+    });
+
+    it('应解析无列号的 MD041 真实输出（file:line error MDxxx/...）', () => {
+      const output = 'a.md:1 error MD041/first-line-heading/first-line-h1 First line should be a top-level heading [Context: "x"]';
+      const results = parseMarkdownlintOutput(output);
+      expect(results).toHaveLength(1);
+      expect(results[0].line).toBe(1);
+      expect(results[0].column).toBeUndefined();
+      expect(results[0].ruleId).toBe('MD041');
     });
 
     it('空输出应返回空数组', () => {
