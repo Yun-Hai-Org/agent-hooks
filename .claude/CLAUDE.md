@@ -1,8 +1,17 @@
 # 项目安全指令 - Claude Code Hooks 安全增强体系
 
-## 四门安全架构
+<!-- markdownlint-disable MD013 -->
 
-本项目部署了**四门安全架构**，所有 hook 均为硬性阻断。Claude 必须主动遵守以下规范以避免被 hook 拦截。
+## 推送规则（最高优先级）
+
+- **禁止 `git push origin main` / `git push origin master`**：main/master 只能通过 PR 合并，**绝不能直接 push**。
+- **禁止 `git push --force` 到任何分支**（尤其 main/master），由 `block-dangerous-commands.ts` 硬阻断。
+- **正确流程**：`git push -u origin <feature-分支>` → 在 GitHub 发起 PR → CI 通过后合并。
+- 即使本地 push/merge 质量门已禁用（见下文），此规则仍由 `block-dangerous-commands.ts` 和项目流程强制执行，**AI 不得尝试绕过**。
+
+## 本地安全架构（实时门 + 提交门）
+
+本项目部署多层安全架构，所有本地 hook 均为硬性阻断。Claude 必须主动遵守以下规范以避免被 hook 拦截。
 
 ### 写入门（自动触发）
 
@@ -16,24 +25,26 @@
 - 每次文件写入后自动运行 ESLint + Ruff + Pyright + Prettier 检查。
 - 通过检查的文件自动 `git add` 暂存。
 
-### 提交门（git commit 时触发）
+### 提交门（git commit 时触发，启用中）
 
 - **Commit 格式**：必须使用 `类型: 描述` 格式，如 `feat: 新增功能`。
 - 允许的类型：feat, fix, refactor, docs, test, chore, style, perf。
 - 禁止提交敏感文件，自动运行依赖审计和关联测试。
 
-### 合并门（git merge 到 master/main 时触发）
+### 推送门 / 合并门（已禁用，让位给 CI）
 
-- 自动运行 Semgrep + Knip + Trivy 全量安全扫描。
-- 运行全量测试和覆盖率检查。
-- 全部通过才允许合并。
+- **状态**：`.claude/quality-gate.yaml` 中 `git.pre-push.enabled: false`、`git.pre-merge-commit.enabled: false`。
+- **接管方**：中央 CI 模板（`pr9898/ci-templates`，详见 `docs/ci-cd-migration.md`）在 PR 流水线运行 typecheck / lint / semgrep / gitleaks / trivy / knip / dep-audit 等全量检查。
+- **AI 行为**：本地 `git push` / `git merge --no-ff` 不会触发本地 full 检查；但**不得**因此跳过 PR 流程或直接 push 到 main/master。
+- **回滚**：翻回 `enabled: true` 即可恢复本地 full 门。
 
 ## 标准开发流程
 
 1. `git checkout -b feat/your-feature` 创建 feature 分支
 2. 在 feature 分支上开发和修改文件
 3. `git commit -m "feat: 描述"` 提交（提交门自动检查）
-4. `git checkout main && git merge --no-ff feat/your-feature` 合并（合并门自动检查）
+4. `git push -u origin feat/your-feature` 推送到远程（推送门已禁用，直接推送）
+5. 在 GitHub 发起 PR → 中央 CI 模板运行 full 检查 → 通过后合并
 
 **终端 alias（可选）**：`git config --global alias.merge-safe '!f(){ git merge --no-ff "$@"; }; f'`
 

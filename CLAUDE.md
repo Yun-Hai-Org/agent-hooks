@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+<!-- markdownlint-disable MD013 -->
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## 常用命令
@@ -60,20 +62,21 @@ uv sync                      # 同步依赖
 
 ### 本地质量门 + 实时安全
 
-| 门 | 触发 | Hook | profile |
-| ---- | ------ | ------ | --------- |
-| **实时安全** | PreToolUse / PostToolUse / Stop | branch-gate、protect-secrets 等 | — |
-| **提交门** | `git commit` | `commit-gate.ts` | `commit`（暂存区增量，<30s） |
-| **推送门** | 人工 `git push` | `push-gate.ts` | `full`（拒绝 + 修复循环） |
-| **合并门** | 人工 `git merge --no-ff` → main/master | native `pre-merge-commit` | `full`（拒绝 + 修复循环） |
+| 门 | 触发 | Hook | profile | 状态 |
+| ---- | ------ | ------ | --------- | ---- |
+| **实时安全** | PreToolUse / PostToolUse / Stop | branch-gate、protect-secrets 等 | — | 启用 |
+| **提交门** | `git commit` | `commit-gate.ts` | `commit`（暂存区增量，<30s） | 启用 |
+| **推送门** | 人工 `git push` | `push-gate.ts` | `full` | **已禁用**（`.claude/quality-gate.yaml` `git.pre-push.enabled: false`） |
+| **合并门** | 人工 `git merge --no-ff` → main/master | native `pre-merge-commit` | `full` | **已禁用**（`git.pre-merge-commit.enabled: false`） |
 
 共享核心：`checks/*.ts` + `quality-gate.ts`。无远程 `hooks-ci.yml`。
+
+**推送门与合并门已让位给中央 CI 模板**（`pr9898/ci-templates`，详见 `docs/ci-cd-migration.md`）：typecheck / lint / semgrep / gitleaks / trivy / knip / dep-audit 等检查项由 PR 流水线接管。本地 hook 代码（`push-gate.ts` / `merge-gate.ts` / `quality-gate.ts` / `checks/*.ts`）保留，翻回 `enabled: true` 即可恢复。
 
 PostToolUse 仅保留 **auto-stage**。
 
 **Stop 链**：`auto-commit`（有暂存则 commit 检查 + 自动提交）→ `gate-retry-stop`（push/merge 曾被 gate 拒绝时驱动 full 修复循环，**不自动 push/merge**）。
 
-`push-gate` / native `pre-merge-commit` 在人工执行 push/merge 时触发；拒绝时写入 pending 并返回详细修复指引。
 **main/master 上须 `git merge --no-ff`**（FF / `--squash` 不触发 pre-merge-commit；见 `configure-merge-no-ff-global.sh`）。
 
 ### Hook 协议
@@ -108,8 +111,11 @@ PostToolUse 仅保留 **auto-stage**。
 1. 在 **feature 分支**开发（禁止在 main/master 直接改代码；worktree 内同样受 branch-gate 约束，`_bmad-output/` 白名单除外）
 2. 文件写入后自动 **git add**（auto-stage）
 3. Agent 一轮结束 → **auto-commit**（有暂存则自动 commit；失败 block/followup 重试）
-4. **人工** `git push` → push-gate（full）；失败 → Agent 修复并重试同一命令；若尝试结束 → **gate-retry-stop** 继续驱动修复
-5. **人工** `git merge --no-ff` 到 main → `pre-merge-commit`（full）；失败修复循环同上；通过后需**再次手动**执行 merge 命令
+4. **人工** `git push -u origin <feature-分支>` → 推送门已禁用，直接推送；CI 在 PR 上自动跑 full 检查
+5. **人工** 在 GitHub 发起 PR → 中央 CI 模板运行 typecheck/lint/semgrep/gitleaks/trivy/knip/dep-audit 等 full 检查
+6. **人工** `git merge --no-ff` 到 main（或通过 GitHub PR 合并）→ 合并门已禁用，CI 已在 PR 阶段覆盖
+
+> **禁止 `git push origin main` / `git push origin master`**：main/master 只能通过 PR 合并，不能直接 push。即使本地 hook 已禁用，此规则仍由 `block-dangerous-commands.ts`（`git-force-main` 规则）和项目流程强制执行。
 
 ## 子代理开发规范
 
@@ -125,8 +131,8 @@ Claude 可以直接执行 `git commit` 和 `git merge`，以下检查由 hook **
 | 阶段 | 自动执行的检查 |
 | ---- | ---------------- |
 | git commit | 分支 + msg + 暂存敏感 + dep audit + 增量 typecheck + 关联测试 |
-| git push | quality-gate full（typecheck/lint/扫描/测试/对抗性等） |
-| git merge → main/master | quality-gate full @ 合并树（须 `--no-ff` 以触发 pre-merge-commit） |
+| git push | **已禁用本地 full 门**；CI 在 PR 流水线接管 typecheck/lint/扫描/测试/对抗性等 |
+| git merge → main/master | **已禁用本地 full 门**；CI 在 PR 流水线已覆盖（须 `--no-ff`） |
 | git merge → feat/* | 跳过 full 门（pushMergeBranches.mode=selected, include=[main, master]） |
 
 **原则：提交门和合并门是安全最终保障，Claude 只需写好代码和提交信息，直接 commit/merge 即可。**
