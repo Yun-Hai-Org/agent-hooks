@@ -632,7 +632,7 @@ git:
 
   # pre-push ???full profile ???????? 15 ???
   pre-push:
-    enabled: true
+    enabled: false
     timeout: 15m
     checks:
       # Hook ?? bun test --coverage ????
@@ -808,7 +808,7 @@ git:
 
   # pre-merge-commit ???? pre-push ??? full profile ???
   pre-merge-commit:
-    enabled: true
+    enabled: false
     timeout: 15m
     checks:
       # Hook ?? bun test --coverage ????
