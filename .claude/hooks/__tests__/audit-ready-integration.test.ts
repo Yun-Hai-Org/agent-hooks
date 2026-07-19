@@ -21,8 +21,10 @@ import { runOpenApiContractStaged, runOpenApiContractFull } from '../checks/open
 import { runK8sKindSmokeFull } from '../checks/k8s-kind-smoke.js';
 import { runOpenApiAuthNegative } from '../checks/openapi-auth-negative.js';
 import { formatResult, DECISION } from '../security-orchestrator.js';
+import { clearGateConfigCache } from '../gate-config.js';
 import { join } from 'path';
-import { createTempGitRepo, cleanupTempGitRepo, PROJECT_ROOT } from './helpers.js';
+import { writeFileSync, readFileSync } from 'fs';
+import { createTempGitRepo, cleanupTempGitRepo, bootstrapQualityGateYaml, PROJECT_ROOT } from './helpers.js';
 
 describe('quality-gate configured checks', () => {
   it('attachControlIds 附加 registry controlIds', () => {
@@ -42,14 +44,25 @@ describe('quality-gate configured checks', () => {
   });
 
   it('runConfiguredCheck merge-only 在 pre-push SKIP', async () => {
-    const r = await runConfiguredCheck({
-      gatePathPrefix: 'git.pre-push',
-      checkId: 'sbom-archive',
-      cwd: PROJECT_ROOT,
-      runner: async () => formatResult('sbom-archive', DECISION.ALLOW, 'ok'),
-    });
-    expect(r.decision).toBe(DECISION.SKIP);
-    expect(r.message).toContain('merge-only');
+    const repoDir = createTempGitRepo('feat/merge-only');
+    bootstrapQualityGateYaml(repoDir);
+    const cfgPath = join(repoDir, '.claude', 'quality-gate.yaml');
+    const cfg = readFileSync(cfgPath, 'utf-8');
+    const patched = cfg.replace(/pre-push:\s*\n\s*enabled:\s*false/, 'pre-push:\n    enabled: true');
+    writeFileSync(cfgPath, patched);
+    clearGateConfigCache();
+    try {
+      const r = await runConfiguredCheck({
+        gatePathPrefix: 'git.pre-push',
+        checkId: 'sbom-archive',
+        cwd: repoDir,
+        runner: async () => formatResult('sbom-archive', DECISION.ALLOW, 'ok'),
+      });
+      expect(r.decision).toBe(DECISION.SKIP);
+      expect(r.message).toContain('merge-only');
+    } finally {
+      cleanupTempGitRepo(repoDir);
+    }
   });
 
   it('parseArgs 解析全部 flags', () => {
