@@ -10,6 +10,7 @@ import {
   isShellTool,
   isFileEditTool,
   normalizeFileEditInput,
+  detectPlatformFromStdin,
 } from '../hook-adapter.js';
 
 describe('hook-adapter', () => {
@@ -162,5 +163,44 @@ describe('hook-adapter', () => {
     expect(out.reason).toBe('fix it');
     if (prev) process.env.HOOK_PLATFORM = prev;
     else delete process.env.HOOK_PLATFORM;
+  });
+});
+
+describe('detectPlatformFromStdin', () => {
+  it('Claude Code stdin (hook_event_name) → claude', () => {
+    expect(detectPlatformFromStdin({ hook_event_name: 'Stop', session_id: 's1', cwd: '/p' })).toBe('claude');
+  });
+
+  it('Claude Code stdin (transcript_path) → claude', () => {
+    expect(detectPlatformFromStdin({ transcript_path: '/x.jsonl', session_id: 's1' })).toBe('claude');
+  });
+
+  it('Cursor stdin (conversation_id) → cursor', () => {
+    expect(detectPlatformFromStdin({ conversation_id: 'c1', cwd: '/p' })).toBe('cursor');
+  });
+
+  it('Cursor stdin (workspace_roots) → cursor', () => {
+    expect(detectPlatformFromStdin({ workspace_roots: ['/p'], cwd: '/p' })).toBe('cursor');
+  });
+
+  it('Kiro stdin (sessionId) → kiro', () => {
+    expect(detectPlatformFromStdin({ sessionId: 'k1', toolName: 'Write', cwd: '/p' })).toBe('kiro');
+  });
+
+  it('Kiro stdin (toolName) → kiro', () => {
+    expect(detectPlatformFromStdin({ toolName: 'Write', cwd: '/p' })).toBe('kiro');
+  });
+
+  it('空对象 → 默认 claude', () => {
+    expect(detectPlatformFromStdin({})).toBe('claude');
+  });
+
+  it('null/非对象 → 默认 claude', () => {
+    expect(detectPlatformFromStdin(null as unknown as Record<string, unknown>)).toBe('claude');
+    expect(detectPlatformFromStdin('string' as unknown as Record<string, unknown>)).toBe('claude');
+  });
+
+  it('仅 session_id 不触发任何判断 → claude（snake_case 不独占）', () => {
+    expect(detectPlatformFromStdin({ session_id: 's1', cwd: '/p' })).toBe('claude');
   });
 });

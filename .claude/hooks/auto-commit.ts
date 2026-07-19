@@ -18,6 +18,7 @@ import { getStagedFiles, hasUncommittedChanges, buildUncommittedWorktreeDenyReas
 import { summarizeResults } from './quality-gate.js';
 import type { CheckResult } from './types.js';
 import { getPlatform, formatStopContinueOutput, formatStopSuccessOutput } from './hook-adapter.js';
+import { detectPlatformFromStdin, setDetectedPlatform } from './platform-state.js';
 import { isGateNodeEnabled } from './gate-config.js';
 import { buildShipStopDenyReason, loadWorkflowState, needsShipBeforeStop } from './workflow-state.js';
 
@@ -199,6 +200,7 @@ async function main() {
 
   try {
     const data = input.trim() ? (JSON.parse(input) as Record<string, unknown>) : {};
+    setDetectedPlatform(detectPlatformFromStdin(data), typeof data['cwd'] === 'string' ? data['cwd'] : undefined);
     const { cwd, sessionId, hookEvent, loopCount, status } = parseStopInput(data);
     const platform = getPlatform();
 
