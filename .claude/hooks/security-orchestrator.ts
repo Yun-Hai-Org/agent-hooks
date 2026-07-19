@@ -10,6 +10,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import type { CheckResult, DecideResult, ExecResult, ToolAvailability, ToolchainInfo, Decision } from './types.js';
 import { isExecErrorLike, stringifyUnknown } from './types.js';
+import { detectPlatformFromStdin, setDetectedPlatform } from './platform-state.js';
 
 export const DECISION = {
   ALLOW: 'allow',
@@ -157,7 +158,10 @@ export function readStdin(): Promise<Record<string, unknown>> {
     });
     process.stdin.on('end', () => {
       try {
-        resolve(JSON.parse(input) as Record<string, unknown>);
+        const data = JSON.parse(input) as Record<string, unknown>;
+        const cwd = typeof data['cwd'] === 'string' ? data['cwd'] : process.cwd();
+        setDetectedPlatform(detectPlatformFromStdin(data), cwd);
+        resolve(data);
       } catch (e) {
         reject(new Error(`JSON 解析失败: ${e instanceof Error ? e.message : String(e)}`));
       }

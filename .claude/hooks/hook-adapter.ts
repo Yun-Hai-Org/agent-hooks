@@ -9,11 +9,27 @@ import { basename } from 'path';
 import type { HookInput, HookPlatform, HookToolInput } from './types.js';
 import { asString } from './types.js';
 import type { SessionEndTrigger } from './gate-config.js';
+import {
+  readPersistedPlatform,
+  getDetectedPlatform,
+  detectPlatformFromStdin as detectPlatformFromStdinImpl,
+  setDetectedPlatform as setDetectedPlatformImpl,
+} from './platform-state.js';
+
+// 重新导出，保持外部 API 不变（其他 hook 从 hook-adapter.js 导入这两个函数）
+export { detectPlatformFromStdinImpl as detectPlatformFromStdin };
+export { setDetectedPlatformImpl as setDetectedPlatform };
 
 export function getPlatform(): HookPlatform {
   const raw = process.env['HOOK_PLATFORM'];
-  const p = (typeof raw === 'string' ? raw : 'claude').toLowerCase();
-  if (p === 'cursor' || p === 'kiro') return p;
+  if (typeof raw === 'string' && raw) {
+    const p = raw.toLowerCase();
+    if (p === 'cursor' || p === 'kiro' || p === 'claude') return p;
+  }
+  const detected = getDetectedPlatform();
+  if (detected) return detected;
+  const persisted = readPersistedPlatform();
+  if (persisted) return persisted;
   return 'claude';
 }
 

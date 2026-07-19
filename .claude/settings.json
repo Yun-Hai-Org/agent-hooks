@@ -82,12 +82,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts format-on-write.ts",
+            "command": "bun .claude/hooks/resolve-hook-path.ts format-on-write.ts",
             "statusMessage": "写入后自动格式化..."
           },
           {
             "type": "command",
-            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts auto-stage.ts",
+            "command": "bun .claude/hooks/resolve-hook-path.ts auto-stage.ts",
             "statusMessage": "自动暂存修改文件..."
           }
         ]
@@ -99,22 +99,22 @@
         "hooks": [
           {
             "type": "command",
-            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts auto-commit.ts",
+            "command": "bun .claude/hooks/resolve-hook-path.ts auto-commit.ts",
             "statusMessage": "自动提交暂存变更..."
           },
           {
             "type": "command",
-            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts gate-retry-stop.ts",
+            "command": "bun .claude/hooks/resolve-hook-path.ts gate-retry-stop.ts",
             "statusMessage": "push/merge 质量门修复循环..."
           },
           {
             "type": "command",
-            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts session-response-cache.ts",
+            "command": "bun .claude/hooks/resolve-hook-path.ts session-response-cache.ts",
             "statusMessage": "缓存 AI 末条回复..."
           },
           {
             "type": "command",
-            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts session-end-notify.ts",
+            "command": "bun .claude/hooks/resolve-hook-path.ts session-end-notify.ts",
             "statusMessage": "发送对话结束通知..."
           }
         ]
@@ -126,7 +126,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "HOOK_PLATFORM=claude bun .claude/hooks/resolve-hook-path.ts session-end-notify.ts",
+            "command": "bun .claude/hooks/resolve-hook-path.ts session-end-notify.ts",
             "statusMessage": "发送对话结束通知..."
           }
         ]
