@@ -546,19 +546,19 @@ git:
       # ??? Semgrep ????
       # controlIds: PCI-6.3.3, PCI-6.5
       semgrep-staged:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? AI code review?????
       code-review-staged:
         enabled: true
       # hooks ??????????
       hook-adversarial:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ????? lint ???
       extended-staged:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ????? lint ????
       extended-staged-extended:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? markdownlint
       lint-staged-markdownlint:
         enabled: true
@@ -569,66 +569,66 @@ git:
         autoFix: true
       # ??? shellcheck
       lint-staged-shellcheck:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? hadolint Dockerfile ??
       lint-staged-hadolint:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? docker/podman compose ????
       lint-staged-compose:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? taplo TOML ????
       format-staged-taplo:
         enabled: true
         autoFix: true
       # ??? sqlfluff SQL lint
       lint-staged-sqlfluff:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
         autoFix: true
       # ??? stylelint CSS ??
       lint-staged-stylelint:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
         autoFix: true
       # ??? JSON/YAML schema ???
       schema-staged:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? schema ????
       schema-staged-schema:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? check-jsonschema ??
       schema-staged-check-jsonschema:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? jq JSON ????
       schema-staged-jq:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? yq YAML ????
       schema-staged-yq:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? K8s manifest ???
       k8s-staged:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? kubeconform ??
       k8s-staged-kubeconform:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? kube-linter ??
       k8s-staged-kube-linter:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? OpenAPI ?????
       openapi-staged:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? oasdiff breaking change ??
       openapi-staged-oasdiff:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? lockfile ? manifest ???
       lockfile-freshness:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??? Semgrep PCI/OWASP ?????
       # controlIds: PCI-6.3.3, PCI-6.5
       semgrep-pci-staged:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ??????????/SRI/CSP ??
       # controlIds: PCI-6.4.3
       payment-page-staged:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
 
   # pre-push ???full profile ???????? 15 ???
   pre-push:
@@ -665,7 +665,7 @@ git:
         enabled: true
       # Hook ?????????
       hook-adversarial:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ?? JS ?? bun audit
       # controlIds: PCI-6.3.2, PCI-6.3.3
       dep-audit:
@@ -766,7 +766,7 @@ git:
         enabled: true
       # ?? lockfile ?????
       lockfile-freshness:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # CycloneDX SBOM ????????
       # controlIds: PCI-6.3.2, DORA-Art6
       sbom-archive:
@@ -841,7 +841,7 @@ git:
         enabled: true
       # Hook ?????????
       hook-adversarial:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # ?? JS ?? bun audit
       # controlIds: PCI-6.3.2, PCI-6.3.3
       dep-audit:
@@ -942,7 +942,7 @@ git:
         enabled: true
       # ?? lockfile ?????
       lockfile-freshness:
-        enabled: true
+        enabled: false # CI: pr9898/ci-templates
       # CycloneDX SBOM ????????
       # controlIds: PCI-6.3.2, DORA-Art6
       sbom-archive:
