@@ -486,7 +486,8 @@ export const GATE_REGISTRY: GateRegistryRoot = {
       description: 'subagentStart/subagentStop：同步 active_background_tasks 供 workflow-stop-gate',
     },
     'orchestrator-gate': {
-      description: 'beforeReadFile/preToolUse：Orchestrator 禁直接 Read/Write（complement workflow-gate）',
+      description:
+        'beforeReadFile/preToolUse Shell：Orchestrator 禁直接 Read/Write 及 Shell 写文件（complement workflow-gate）',
     },
     'git-ship-gate': {
       description: 'beforeShellExecution/preToolUse Shell：Orchestrator 禁 git commit/push/merge；仅 ship-sa 子代理',
