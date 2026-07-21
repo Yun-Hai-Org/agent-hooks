@@ -17,6 +17,7 @@ import {
 } from './workflow-state.js';
 
 const HOOK_NAME = 'workflow-subagent-sync';
+const SHIP_ROLE_PATTERN = /ship-sa|integrator-sa|merge-sa|ci-fixer-sa/;
 
 function log(data: Record<string, unknown>) {
   try {
@@ -59,6 +60,19 @@ function resolveSyncAction(raw: Record<string, unknown>): 'start' | 'stop' | nul
 
 function resolveAgentId(raw: Record<string, unknown>): string {
   return asString(raw['agent_id']) || asString(raw['agentId']);
+}
+
+function resolveShipRole(raw: Record<string, unknown>): string | undefined {
+  const fields = [
+    asString(raw['description']),
+    asString(raw['subagent_description']),
+    asString(raw['agent_type']),
+  ];
+  for (const field of fields) {
+    const match = field.match(SHIP_ROLE_PATTERN);
+    if (match) return match[0];
+  }
+  return undefined;
 }
 
 function resolveRunInBackground(raw: Record<string, unknown>): boolean {
@@ -110,9 +124,16 @@ async function main() {
         runInBackground: resolveRunInBackground(raw),
         startedAt: new Date().toISOString(),
       });
-      log({ level: 'INFO', action: 'add', agent_id: agentId, session_id: sessionId });
+      const shipRole = resolveShipRole(raw);
+      if (shipRole) {
+        state = { ...state, agent_role: shipRole };
+      }
+      log({ level: 'INFO', action: 'add', agent_id: agentId, session_id: sessionId, ...(shipRole ? { agent_role: shipRole } : {}) });
     } else {
       state = removeBackgroundTask(state, agentId);
+      if (state.active_background_tasks.length === 0) {
+        state = { ...state, agent_role: undefined };
+      }
       log({ level: 'INFO', action: 'remove', agent_id: agentId, session_id: sessionId });
     }
 
@@ -128,4 +149,4 @@ if (import.meta.main) {
   void main();
 }
 
-export { HOOK_NAME, main, resolveSyncAction, addBackgroundTask, removeBackgroundTask };
+export { HOOK_NAME, main, resolveSyncAction, resolveShipRole, addBackgroundTask, removeBackgroundTask };

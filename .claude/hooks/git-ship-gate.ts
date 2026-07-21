@@ -15,7 +15,7 @@ import { loadWorkflowState } from './workflow-state.js';
 import { notifyGateBlockedAsync } from './gate-blocked-notify.js';
 
 const HOOK_NAME = 'git-ship-gate';
-const SHIP_ROLE_PATTERN = /ship-sa|integrator-sa|merge-sa|ci-fixer-sa/;
+export const SHIP_ROLE_PATTERN = /ship-sa|integrator-sa|merge-sa|ci-fixer-sa/;
 
 function log(data: Record<string, unknown>) {
   try {
@@ -37,8 +37,21 @@ function allow() {
   return formatAllowOutput();
 }
 
-export function isOrchestrator(raw: Record<string, unknown>): boolean {
-  return !asString(raw['agent_id']);
+export function isOrchestrator(raw: Record<string, unknown>, sessionId?: string): boolean {
+  if (asString(raw['agent_id'])) return false;
+
+  if (sessionId) {
+    const state = loadWorkflowState(sessionId);
+    if (
+      state.active_background_tasks.length > 0 &&
+      state.agent_role &&
+      SHIP_ROLE_PATTERN.test(state.agent_role)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export function isGitShipWriteCommand(cmd: string): boolean {
@@ -52,7 +65,12 @@ export function isGitShipWriteCommand(cmd: string): boolean {
 export function isShipAgent(raw: Record<string, unknown>, sessionId: string): boolean {
   const state = loadWorkflowState(sessionId);
   const role = asString(raw['agent_role']) || asString(state.agent_role);
-  const desc = [asString(raw['description']), asString(raw['subagent_description']), asString(raw['subagent_type'])]
+  const desc = [
+    asString(raw['description']),
+    asString(raw['subagent_description']),
+    asString(raw['subagent_type']),
+    asString(raw['agent_type']),
+  ]
     .filter((s) => s.length > 0)
     .join(' ');
   const combined = `${role} ${desc}`.toLowerCase();
@@ -112,7 +130,7 @@ async function main() {
       return;
     }
 
-    if (isOrchestrator(raw)) {
+    if (isOrchestrator(raw, session_id)) {
       const reason = buildOrchestratorGitShipDenyReason(cmd);
       log({ level: 'BLOCKED', reason: 'orchestrator git write', cmd: cmd.slice(0, 200), session_id });
       notifyGateBlockedAsync({
