@@ -52,6 +52,26 @@ describe('workflow-subagent-sync', () => {
     expect(output.trim()).toBe('{}');
   });
 
+  it('subagentStart syncs agent_role from ship-sa description', async () => {
+    saveWorkflowState(sessionId, defaultWorkflowState());
+    process.stdin = Readable.from([
+      JSON.stringify({
+        hook_event_name: 'subagentStart',
+        agent_id: 'ship-sa-1',
+        run_in_background: true,
+        session_id: sessionId,
+        cwd: PROJECT_ROOT,
+        description: 'ship-sa',
+        subagent_type: 'shell',
+      }),
+    ]);
+    await main();
+
+    const state = loadWorkflowState(sessionId);
+    expect(state.agent_role).toBe('ship-sa');
+    expect(state.active_background_tasks).toHaveLength(1);
+  });
+
   it('subagentStop removes active_background_tasks entry', async () => {
     let state = addBackgroundTask(defaultWorkflowState(), {
       agentId: 'agent-abc',
