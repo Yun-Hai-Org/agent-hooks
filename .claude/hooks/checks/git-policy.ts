@@ -1,4 +1,4 @@
-import { execCommand, formatResult, DECISION } from '../security-orchestrator.js';
+import { execCommand, formatResult, DECISION, getCurrentBranch } from '../security-orchestrator.js';
 import { existsSync, readFileSync, realpathSync } from 'fs';
 import { join, isAbsolute } from 'path';
 import type { CheckResult } from '../types.js';
@@ -102,14 +102,32 @@ export function countUncommittedFiles(cwd?: string): number {
   return result.stdout.trim().split('\n').filter(Boolean).length;
 }
 
+export function resolveGitBranchName(cwd?: string): string | null {
+  const root = cwd ?? process.cwd();
+  const fromShowCurrent = getCurrentBranch(root);
+  if (fromShowCurrent) return fromShowCurrent;
+
+  const symbolic = execCommand('git symbolic-ref --short HEAD', { cwd: root });
+  if (symbolic.success) {
+    const branch = symbolic.stdout.trim();
+    if (branch) return branch;
+  }
+
+  const revParse = execCommand('git rev-parse --abbrev-ref HEAD', { cwd: root });
+  if (revParse.success) {
+    const branch = revParse.stdout.trim();
+    if (branch && branch !== 'HEAD') return branch;
+  }
+  return null;
+}
+
 export function buildUncommittedWorktreeDenyReason(
   cwd: string,
   action: WorktreeAction,
   options: { prefix?: string } = {},
 ): string {
   const prefix = options.prefix ?? '';
-  const branchResult = execCommand('git rev-parse --abbrev-ref HEAD', { cwd });
-  const branch = branchResult.success ? branchResult.stdout.trim() : 'unknown';
+  const branch = resolveGitBranchName(cwd) ?? 'unknown';
   const fileCount = countUncommittedFiles(cwd);
   const actionStep = ACTION_STEPS[action];
 
@@ -147,8 +165,7 @@ export function buildUncommittedWorktreeDenyReason(
 }
 
 export function checkBranch(cwd?: string): CheckResult {
-  const result = execCommand('git rev-parse --abbrev-ref HEAD', { cwd });
-  const branch = result.success ? result.stdout.trim() : null;
+  const branch = resolveGitBranchName(cwd);
   if (!branch) return formatResult('branch-check', DECISION.DENY, '无法获取当前分支名');
   if (branch === 'main' || branch === 'master') {
     return formatResult('branch-check', DECISION.DENY, `禁止在 ${branch} 分支上直接提交，请创建 feature 分支`);
@@ -435,12 +452,7 @@ export function getWorktreeBranch(worktreePath: string, repoCwd?: string): strin
   for (const [path, branch] of listWorktrees(repoCwd)) {
     if (worktreePathsEqual(path, worktreePath)) return branch;
   }
-  const head = execCommand('git rev-parse --abbrev-ref HEAD', { cwd: worktreePath });
-  if (head.success) {
-    const branch = head.stdout.trim();
-    if (branch && branch !== 'HEAD') return branch;
-  }
-  return null;
+  return resolveGitBranchName(worktreePath);
 }
 
 export function buildProtectedBranchDeleteDenyReason(branch: string): string {
