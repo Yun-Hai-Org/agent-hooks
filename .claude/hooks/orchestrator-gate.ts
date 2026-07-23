@@ -16,6 +16,7 @@ import {
 } from './hook-adapter.js';
 import { asString } from './types.js';
 import { isGateNodeEnabled } from './gate-config.js';
+import { isAllowedPathOnMain } from './branch-gate.js';
 
 const HOOK_NAME = 'orchestrator-gate';
 
@@ -87,6 +88,17 @@ async function main() {
     }
 
     if (!isOrchestrator(raw)) {
+      emit(allow());
+      return;
+    }
+
+    if (isRead) {
+      emit(allow());
+      return;
+    }
+
+    const filePath = (data.tool_input?.file_path as string) ?? '';
+    if (isAllowedPathOnMain(filePath)) {
       emit(allow());
       return;
     }

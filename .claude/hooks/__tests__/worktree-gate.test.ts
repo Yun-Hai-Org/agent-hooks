@@ -5,7 +5,7 @@ import { Readable } from 'stream';
 import { isFeatBranch, isWorktreeBootstrapCommand, main as worktreeMain } from '../worktree-gate.js';
 import { isInsideWorktree } from '../branch-gate.js';
 import { clearGateConfigCache } from '../gate-config.js';
-import { expectAllow, expectDeny, PROJECT_ROOT } from './helpers.js';
+import { expectAllow, expectDeny, PROJECT_ROOT, createTempGitRepo, cleanupTempGitRepo } from './helpers.js';
 
 describe('worktree-gate helpers', () => {
   it('isFeatBranch accepts feat/* and task branches', () => {
@@ -77,17 +77,22 @@ describe('worktree-gate main()', () => {
   });
 
   it('denies Write on main checkout when gate enabled', async () => {
-    process.stdin = Readable.from([
-      JSON.stringify({
-        tool_name: 'Write',
-        tool_input: { file_path: 'foo.txt', content: 'x' },
-        session_id: 's2',
-        cwd: PROJECT_ROOT,
-      }),
-    ]);
-    await worktreeMain();
-    expect(output).toHaveLength(1);
-    expect(expectDeny(output[0]!)).toBe(true);
+    const repoDir = createTempGitRepo('main');
+    try {
+      process.stdin = Readable.from([
+        JSON.stringify({
+          tool_name: 'Write',
+          tool_input: { file_path: 'foo.txt', content: 'x' },
+          session_id: 's2',
+          cwd: repoDir,
+        }),
+      ]);
+      await worktreeMain();
+      expect(output).toHaveLength(1);
+      expect(expectDeny(output[0]!)).toBe(true);
+    } finally {
+      cleanupTempGitRepo(repoDir);
+    }
   });
 
   it('allows git worktree add bootstrap shell', async () => {
@@ -122,6 +127,44 @@ describe('worktree-gate main()', () => {
       expect(expectAllow(output[0]!)).toBe(true);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('allows Write to _bmad-output/ on main checkout', async () => {
+    const repoDir = createTempGitRepo('main');
+    try {
+      process.stdin = Readable.from([
+        JSON.stringify({
+          tool_name: 'Write',
+          tool_input: { file_path: '_bmad-output/x.md', content: 'x' },
+          session_id: 's5',
+          cwd: repoDir,
+        }),
+      ]);
+      await worktreeMain();
+      expect(output).toHaveLength(1);
+      expect(expectAllow(output[0]!)).toBe(true);
+    } finally {
+      cleanupTempGitRepo(repoDir);
+    }
+  });
+
+  it('allows Shell write to _bmad-output/ on main checkout', async () => {
+    const repoDir = createTempGitRepo('main');
+    try {
+      process.stdin = Readable.from([
+        JSON.stringify({
+          tool_name: 'Shell',
+          tool_input: { command: "cat <<'EOF' > _bmad-output/x.md" },
+          session_id: 's6',
+          cwd: repoDir,
+        }),
+      ]);
+      await worktreeMain();
+      expect(output).toHaveLength(1);
+      expect(expectAllow(output[0]!)).toBe(true);
+    } finally {
+      cleanupTempGitRepo(repoDir);
     }
   });
 });

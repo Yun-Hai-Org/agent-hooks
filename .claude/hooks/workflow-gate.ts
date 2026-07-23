@@ -17,6 +17,7 @@ import {
 import { asString } from './types.js';
 import { isGateNodeEnabled } from './gate-config.js';
 import { countPendingTodos, loadWorkflowState } from './workflow-state.js';
+import { isAllowedPathOnMain } from './branch-gate.js';
 
 const HOOK_NAME = 'workflow-gate';
 
@@ -103,6 +104,15 @@ async function main() {
     }
 
     if (orchestrator) {
+      if (isRead) {
+        emit(allow());
+        return;
+      }
+      const filePath = (data.tool_input?.file_path as string) ?? '';
+      if (isAllowedPathOnMain(filePath)) {
+        emit(allow());
+        return;
+      }
       log({ level: 'BLOCKED', reason: 'orchestrator direct tool', tool: tool_name, session_id });
       const action = isRead ? 'Read' : 'Write';
       emit(
