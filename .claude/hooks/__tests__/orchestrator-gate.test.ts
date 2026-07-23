@@ -82,4 +82,30 @@ describe('orchestrator-gate main()', () => {
     await orchestratorMain();
     expect(expectAllow(output[0]!)).toBe(true);
   });
+
+  it('allows orchestrator Read of any file (agent_id omitted)', async () => {
+    process.stdin = Readable.from([
+      JSON.stringify({
+        tool_name: 'Read',
+        tool_input: { file_path: 'foo.ts' },
+        session_id: 'orch-test',
+        cwd: PROJECT_ROOT,
+      }),
+    ]);
+    await orchestratorMain();
+    expect(expectAllow(output[0]!)).toBe(true);
+  });
+
+  it('allows orchestrator Write to _bmad-output planning artifact (agent_id omitted)', async () => {
+    process.stdin = Readable.from([
+      JSON.stringify({
+        tool_name: 'Write',
+        tool_input: { file_path: '_bmad-output/spec.md' },
+        session_id: 'orch-test',
+        cwd: PROJECT_ROOT,
+      }),
+    ]);
+    await orchestratorMain();
+    expect(expectAllow(output[0]!)).toBe(true);
+  });
 });

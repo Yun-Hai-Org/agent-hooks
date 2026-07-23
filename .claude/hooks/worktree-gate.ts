@@ -23,6 +23,8 @@ import {
   isGitBootstrapCommand,
   isFileWriteCommand,
   getWritePatternName,
+  ALLOWED_PATHS_ON_MAIN,
+  isAllowedPathOnMain,
 } from './branch-gate.js';
 import { notifyGateBlockedAsync } from './gate-blocked-notify.js';
 
@@ -101,6 +103,22 @@ async function main() {
         return;
       }
       if (!isFileWriteCommand(command)) {
+        emit(allow());
+        return;
+      }
+    }
+
+    if (tool_name === 'Shell') {
+      const command = tool_input.command ?? '';
+      if (ALLOWED_PATHS_ON_MAIN.some((p) => command.includes(p))) {
+        log({ level: 'INFO', reason: 'allowed planning path in shell command', command: command.slice(0, 200), session_id });
+        emit(allow());
+        return;
+      }
+    } else {
+      const filePath = tool_input.file_path ?? '';
+      if (isAllowedPathOnMain(filePath)) {
+        log({ level: 'INFO', reason: 'allowed planning path', file: filePath, tool: tool_name, session_id });
         emit(allow());
         return;
       }
