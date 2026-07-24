@@ -6,9 +6,10 @@
 
 import { readStdin as readStdinBase } from './security-orchestrator.js';
 import { basename } from 'path';
-import type { HookInput, HookPlatform, HookToolInput } from './types.js';
+import type { AgentMode, HookInput, HookPlatform, HookToolInput } from './types.js';
 import { asString } from './types.js';
 import type { SessionEndTrigger } from './gate-config.js';
+import { isWorkflowActive, loadWorkflowState, type WorkflowState } from './workflow-state.js';
 
 export function getPlatform(): HookPlatform {
   const raw = process.env['HOOK_PLATFORM'];
@@ -48,6 +49,24 @@ export function isShellHookInput(data: { tool_name?: string; tool_input?: { comm
   return Boolean(data.tool_input?.command);
 }
 
+const VALID_AGENT_MODES: ReadonlySet<AgentMode> = new Set(['orchestrator', 'ask', 'subagent']);
+
+function isValidAgentMode(value: unknown): value is AgentMode {
+  return typeof value === 'string' && VALID_AGENT_MODES.has(value as AgentMode);
+}
+
+export function deriveAgentMode(raw: Record<string, unknown>, state: WorkflowState): AgentMode {
+  const envMode = process.env['AGENT_MODE'];
+  if (isValidAgentMode(envMode)) return envMode;
+  if (isValidAgentMode(raw['agent_mode'])) return raw['agent_mode'] as AgentMode;
+  if (asString(raw['agent_id'])) return 'subagent';
+  return isWorkflowActive(state) ? 'orchestrator' : 'ask';
+}
+
+export function isOrchestratorInWorkflow(raw: Record<string, unknown>, state: WorkflowState): boolean {
+  return deriveAgentMode(raw, state) === 'orchestrator';
+}
+
 export function normalizeInput(data: Record<string, unknown>): HookInput {
   const platform = getPlatform();
   if (platform === 'cursor') {
@@ -58,11 +77,15 @@ export function normalizeInput(data: Record<string, unknown>): HookInput {
     let tool_name = asString(data['tool_name']);
     if (!tool_name) tool_name = asString(data['toolName']);
     if (!tool_name && (isBeforeShell || command)) tool_name = 'Shell';
+    const sessionId = asString(data['session_id']) || asString(data['conversation_id']);
+    const state = loadWorkflowState(sessionId);
     return {
       tool_name,
       tool_input: { command: mergedCommand },
-      session_id: asString(data['session_id']) || asString(data['conversation_id']),
+      session_id: sessionId,
       cwd: resolveCwd(data),
+      agent_id: asString(data['agent_id']),
+      agent_mode: deriveAgentMode(data, state),
     };
   }
   if (platform === 'kiro') {
@@ -121,37 +144,45 @@ export function normalizeFileEditInput(data: Record<string, unknown>): HookInput
   const platform = getPlatform();
   if (platform === 'cursor' && typeof data['file_path'] === 'string') {
     const roots = data['workspace_roots'];
+    const sessionId =
+      typeof data['session_id'] === 'string'
+        ? data['session_id']
+        : typeof data['conversation_id'] === 'string'
+          ? data['conversation_id']
+          : '';
+    const state = loadWorkflowState(sessionId);
     return {
       tool_name: 'Write',
       tool_input: { file_path: data['file_path'] },
-      session_id:
-        typeof data['session_id'] === 'string'
-          ? data['session_id']
-          : typeof data['conversation_id'] === 'string'
-            ? data['conversation_id']
-            : '',
+      session_id: sessionId,
       cwd:
         typeof data['cwd'] === 'string'
           ? data['cwd']
           : Array.isArray(roots) && typeof roots[0] === 'string'
             ? roots[0]
             : process.cwd(),
+      agent_id: asString(data['agent_id']),
+      agent_mode: deriveAgentMode(data, state),
     };
   }
   const rawInput = data['tool_input'] ?? data['toolInput'];
   const tool_input = parseHookToolInput(rawInput);
   let tool_name = asString(data['tool_name']);
   if (!tool_name) tool_name = asString(data['toolName']);
+  const sessionId =
+    typeof data['session_id'] === 'string'
+      ? data['session_id']
+      : typeof data['conversation_id'] === 'string'
+        ? data['conversation_id']
+        : '';
+  const state = loadWorkflowState(sessionId);
   return {
     tool_name,
     tool_input,
-    session_id:
-      typeof data['session_id'] === 'string'
-        ? data['session_id']
-        : typeof data['conversation_id'] === 'string'
-          ? data['conversation_id']
-          : '',
+    session_id: sessionId,
     cwd: typeof data['cwd'] === 'string' ? data['cwd'] : process.cwd(),
+    agent_id: asString(data['agent_id']),
+    agent_mode: deriveAgentMode(data, state),
   };
 }
 

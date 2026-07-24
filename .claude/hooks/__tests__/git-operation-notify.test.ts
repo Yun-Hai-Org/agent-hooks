@@ -168,4 +168,33 @@ describe('git-operation-notify', () => {
   it('isMergeCommit 普通提交应为 false', () => {
     expect(isMergeCommit(repoDir)).toBe(false);
   });
+
+  it('agent_id 应串入 event 并作用域化频控 key（同 sha 不同 agent 不合并）', async () => {
+    mkdirSync(join(repoDir, '.claude'), { recursive: true });
+    writeFileSync(
+      join(repoDir, '.claude/quality-gate.yaml'),
+      `settings:
+  notifications:
+    cooldown: 5m
+    channels:
+      wechat:
+        url: "http://127.0.0.1:1/nope"
+git:
+  git-operation-notify:
+    enabled: true
+    timeout: 2s
+    operations:
+      - commit
+      - push
+      - merge
+`,
+    );
+    clearGateConfigCache();
+    const r1 = await handleGitOperationNotify('commit', repoDir, 'agent-A');
+    const r2 = await handleGitOperationNotify('commit', repoDir, 'agent-B');
+    const r3 = await handleGitOperationNotify('commit', repoDir, 'agent-A');
+    expect(r1.reason).toBe('send_failed');
+    expect(r2.reason).toBe('send_failed');
+    expect(r3.reason).toBe('cooldown');
+  });
 });

@@ -226,6 +226,11 @@ describe('auto-commit', () => {
       const parsed = parseStopInput({ workspace_roots: [repoPath] });
       expect(parsed.cwd).toBe(repoPath);
     });
+
+    it('仅 conversation_id 时回退到 conversation_id', () => {
+      const parsed = parseStopInput({ cwd: '/repo', conversation_id: 'c1' });
+      expect(parsed.sessionId).toBe('c1');
+    });
   });
 
   describe('buildCommitMessage chore 分支', () => {

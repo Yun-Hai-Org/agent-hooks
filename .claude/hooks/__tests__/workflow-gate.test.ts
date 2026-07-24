@@ -11,7 +11,8 @@ import {
   parseTodoWriteFromToolResponse,
   saveWorkflowState,
 } from '../workflow-state.js';
-import { isOrchestrator, isReadTool, isWriteTool, main as workflowMain } from '../workflow-gate.js';
+import { isOrchestratorInWorkflow } from '../hook-adapter.js';
+import { isReadTool, isWriteTool, main as workflowMain } from '../workflow-gate.js';
 import { clearGateConfigCache } from '../gate-config.js';
 import { expectAllow, expectDeny, PROJECT_ROOT } from './helpers.js';
 
@@ -50,9 +51,16 @@ describe('workflow-state', () => {
 });
 
 describe('workflow-gate helpers', () => {
-  it('isOrchestrator when no agent_id', () => {
-    expect(isOrchestrator({})).toBe(true);
-    expect(isOrchestrator({ agent_id: 'abc' })).toBe(false);
+  it('isOrchestratorInWorkflow derives mode from agent_id/state', () => {
+    const idle = defaultWorkflowState();
+    const active = mergeTodoWriteItems(defaultWorkflowState(), [
+      { id: '1', content: 'read plan', status: 'pending' },
+    ]);
+    expect(isOrchestratorInWorkflow({}, idle)).toBe(false);
+    expect(isOrchestratorInWorkflow({}, active)).toBe(true);
+    expect(isOrchestratorInWorkflow({ agent_id: 'sa' }, active)).toBe(false);
+    expect(isOrchestratorInWorkflow({ agent_mode: 'orchestrator' }, idle)).toBe(true);
+    expect(isOrchestratorInWorkflow({ agent_mode: 'ask' }, active)).toBe(false);
   });
 
   it('tool kind detection', () => {
@@ -89,18 +97,33 @@ describe('workflow-gate main()', () => {
     if (existsSync(statePath)) rmSync(statePath, { force: true });
   });
 
-  it('denies orchestrator Read without todos', async () => {
+  it('allows ask-mode Read without todos', async () => {
     process.stdin = Readable.from([
       JSON.stringify({
         tool_name: 'Read',
         tool_input: { file_path: 'plan.md' },
         session_id: sessionId,
         cwd: PROJECT_ROOT,
+        agent_mode: 'ask',
       }),
     ]);
     await workflowMain();
-    expect(output).toHaveLength(1);
+    expect(expectAllow(output[0]!)).toBe(true);
+  });
+
+  it('denies orchestrator-mode Read without todos (请先 TodoWrite)', async () => {
+    process.stdin = Readable.from([
+      JSON.stringify({
+        tool_name: 'Read',
+        tool_input: { file_path: 'plan.md' },
+        session_id: sessionId,
+        cwd: PROJECT_ROOT,
+        agent_mode: 'orchestrator',
+      }),
+    ]);
+    await workflowMain();
     expect(expectDeny(output[0]!)).toBe(true);
+    expect(output[0]).toContain('TodoWrite');
   });
 
   it('denies orchestrator Read even with todos', async () => {
@@ -132,6 +155,21 @@ describe('workflow-gate main()', () => {
         session_id: sessionId,
         cwd: PROJECT_ROOT,
         agent_id: 'subagent-1',
+      }),
+    ]);
+    await workflowMain();
+    expect(expectAllow(output[0]!)).toBe(true);
+  });
+
+  it('allows subagent Read without todos', async () => {
+    process.stdin = Readable.from([
+      JSON.stringify({
+        tool_name: 'Read',
+        tool_input: { file_path: 'plan.md' },
+        session_id: sessionId,
+        cwd: PROJECT_ROOT,
+        agent_id: 'subagent-1',
+        agent_mode: 'subagent',
       }),
     ]);
     await workflowMain();

@@ -12,11 +12,15 @@ import {
   getConfiguredChannels,
   isCoolingDown,
   makeEventKey,
+  makeGitOperationEventKey,
+  makeConversationEndEventKey,
   mapSeverityEmoji,
   parseNotificationMessage,
   recordSent,
   truncateSummary,
+  formatWechatGitOperationMessage,
   type ConversationEndEvent,
+  type GitOperationEvent,
 } from '../notification-core.js';
 import { clearGateConfigCache } from '../gate-config.js';
 import { createTempGitRepo, cleanupTempGitRepo } from './helpers.js';
@@ -103,5 +107,62 @@ describe('notification-core', () => {
       cleanupTempGitRepo(repoDir);
       clearGateConfigCache();
     }
+  });
+
+  it('makeEventKey 应在 agentId 存在时附加 agent 作用域', () => {
+    expect(makeEventKey({ hook: 'branch-gate', severity: 'high', reason: 'x' })).toBe('branch-gate:high');
+    expect(makeEventKey({ hook: 'branch-gate', severity: 'high', reason: 'x', agentId: 'a1' })).toBe('branch-gate:high:a1');
+  });
+
+  it('makeGitOperationEventKey 同 sha 不同 agent 应产出不同 key（不合并频控）', () => {
+    expect(makeGitOperationEventKey('commit', 'abc123')).toBe('git-operation:commit:abc123');
+    expect(makeGitOperationEventKey('commit', 'abc123', 'a1')).toBe('git-operation:commit:abc123:a1');
+    expect(makeGitOperationEventKey('commit', 'abc123', 'a2')).toBe('git-operation:commit:abc123:a2');
+    expect(makeGitOperationEventKey('commit', 'abc123', 'a1')).not.toBe(makeGitOperationEventKey('commit', 'abc123', 'a2'));
+  });
+
+  it('makeGitOperationEventKey 无 agent_id 时保持向后兼容', () => {
+    expect(makeGitOperationEventKey('push', 'sha-x')).toBe('git-operation:push:sha-x');
+    expect(makeGitOperationEventKey('push', '')).toBe('git-operation:push:unknown');
+  });
+
+  it('makeConversationEndEventKey 应按 agent_id 作用域化', () => {
+    expect(makeConversationEndEventKey('s1')).toBe('conversation-end:s1');
+    expect(makeConversationEndEventKey('s1', 'a1')).toBe('conversation-end:s1:a1');
+    expect(makeConversationEndEventKey('s1', 'a1')).not.toBe(makeConversationEndEventKey('s1', 'a2'));
+  });
+
+  it('formatWechatGitOperationMessage 应在 agent_id 存在时含归属 agent 行', () => {
+    const body = formatWechatGitOperationMessage(
+      {
+        operation: 'commit',
+        projectName: 'demo',
+        platform: 'Git',
+        branch: 'feat/test',
+        summaryText: 'feat: add',
+        agent_id: 'agent-42',
+      } as GitOperationEvent,
+      '2026/7/3 12:00:00',
+      1500,
+    );
+    const content = (body.markdown as { content: string }).content;
+    expect(content).toContain('**归属 agent**');
+    expect(content).toContain('agent-42');
+  });
+
+  it('formatWechatGitOperationMessage 无 agent_id 时不含归属 agent 行', () => {
+    const body = formatWechatGitOperationMessage(
+      {
+        operation: 'commit',
+        projectName: 'demo',
+        platform: 'Git',
+        branch: 'feat/test',
+        summaryText: 'feat: add',
+      } as GitOperationEvent,
+      '2026/7/3 12:00:00',
+      1500,
+    );
+    const content = (body.markdown as { content: string }).content;
+    expect(content).not.toContain('归属 agent');
   });
 });

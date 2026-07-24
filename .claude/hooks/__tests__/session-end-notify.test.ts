@@ -479,4 +479,42 @@ ide:
       expect(settings.channels.wechat).toBe('https://example.com/hook');
     });
   });
+
+  it('agent_id 应串入 ConversationEndEvent 并作用域化频控 key', async () => {
+    mkdirSync(join(repoDir, '.claude'), { recursive: true });
+    writeFileSync(
+      join(repoDir, '.claude/quality-gate.yaml'),
+      `settings:
+  notifications:
+    timeout: 2s
+    cooldown: 5m
+    channels:
+      wechat:
+        url: "http://127.0.0.1:1/nope"
+ide:
+  session-end-notify:
+    enabled: true
+    trigger: both
+    maxSummaryChars: 1500
+    fallbackOnEmptySummary: true
+    timeout: 2s
+    platforms:
+      cursor:
+        trigger: both
+      claude:
+        trigger: both
+      kiro:
+        trigger: both
+`,
+    );
+    clearGateConfigCache();
+    process.env.HOOK_PLATFORM = 'claude';
+    const base = { hook_event_name: 'Stop', session_id: 's1', last_assistant_message: 'summary text', cwd: repoDir };
+    const r1 = await handleSessionEndNotify({ ...base, agent_id: 'agent-A' });
+    const r2 = await handleSessionEndNotify({ ...base, agent_id: 'agent-B' });
+    const r3 = await handleSessionEndNotify({ ...base, agent_id: 'agent-A' });
+    expect(r1.reason).toBe('send_failed');
+    expect(r2.reason).toBe('send_failed');
+    expect(r3.reason).toBe('cooldown');
+  });
 });

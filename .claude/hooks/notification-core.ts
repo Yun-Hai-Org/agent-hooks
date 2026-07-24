@@ -21,6 +21,7 @@ interface DispatchInput {
   message?: string;
   session_id?: string;
   cwd?: string;
+  agent_id?: string;
 }
 
 export interface ConversationEndEvent {
@@ -32,6 +33,7 @@ export interface ConversationEndEvent {
   durationMs?: number;
   status?: string;
   uncommittedHint?: string;
+  agent_id?: string;
 }
 
 export interface GitOperationEvent {
@@ -41,6 +43,7 @@ export interface GitOperationEvent {
   branch: string;
   summaryText: string;
   commitSha?: string;
+  agent_id?: string;
 }
 
 export function conversationEndTitle(status?: string): string {
@@ -155,8 +158,9 @@ function gitOperationSlackColor(operation: GitOperationKind): string {
   }
 }
 
-function makeGitOperationEventKey(operation: GitOperationKind, commitSha: string): string {
-  return `git-operation:${operation}:${commitSha || 'unknown'}`;
+export function makeGitOperationEventKey(operation: GitOperationKind, commitSha: string, agent_id?: string): string {
+  const base = `git-operation:${operation}:${commitSha || 'unknown'}`;
+  return agent_id ? `${base}:${agent_id}` : base;
 }
 
 export function parseNotificationMessage(message: string): NotificationEvent {
@@ -177,7 +181,8 @@ export function parseNotificationMessage(message: string): NotificationEvent {
 }
 
 export function makeEventKey(event: NotificationEvent): string {
-  return `${event.hook}:${event.severity}`;
+  const base = `${event.hook}:${event.severity}`;
+  return event.agentId ? `${base}:${event.agentId}` : base;
 }
 
 export function truncateSummary(text: string, maxChars: number): string {
@@ -195,6 +200,7 @@ export function formatWechatMessage(event: NotificationEvent, timestamp: string)
     `> **级别**: ${event.severity.toUpperCase()}`,
   ];
   if (event.sessionId) lines.push(`> **会话**: ${event.sessionId}`);
+  if (event.agentId) lines.push(`> **归属 agent**: ${event.agentId}`);
   lines.push(`> **时间**: ${timestamp}`, '', '**详情**', event.reason);
   return { msgtype: 'markdown', markdown: { content: lines.join('\n') } };
 }
@@ -213,6 +219,7 @@ export function formatWechatGitOperationMessage(
     `> **分支**: ${event.branch}`,
   ];
   if (event.commitSha) lines.push(`> **提交**: ${event.commitSha.slice(0, 7)}`);
+  if (event.agent_id) lines.push(`> **归属 agent**: ${event.agent_id}`);
   lines.push(`> **时间**: ${timestamp}`, '', '**说明**', summary);
   return { msgtype: 'markdown', markdown: { content: lines.join('\n') } };
 }
@@ -230,6 +237,7 @@ export function formatWechatConversationEndMessage(
     `> **平台**: ${event.platform}`,
     `> **会话**: ${event.sessionId || 'unknown'}`,
   ];
+  if (event.agent_id) lines.push(`> **归属 agent**: ${event.agent_id}`);
   if (event.reason) lines.push(`> **原因**: ${event.reason}`);
   if (event.status) lines.push(`> **状态**: ${event.status}`);
   if (event.durationMs !== undefined) lines.push(`> **时长**: ${String(Math.round(event.durationMs / 1000))}s`);
@@ -257,6 +265,7 @@ export function formatFeishuMessage(event: NotificationEvent, timestamp: string)
     `**钩子**: ${event.hook}`,
     `**级别**: ${event.severity.toUpperCase()}`,
     event.sessionId ? `**会话**: ${event.sessionId}` : '',
+    event.agentId ? `**归属 agent**: ${event.agentId}` : '',
     `**时间**: ${timestamp}`,
   ]
     .filter(Boolean)
@@ -289,6 +298,7 @@ export function formatFeishuGitOperationMessage(
     `**平台**: ${event.platform}`,
     `**分支**: ${event.branch}`,
     event.commitSha ? `**提交**: ${event.commitSha.slice(0, 7)}` : '',
+    event.agent_id ? `**归属 agent**: ${event.agent_id}` : '',
     `**时间**: ${timestamp}`,
   ]
     .filter(Boolean)
@@ -319,6 +329,7 @@ export function formatFeishuConversationEndMessage(
     `**项目**: ${event.projectName}`,
     `**平台**: ${event.platform}`,
     `**会话**: ${event.sessionId || 'unknown'}`,
+    event.agent_id ? `**归属 agent**: ${event.agent_id}` : '',
     event.reason ? `**原因**: ${event.reason}` : '',
     event.status ? `**状态**: ${event.status}` : '',
     event.durationMs !== undefined ? `**时长**: ${String(Math.round(event.durationMs / 1000))}s` : '',
@@ -364,6 +375,7 @@ export function formatSlackMessage(event: NotificationEvent, timestamp: string):
     { type: 'mrkdwn', text: `*钩子*\n${event.hook}` },
     { type: 'mrkdwn', text: `*级别*\n${event.severity.toUpperCase()}` },
   ];
+  if (event.agentId) fields.push({ type: 'mrkdwn', text: `*归属 agent*\n${event.agentId}` });
 
   return {
     attachments: [
@@ -399,6 +411,7 @@ export function formatSlackGitOperationMessage(
     { type: 'mrkdwn', text: `*分支*\n${event.branch}` },
   ];
   if (event.commitSha) fields.push({ type: 'mrkdwn', text: `*提交*\n${event.commitSha.slice(0, 7)}` });
+  if (event.agent_id) fields.push({ type: 'mrkdwn', text: `*归属 agent*\n${event.agent_id}` });
   return {
     attachments: [
       {
@@ -425,6 +438,7 @@ export function formatSlackConversationEndMessage(
     { type: 'mrkdwn', text: `*平台*\n${event.platform}` },
   ];
   if (event.status) fields.push({ type: 'mrkdwn', text: `*状态*\n${event.status}` });
+  if (event.agent_id) fields.push({ type: 'mrkdwn', text: `*归属 agent*\n${event.agent_id}` });
   const titlePlain = conversationEndTitle(event.status).replace(/\*\*/g, '');
   const color = event.status === 'error' || event.status === 'aborted' ? '#ECB22E' : '#2EB886';
   const blocks: Record<string, unknown>[] = [
@@ -531,6 +545,7 @@ export async function dispatchSecurityNotification(input: DispatchInput, logHook
   event.projectName = resolveSecurityProjectName(cwd);
   event.platform = resolveSecurityPlatform();
   if (input.session_id) event.sessionId = input.session_id;
+  if (input.agent_id) event.agentId = input.agent_id;
 
   const eventKey = makeEventKey(event);
   const { cooldownMs } = getNotificationSettings(cwd);
@@ -581,7 +596,7 @@ export async function dispatchGitOperationNotification(
   const settings = getNotificationSettings(cwd);
   const maxSummaryChars = options.maxSummaryChars ?? 1500;
   const timeoutMs = options.timeoutMs ?? settings.timeoutMs;
-  const eventKey = makeGitOperationEventKey(event.operation, event.commitSha ?? event.branch);
+  const eventKey = makeGitOperationEventKey(event.operation, event.commitSha ?? event.branch, event.agent_id);
 
   if (isCoolingDown(eventKey, settings.cooldownMs)) {
     log(logHookName, { level: 'SKIP', reason: '频控冷却期内', eventKey, operation: event.operation });
@@ -655,8 +670,9 @@ export async function dispatchGitOperationNotification(
   return { sent: successCount > 0, results: mapped, reason: successCount > 0 ? undefined : 'send_failed' };
 }
 
-function makeConversationEndEventKey(sessionId: string): string {
-  return `conversation-end:${sessionId || 'unknown'}`;
+export function makeConversationEndEventKey(sessionId: string, agent_id?: string): string {
+  const base = `conversation-end:${sessionId || 'unknown'}`;
+  return agent_id ? `${base}:${agent_id}` : base;
 }
 
 export async function dispatchConversationEndNotification(
@@ -669,7 +685,7 @@ export async function dispatchConversationEndNotification(
   const settings = getNotificationSettings(cwd);
   const maxSummaryChars = options.maxSummaryChars ?? 1500;
   const timeoutMs = options.timeoutMs ?? settings.timeoutMs;
-  const eventKey = makeConversationEndEventKey(event.sessionId);
+  const eventKey = makeConversationEndEventKey(event.sessionId, event.agent_id);
 
   if (isCoolingDown(eventKey, settings.cooldownMs)) {
     log(logHookName, { level: 'SKIP', reason: '频控冷却期内', eventKey, session_id: event.sessionId });

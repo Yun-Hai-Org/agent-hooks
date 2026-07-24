@@ -1,8 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach } from 'bun:test';
 import { join } from 'path';
 import { Readable } from 'stream';
-import { isGitShipWriteCommand, isOrchestrator, isShipAgent, main as gitShipMain } from '../git-ship-gate.js';
-import { main as subagentSyncMain } from '../workflow-subagent-sync.js';
+import { isGitShipWriteCommand, isShipAgent, main as gitShipMain } from '../git-ship-gate.js';
 import { clearGateConfigCache } from '../gate-config.js';
 import { saveWorkflowState, defaultWorkflowState } from '../workflow-state.js';
 import { expectAllow, expectDeny, PROJECT_ROOT } from './helpers.js';
@@ -25,26 +24,6 @@ describe('git-ship-gate helpers', () => {
     expect(isShipAgent({ agent_id: 'sa-1', description: 'impl task' }, sessionId)).toBe(true);
     expect(isShipAgent({ agent_id: 'sa-2', subagent_type: 'generalPurpose' }, 'other-session')).toBe(false);
   });
-
-  it('isShipAgent true when workflow state has agent_role from sync', async () => {
-    const sessionId = `ship-sync-${Date.now()}`;
-    saveWorkflowState(sessionId, defaultWorkflowState());
-    process.stdin = Readable.from([
-      JSON.stringify({
-        hook_event_name: 'subagentStart',
-        agent_id: 'ship-sa-1',
-        run_in_background: true,
-        session_id: sessionId,
-        cwd: PROJECT_ROOT,
-        description: 'ship-sa',
-        subagent_type: 'shell',
-      }),
-    ]);
-    await subagentSyncMain();
-
-    expect(isShipAgent({ agent_id: 'ship-sa-1', subagent_type: 'shell' }, sessionId)).toBe(true);
-  });
-
 });
 
 describe('git-ship-gate main()', () => {
@@ -71,12 +50,30 @@ describe('git-ship-gate main()', () => {
     clearGateConfigCache();
   });
 
-  it('denies orchestrator git commit', async () => {
+  it('allows ask-mode git commit (not treated as orchestrator)', async () => {
+    const sessionId = `ship-ask-${Date.now()}`;
+    saveWorkflowState(sessionId, defaultWorkflowState());
     process.stdin = Readable.from([
       JSON.stringify({
         command: 'git commit -m "feat: x"',
-        session_id: 'ship-test',
+        session_id: sessionId,
         cwd: PROJECT_ROOT,
+        agent_mode: 'ask',
+      }),
+    ]);
+    await gitShipMain();
+    expect(expectAllow(output[0]!)).toBe(true);
+  });
+
+  it('denies orchestrator-mode git commit', async () => {
+    const sessionId = `ship-orch-${Date.now()}`;
+    saveWorkflowState(sessionId, defaultWorkflowState());
+    process.stdin = Readable.from([
+      JSON.stringify({
+        command: 'git commit -m "feat: x"',
+        session_id: sessionId,
+        cwd: PROJECT_ROOT,
+        agent_mode: 'orchestrator',
       }),
     ]);
     await gitShipMain();
@@ -101,13 +98,12 @@ describe('git-ship-gate main()', () => {
     expect(expectAllow(output[0]!)).toBe(true);
   });
 
-  it('allows ship-sa via beforeShellExecution without agent_id', async () => {
+  it('allows ship-sa git commit via beforeShellExecution without agent_id', async () => {
     const sessionId = `ship-sync-no-agent-${Date.now()}`;
-    saveWorkflowState(sessionId, defaultWorkflowState());
-    process.stdin = Readable.from([JSON.stringify({hook_event_name:'subagentStart',agent_id:'ship-sa-1',run_in_background:true,session_id:sessionId,cwd:PROJECT_ROOT,description:'ship-sa',subagent_type:'shell'})]);
-    await subagentSyncMain();
-    output = [];
-    process.stdin = Readable.from([JSON.stringify({command:"git commit -m \"feat: x\"",session_id:sessionId,cwd:PROJECT_ROOT})]);
+    saveWorkflowState(sessionId, { ...defaultWorkflowState(), agent_role: 'ship-sa' });
+    process.stdin = Readable.from([
+      JSON.stringify({ command: 'git commit -m "feat: x"', session_id: sessionId, cwd: PROJECT_ROOT }),
+    ]);
     await gitShipMain();
     expect(expectAllow(output[0]!)).toBe(true);
   });

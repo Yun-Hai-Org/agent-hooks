@@ -1,13 +1,20 @@
 #!/usr/bin/env bun
 /**
  * Git Ship Gate - beforeShellExecution / preToolUse Shell
- * Denies Orchestrator git commit/push/merge/checkout main; allows ship-sa subagents.
+ * Denies Orchestrator-in-workflow git commit/push/merge/checkout main; allows ship-sa subagents.
  */
 
 import { existsSync, appendFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { LOG_DIR, readStdin } from './security-orchestrator.js';
-import { normalizeInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
+import {
+  normalizeInput,
+  formatDenyOutput,
+  formatAllowOutput,
+  isShellHookInput,
+  isOrchestratorInWorkflow,
+  deriveAgentMode,
+} from './hook-adapter.js';
 import { asString } from './types.js';
 import { isGateNodeEnabled } from './gate-config.js';
 import { isGitCommitCommand, isGitPushCommand, isGitMergeCommand } from './checks/git-policy.js';
@@ -35,23 +42,6 @@ function emit(out: string) {
 
 function allow() {
   return formatAllowOutput();
-}
-
-export function isOrchestrator(raw: Record<string, unknown>, sessionId?: string): boolean {
-  if (asString(raw['agent_id'])) return false;
-
-  if (sessionId) {
-    const state = loadWorkflowState(sessionId);
-    if (
-      state.active_background_tasks.length > 0 &&
-      state.agent_role &&
-      SHIP_ROLE_PATTERN.test(state.agent_role)
-    ) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 export function isGitShipWriteCommand(cmd: string): boolean {
@@ -130,7 +120,9 @@ async function main() {
       return;
     }
 
-    if (isOrchestrator(raw, session_id)) {
+    const state = loadWorkflowState(session_id);
+
+    if (isOrchestratorInWorkflow(raw, state)) {
       const reason = buildOrchestratorGitShipDenyReason(cmd);
       log({ level: 'BLOCKED', reason: 'orchestrator git write', cmd: cmd.slice(0, 200), session_id });
       notifyGateBlockedAsync({
@@ -144,6 +136,11 @@ async function main() {
     }
 
     if (isShipAgent(raw, session_id)) {
+      emit(allow());
+      return;
+    }
+
+    if (deriveAgentMode(raw, state) === 'ask') {
       emit(allow());
       return;
     }

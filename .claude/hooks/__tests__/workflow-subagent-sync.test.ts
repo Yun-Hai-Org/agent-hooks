@@ -1,122 +1,175 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { existsSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { Readable } from 'stream';
-import { clearGateConfigCache } from '../gate-config.js';
-import { main, addBackgroundTask, removeBackgroundTask } from '../workflow-subagent-sync.js';
-import { defaultWorkflowState, getWorkflowStatePath, loadWorkflowState, saveWorkflowState } from '../workflow-state.js';
-import { PROJECT_ROOT } from './helpers.js';
+import { tmpdir } from 'os';
+import { spawn } from 'child_process';
+import { loadEntry } from '../agent-registry.js';
+import { createTempGitRepo, cleanupTempGitRepo } from './helpers.js';
 
-const GATE_CONFIG = join(import.meta.dir, 'workflow-subagent-enabled.yaml');
+const SCRIPT_PATH = join(import.meta.dir, '..', 'workflow-subagent-sync.ts');
+
+function runScript(
+  input: string,
+  env: Record<string, string>,
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [SCRIPT_PATH], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, ...env },
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => (stdout += d.toString()));
+    child.stderr.on('data', (d) => (stderr += d.toString()));
+    child.on('close', (code) => resolve({ code, stdout, stderr }));
+    child.on('error', reject);
+    child.stdin.write(input);
+    child.stdin.end();
+  });
+}
+
+// workflow-state.ts computes STATE_DIR at module load from os.homedir(); the test
+// process imports it before beforeEach swaps HOME, so read the file directly.
+function readWorkflowState(tempHome: string, sessionId: string): Record<string, unknown> | null {
+  const safe = sessionId.replace(/[^a-zA-Z0-9_-]/g, '_') || 'default';
+  const path = join(tempHome, '.claude', 'workflow-state', `${safe}.json`);
+  if (!existsSync(path)) return null;
+  return JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+}
+
+function activeTaskCount(state: Record<string, unknown> | null): number {
+  if (!state) return 0;
+  const tasks = state['active_background_tasks'];
+  return Array.isArray(tasks) ? tasks.length : 0;
+}
 
 describe('workflow-subagent-sync', () => {
-  const sessionId = `subagent-sync-${Date.now()}`;
+  let tempHome: string;
+  let savedHome: string | undefined;
 
   beforeEach(() => {
-    writeFileSync(GATE_CONFIG, ['ide:', '  workflow-subagent-sync:', '    enabled: true'].join('\n'), 'utf-8');
-    process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'] = GATE_CONFIG;
-    clearGateConfigCache();
+    tempHome = mkdtempSync(join(tmpdir(), `wss-${Date.now()}-`));
+    savedHome = process.env['HOME'];
+    process.env['HOME'] = tempHome;
   });
 
   afterEach(() => {
-    process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'] = join(import.meta.dir, 'empty-global-quality-gate.yaml');
-    clearGateConfigCache();
-    const statePath = getWorkflowStatePath(sessionId);
-    if (existsSync(statePath)) rmSync(statePath, { force: true });
-    if (existsSync(GATE_CONFIG)) rmSync(GATE_CONFIG, { force: true });
+    process.env['HOME'] = savedHome;
+    try {
+      rmSync(tempHome, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
   });
 
-  it('subagentStart adds active_background_tasks entry', async () => {
-    saveWorkflowState(sessionId, defaultWorkflowState());
-    let output = '';
-    process.stdout.write = ((chunk: string | Uint8Array) => {
-      output += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString();
-      return true;
-    }) as typeof process.stdout.write;
+  it('start writes a registry entry (dispatched) and adds an ActiveBackgroundTask', async () => {
+    const input = JSON.stringify({
+      session_id: 'disp-sess-1',
+      agent_id: 'agent-x',
+      subagent_type: 'explore',
+      description: '读取 plan docs',
+      todo_id: 'todo-1',
+      agent_role: 'explorer',
+    });
+    const res = await runScript(input, { WORKFLOW_SUBAGENT_SYNC: 'start' });
+    expect(res.code).toBe(0);
+    expect(res.stdout.trim()).toBe('{}');
 
-    process.stdin = Readable.from([
-      JSON.stringify({
-        hook_event_name: 'subagentStart',
-        agent_id: 'agent-abc',
-        run_in_background: true,
-        session_id: sessionId,
-        cwd: PROJECT_ROOT,
-      }),
-    ]);
-    await main();
+    const entry = loadEntry('agent-x');
+    expect(entry).not.toBeNull();
+    expect(entry!.agent_id).toBe('agent-x');
+    expect(entry!.dispatcherSessionId).toBe('disp-sess-1');
+    expect(entry!.status).toBe('dispatched');
+    expect(entry!.kind).toBe('explore');
+    expect(entry!.todoId).toBe('todo-1');
+    expect(entry!.agent_role).toBe('explorer');
+    expect(typeof entry!.startedAt).toBe('string');
 
-    const state = loadWorkflowState(sessionId);
-    expect(state.active_background_tasks).toHaveLength(1);
-    expect(state.active_background_tasks[0]?.agentId).toBe('agent-abc');
-    expect(state.active_background_tasks[0]?.runInBackground).toBe(true);
-    expect(output.trim()).toBe('{}');
+    const state = readWorkflowState(tempHome, 'disp-sess-1');
+    expect(activeTaskCount(state)).toBeGreaterThan(0);
+    const tasks = (state!['active_background_tasks'] as Array<Record<string, unknown>>);
+    const task = tasks.find((t) => t['agentId'] === 'agent-x');
+    expect(task).toBeDefined();
+    expect(task!['runInBackground']).toBe(true);
+    expect(task!['todoId']).toBe('todo-1');
+    expect(typeof task!['startedAt']).toBe('string');
   });
 
-  it('subagentStart syncs agent_role from ship-sa description', async () => {
-    saveWorkflowState(sessionId, defaultWorkflowState());
-    process.stdin = Readable.from([
-      JSON.stringify({
-        hook_event_name: 'subagentStart',
-        agent_id: 'ship-sa-1',
-        run_in_background: true,
-        session_id: sessionId,
-        cwd: PROJECT_ROOT,
-        description: 'ship-sa',
+  it('start is idempotent for the same agentId (no duplicate active task)', async () => {
+    const input = JSON.stringify({
+      session_id: 'disp-sess-2',
+      agent_id: 'agent-y',
+      subagent_type: 'generalPurpose',
+      description: '实现 feature',
+    });
+    await runScript(input, { WORKFLOW_SUBAGENT_SYNC: 'start' });
+    await runScript(input, { WORKFLOW_SUBAGENT_SYNC: 'start' });
+    const state = readWorkflowState(tempHome, 'disp-sess-2');
+    const tasks = (state!['active_background_tasks'] as Array<Record<string, unknown>>);
+    expect(tasks.filter((t) => t['agentId'] === 'agent-y')).toHaveLength(1);
+  });
+
+  it('stop sets registry status=completed with commitSha and worktree', async () => {
+    const repo = createTempGitRepo('feat/test-sync');
+    try {
+      const startInput = JSON.stringify({
+        session_id: 'disp-sess-3',
+        agent_id: 'agent-z',
         subagent_type: 'shell',
-      }),
-    ]);
-    await main();
+        description: 'git commit and push',
+        cwd: repo,
+      });
+      await runScript(startInput, { WORKFLOW_SUBAGENT_SYNC: 'start' });
 
-    const state = loadWorkflowState(sessionId);
-    expect(state.agent_role).toBe('ship-sa');
-    expect(state.active_background_tasks).toHaveLength(1);
+      const stopInput = JSON.stringify({
+        session_id: 'disp-sess-3',
+        agent_id: 'agent-z',
+        cwd: repo,
+      });
+      const res = await runScript(stopInput, { WORKFLOW_SUBAGENT_SYNC: 'stop' });
+      expect(res.code).toBe(0);
+      expect(res.stdout.trim()).toBe('{}');
+
+      const entry = loadEntry('agent-z');
+      expect(entry).not.toBeNull();
+      expect(entry!.status).toBe('completed');
+      expect(entry!.commitSha).toBeTruthy();
+      expect(entry!.commitSha).toMatch(/^[0-9a-f]{7,40}$/);
+      expect(entry!.worktree).toBe(repo);
+      expect(typeof entry!.completedAt).toBe('string');
+
+      // stop must NOT clear active_background_tasks (reclaim is T5's job)
+      const state = readWorkflowState(tempHome, 'disp-sess-3');
+      const tasks = (state!['active_background_tasks'] as Array<Record<string, unknown>>);
+      expect(tasks.some((t) => t['agentId'] === 'agent-z')).toBe(true);
+    } finally {
+      cleanupTempGitRepo(repo);
+    }
   });
 
-  it('subagentStop removes active_background_tasks entry', async () => {
-    let state = addBackgroundTask(defaultWorkflowState(), {
-      agentId: 'agent-abc',
-      runInBackground: true,
-      startedAt: new Date().toISOString(),
+  it('falls back to hook_event_name when env var is absent', async () => {
+    const input = JSON.stringify({
+      session_id: 'disp-sess-4',
+      agent_id: 'agent-ev',
+      subagent_type: 'explore',
+      description: 'explore codebase',
+      hook_event_name: 'subagentStart',
     });
-    state = addBackgroundTask(state, {
-      agentId: 'agent-xyz',
-      runInBackground: true,
-      startedAt: new Date().toISOString(),
-    });
-    saveWorkflowState(sessionId, state);
-
-    process.stdin = Readable.from([
-      JSON.stringify({
-        hookEventName: 'subagentStop',
-        agentId: 'agent-abc',
-        session_id: sessionId,
-        cwd: PROJECT_ROOT,
-      }),
-    ]);
-    await main();
-
-    const loaded = loadWorkflowState(sessionId);
-    expect(loaded.active_background_tasks).toHaveLength(1);
-    expect(loaded.active_background_tasks[0]?.agentId).toBe('agent-xyz');
+    const res = await runScript(input, {});
+    expect(res.code).toBe(0);
+    expect(res.stdout.trim()).toBe('{}');
+    expect(loadEntry('agent-ev')?.status).toBe('dispatched');
   });
 
-  it('addBackgroundTask replaces same agentId', () => {
-    const first = addBackgroundTask(defaultWorkflowState(), {
-      agentId: 'dup',
-      runInBackground: false,
-      startedAt: '2026-01-01T00:00:00.000Z',
-    });
-    const second = addBackgroundTask(first, {
-      agentId: 'dup',
-      runInBackground: true,
-      startedAt: '2026-01-02T00:00:00.000Z',
-    });
-    expect(second.active_background_tasks).toHaveLength(1);
-    expect(second.active_background_tasks[0]?.runInBackground).toBe(true);
+  it('fail-open: missing agent_id still emits {} and exits 0', async () => {
+    const res = await runScript(JSON.stringify({ session_id: 's' }), { WORKFLOW_SUBAGENT_SYNC: 'start' });
+    expect(res.code).toBe(0);
+    expect(res.stdout.trim()).toBe('{}');
   });
 
-  it('removeBackgroundTask is idempotent', () => {
-    const state = removeBackgroundTask(defaultWorkflowState(), 'missing');
-    expect(state.active_background_tasks).toHaveLength(0);
+  it('fail-open: unknown phase (no env, no event) still emits {}', async () => {
+    const res = await runScript(JSON.stringify({ session_id: 's', agent_id: 'a' }), {});
+    expect(res.code).toBe(0);
+    expect(res.stdout.trim()).toBe('{}');
   });
 });

@@ -56,6 +56,16 @@
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts protect-secrets.ts",
         "matcher": "Shell|Write"
+      },
+      {
+        "command": "HOOK_PLATFORM=cursor WORKFLOW_SUBAGENT_SYNC=start $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-subagent-sync.ts",
+        "matcher": "Task"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-todo-sync.ts",
+        "matcher": "TodoWrite"
       }
     ],
     "beforeReadFile": [

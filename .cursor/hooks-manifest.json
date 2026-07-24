@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "requiredEvents": ["stop", "sessionEnd", "afterFileEdit", "afterAgentResponse"],
+  "requiredEvents": ["stop", "sessionEnd", "afterFileEdit", "afterAgentResponse", "postToolUse", "preToolUse", "subagentStart", "subagentStop"],
   "requiredCommandTokens": [
     "session-end-notify",
     "block-dangerous-commands",
@@ -18,7 +18,9 @@
     "session-response-cache",
     "branch-gate",
     "branch-delete-gate",
-    "protect-secrets"
+    "protect-secrets",
+    "workflow-todo-sync",
+    "workflow-subagent-sync"
   ],
   "requiredSymlinks": [
     { "path": "~/.cursor/hooks.json", "targetSuffix": ".cursor/hooks.json.example" },

@@ -17,6 +17,7 @@ import { execCommand, log, getCurrentBranch } from './security-orchestrator.js';
 import { getStagedFiles, hasUncommittedChanges, buildUncommittedWorktreeDenyReason } from './checks/git-policy.js';
 import { summarizeResults } from './quality-gate.js';
 import type { CheckResult } from './types.js';
+import { asString } from './types.js';
 import { getPlatform, formatStopContinueOutput, formatStopSuccessOutput } from './hook-adapter.js';
 import { isGateNodeEnabled } from './gate-config.js';
 import { buildShipStopDenyReason, loadWorkflowState, needsShipBeforeStop } from './workflow-state.js';
@@ -37,7 +38,7 @@ function resolveCwd(data: Record<string, unknown>): string {
 export function parseStopInput(data: Record<string, unknown>) {
   return {
     cwd: resolveCwd(data),
-    sessionId: typeof data['session_id'] === 'string' ? data['session_id'] : '',
+    sessionId: asString(data['session_id']) || asString(data['conversation_id']),
     hookEvent: typeof data['hook_event_name'] === 'string' ? data['hook_event_name'] : '',
     stopHookActive: data['stop_hook_active'] === true,
     loopCount: typeof data['loop_count'] === 'number' ? data['loop_count'] : 0,
