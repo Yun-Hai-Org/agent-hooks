@@ -24,19 +24,15 @@ function emit(out: string) {
 
 function extractAgentId(toolResponse: unknown): string {
   if (!toolResponse) return '';
-  if (typeof toolResponse === 'string') {
-    const m = toolResponse.match(/Agent ID: *([0-9a-f-]{8,})/i);
-    return m ? m[1] : '';
-  }
+  const text = typeof toolResponse === 'string' ? toolResponse : JSON.stringify(toolResponse);
+  const m = text.match(/Agent ID: *([0-9a-f-]{8,})/i);
+  if (m) return m[1];
   if (typeof toolResponse === 'object' && toolResponse) {
     const obj = toolResponse as any;
     for (const key of ['agent_id', 'agentId', 'id', 'task_id']) {
       const v = asString(obj[key]);
       if (v) return v;
     }
-    const content = asString(obj['content']) || asString(obj['text']) || asString(obj['response']);
-    const m = content.match(/Agent ID: *([0-9a-f-]{8,})/i);
-    if (m) return m[1];
   }
   return '';
 }
