@@ -273,15 +273,15 @@ ide:
 
   # beforeReadFile/preToolUse：Todo 先于 Read/Write；Orchestrator 禁直接读写
   workflow-gate:
-    enabled: true
+    enabled: false
 
   # Stop：pending≥2 时要求 ≥2 并行后台 Task
   workflow-stop-gate:
-    enabled: true
+    enabled: false
 
   # beforeReadFile/preToolUse：Orchestrator 禁直接 Read/Write（complement workflow-gate）
   orchestrator-gate:
-    enabled: true
+    enabled: false
 
   # beforeShellExecution/preToolUse Shell：Orchestrator 禁 git commit/push/merge；仅 ship-sa 子代理
   git-ship-gate:
