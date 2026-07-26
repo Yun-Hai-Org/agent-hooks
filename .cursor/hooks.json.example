@@ -116,6 +116,12 @@
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-subagent-sync.ts"
       }
+    ],
+    "postToolUse": [
+      {
+        "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts workflow-todo-sync.ts",
+        "matcher": "TodoWrite"
+      }
     ]
   }
 }

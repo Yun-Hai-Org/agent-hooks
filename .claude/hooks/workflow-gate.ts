@@ -92,7 +92,7 @@ async function main() {
     const pending = countPendingTodos(state);
     const orchestrator = isOrchestrator(raw);
 
-    if (pending === 0) {
+    if (pending === 0 && orchestrator) {
       log({ level: 'BLOCKED', reason: 'no todos', tool: tool_name, session_id, orchestrator });
       emit(
         deny(
