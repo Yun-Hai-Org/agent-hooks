@@ -67,7 +67,7 @@ rm -f "$HOME/.cursor/hooks.json"
 
 mkdir -p "$HOME/.claude" "$HOME/.cursor"
 
-ln -sf "$HOOKS_REPO/.claude/hooks" "$HOME/.claude/hooks"
+ln -sfn "$HOOKS_REPO/.claude/hooks" "$HOME/.claude/hooks"
 ln -sf "$HOOKS_REPO/.cursor/hooks.json.example" "$HOME/.cursor/hooks.json"
 
 VENDORED_BUN_PATH=""
