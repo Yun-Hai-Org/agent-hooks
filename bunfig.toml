@@ -1,0 +1,5 @@
+[test]
+preload = [
+  "./.claude/hooks/__tests__/preload.ts",
+  "./.claude/hooks/__tests__/_preload-reset-state.ts",
+]
