@@ -32,6 +32,7 @@ indent-style = "space"
 
 [dependency-groups]
 dev = [
+  "pip-audit>=2.7.0",
   "pyright>=1.1.409",
   "pytest>=8.0.0",
   "pytest-cov>=6.0.0",
