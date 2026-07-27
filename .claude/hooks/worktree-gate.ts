@@ -4,9 +4,10 @@
  * Deny file writes on main checkout; allow inside git worktrees on feat/* branches.
  */
 
-import { existsSync, appendFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { LOG_DIR, readStdin, isGitRepo } from './security-orchestrator.js';
+import { existsSync, appendFileSync, mkdirSync, realpathSync } from 'fs';
+import { join, resolve, isAbsolute, basename } from 'path';
+import { LOG_DIR, readStdin, isGitRepo, execCommand } from './security-orchestrator.js';
+import { repoRelativePathFromAbs } from './checks/scan-scope.js';
 import {
   normalizeInput,
   normalizeFileEditInput,
@@ -105,6 +106,23 @@ async function main() {
       if (!isFileWriteCommand(command)) {
         emit(allow());
         return;
+      }
+    }
+
+    if (tool_name === 'Write' || tool_name === 'Edit' || tool_name === 'StrReplace') {
+      const rawFilePath = tool_input.file_path ?? '';
+      if (rawFilePath) {
+        let absPath = isAbsolute(rawFilePath) ? rawFilePath : resolve(workingDir, rawFilePath);
+        try { absPath = realpathSync(absPath); } catch { absPath = join(realpathSync(resolve(absPath, '..')), basename(absPath)); }
+        const rootResult = execCommand('git rev-parse --show-toplevel', { cwd: workingDir });
+        if (rootResult.success && rootResult.stdout.trim()) {
+          const rel = repoRelativePathFromAbs(absPath, rootResult.stdout.trim());
+          if (rel === null) {
+            log({ level: 'INFO', reason: 'write outside repo allowed', file: absPath, tool: tool_name, session_id });
+            emit(allow());
+            return;
+          }
+        }
       }
     }
 
