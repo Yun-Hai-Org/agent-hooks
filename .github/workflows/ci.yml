@@ -3,6 +3,10 @@ on:
   pull_request:
   push:
     branches: ["**"]
+permissions:
+  contents: read
+  actions: read
+  security-events: write
 jobs:
   ci-bun:
     uses: Yun-Hai-Org/ci-templates/.github/workflows/standard-ci.yml@main
