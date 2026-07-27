@@ -167,4 +167,24 @@ describe('worktree-gate main()', () => {
       cleanupTempGitRepo(repo);
     }
   });
+
+  it('allows Write to out-of-repo absolute path on main checkout', async () => {
+    const repo = createTempGitRepo('main');
+    try {
+      const externalPath = join(process.env['HOME'] ?? '/tmp', '.cursor', 'plans', 'foo.plan.md');
+      process.stdin = Readable.from([
+        JSON.stringify({
+          tool_name: 'Write',
+          tool_input: { file_path: externalPath, content: 'x' },
+          session_id: 's7',
+          cwd: repo,
+        }),
+      ]);
+      await worktreeMain();
+      expect(output).toHaveLength(1);
+      expect(expectAllow(output[0]!)).toBe(true);
+    } finally {
+      cleanupTempGitRepo(repo);
+    }
+  });
 });
