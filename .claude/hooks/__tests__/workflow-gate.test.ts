@@ -103,7 +103,7 @@ describe('workflow-gate main()', () => {
     expect(expectDeny(output[0]!)).toBe(true);
   });
 
-  it('denies orchestrator Read even with todos', async () => {
+  it('allows orchestrator Read even with todos', async () => {
     saveWorkflowState(
       sessionId,
       mergeTodoWriteItems(defaultWorkflowState(), [{ id: '1', content: 'read plan', status: 'pending' }]),
@@ -112,6 +112,40 @@ describe('workflow-gate main()', () => {
       JSON.stringify({
         tool_name: 'Read',
         tool_input: { file_path: 'plan.md' },
+        session_id: sessionId,
+        cwd: PROJECT_ROOT,
+      }),
+    ]);
+    await workflowMain();
+    expect(expectAllow(output[0]!)).toBe(true);
+  });
+
+  it('allows orchestrator Write to _bmad-output/ when todos exist', async () => {
+    saveWorkflowState(
+      sessionId,
+      mergeTodoWriteItems(defaultWorkflowState(), [{ id: '1', content: 'write spec', status: 'pending' }]),
+    );
+    process.stdin = Readable.from([
+      JSON.stringify({
+        tool_name: 'Write',
+        tool_input: { file_path: '_bmad-output/spec.md' },
+        session_id: sessionId,
+        cwd: PROJECT_ROOT,
+      }),
+    ]);
+    await workflowMain();
+    expect(expectAllow(output[0]!)).toBe(true);
+  });
+
+  it('denies orchestrator Write to non-planning path when todos exist', async () => {
+    saveWorkflowState(
+      sessionId,
+      mergeTodoWriteItems(defaultWorkflowState(), [{ id: '1', content: 'write code', status: 'pending' }]),
+    );
+    process.stdin = Readable.from([
+      JSON.stringify({
+        tool_name: 'Write',
+        tool_input: { file_path: 'foo.ts' },
         session_id: sessionId,
         cwd: PROJECT_ROOT,
       }),

@@ -6,6 +6,7 @@ import {
   extractCommitMessage,
   getStagedFiles,
   checkBranch,
+  resolveGitBranchName,
   checkCommitMessage,
   checkSensitiveStagedFiles as checkSensitiveFiles,
 } from '../checks/git-policy.js';
@@ -524,6 +525,28 @@ EOF
         expect(result.decision).toBe(DECISION.DENY);
       } finally {
         cleanupTempGitRepo(mainRepo);
+      }
+    });
+
+    it('resolveGitBranchName 在 unborn HEAD 时应解析分支名', () => {
+      const { execSync } = require('child_process');
+      const { mkdirSync, writeFileSync, rmSync } = require('fs');
+      const { join } = require('path');
+      const { tmpdir } = require('os');
+      const tempDir = join(tmpdir(), `unborn-head-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+      mkdirSync(tempDir, { recursive: true });
+      try {
+        execSync('git init -b feature/dual-track-copy', { cwd: tempDir, stdio: 'pipe' });
+        execSync('git config user.email "test@test.com"', { cwd: tempDir, stdio: 'pipe' });
+        execSync('git config user.name "Test"', { cwd: tempDir, stdio: 'pipe' });
+        writeFileSync(join(tempDir, 'f.txt'), 'x');
+        execSync('git add f.txt', { cwd: tempDir, stdio: 'pipe' });
+        expect(resolveGitBranchName(tempDir)).toBe('feature/dual-track-copy');
+        const result = checkBranch(tempDir);
+        expect(result.decision).toBe(DECISION.ALLOW);
+        expect(result.message).toContain('feature/dual-track-copy');
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
       }
     });
   });

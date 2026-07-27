@@ -1,5 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach } from 'bun:test';
 import { join } from 'path';
+import { existsSync, rmSync } from 'fs';
+import { homedir } from 'os';
 import { Readable } from 'stream';
 import { isGitShipWriteCommand, isOrchestrator, isShipAgent, main as gitShipMain } from '../git-ship-gate.js';
 import { main as subagentSyncMain } from '../workflow-subagent-sync.js';
@@ -52,7 +54,10 @@ describe('git-ship-gate main()', () => {
   let originalStdoutWrite: typeof process.stdout.write;
   let output: string[];
 
+  const shipPointerPath = join(homedir(), '.claude', 'workflow-state', '_ship_parent.json');
+
   beforeEach(() => {
+    if (existsSync(shipPointerPath)) rmSync(shipPointerPath, { force: true });
     originalStdin = process.stdin;
     originalStdoutWrite = process.stdout.write.bind(process.stdout);
     output = [];
@@ -138,4 +143,25 @@ describe('git-ship-gate main()', () => {
     await gitShipMain();
     expect(expectAllow(output[0]!)).toBe(true);
   });
+
+  it('allows ship-sa when workflow state is on parent session via conversation_id fallback', async () => {
+    const parentSessionId = `parent-ship-${Date.now()}`;
+    const subagentSessionId = `subagent-ship-${Date.now()}`;
+    saveWorkflowState(parentSessionId, {
+      ...defaultWorkflowState(),
+      agent_role: 'ship-sa',
+      active_background_tasks: [{ agentId: 'pending-ship-sa', runInBackground: true, startedAt: new Date().toISOString() }],
+    });
+    process.stdin = Readable.from([
+      JSON.stringify({
+        command: 'git commit -m "feat: x"',
+        session_id: subagentSessionId,
+        conversation_id: parentSessionId,
+        cwd: PROJECT_ROOT,
+      }),
+    ]);
+    await gitShipMain();
+    expect(expectAllow(output[0]!)).toBe(true);
+  });
+
 });

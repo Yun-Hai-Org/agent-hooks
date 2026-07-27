@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Workflow Subagent Sync - subagentStart / subagentStop
+ * Workflow Subagent Sync - subagentStart / subagentStop / preToolUse Task
  * Tracks active background tasks in ~/.claude/workflow-state/<session>.json
  */
 
@@ -14,6 +14,7 @@ import {
   saveWorkflowState,
   type ActiveBackgroundTask,
   type WorkflowState,
+  saveShipParentPointer,
 } from './workflow-state.js';
 
 const HOOK_NAME = 'workflow-subagent-sync';
@@ -43,6 +44,17 @@ function isSubagentStopEvent(event: string): boolean {
   return event.replace(/_/g, '').toLowerCase() === 'subagentstop';
 }
 
+function isTaskTool(raw: Record<string, unknown>): boolean {
+  const toolName = asString(raw['tool_name']) || asString(raw['toolName']);
+  return toolName === 'Task';
+}
+
+function resolveToolInput(raw: Record<string, unknown>): Record<string, unknown> {
+  const toolInput = raw['tool_input'] ?? raw['toolInput'];
+  if (toolInput && typeof toolInput === 'object') return toolInput as Record<string, unknown>;
+  return {};
+}
+
 function resolveSyncAction(raw: Record<string, unknown>): 'start' | 'stop' | null {
   const event = normalizeHookEvent(raw);
   if (isSubagentStartEvent(event)) return 'start';
@@ -50,6 +62,8 @@ function resolveSyncAction(raw: Record<string, unknown>): 'start' | 'stop' | nul
 
   const envAction = process.env['WORKFLOW_SUBAGENT_SYNC'];
   if (envAction === 'start' || envAction === 'stop') return envAction;
+
+  if (isTaskTool(raw)) return 'start';
 
   if (raw['last_assistant_message'] != null || raw['lastAssistantMessage'] != null) {
     return 'stop';
@@ -62,11 +76,43 @@ function resolveAgentId(raw: Record<string, unknown>): string {
   return asString(raw['agent_id']) || asString(raw['agentId']);
 }
 
+function simpleHash(value: string): string {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash * 31 + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(36).slice(0, 8);
+}
+
+function resolveSyntheticAgentId(raw: Record<string, unknown>): string {
+  const toolInput = resolveToolInput(raw);
+  const description =
+    asString(toolInput['description']) ||
+    asString(raw['description']) ||
+    asString(toolInput['prompt']) ||
+    asString(raw['prompt']);
+  if (description) return `pending-${simpleHash(description)}`;
+  const shipRole = resolveShipRole(raw);
+  if (shipRole) return `pending-${shipRole}`;
+  return 'pending-task';
+}
+
+function resolveAgentIdForSync(raw: Record<string, unknown>, action: 'start' | 'stop'): string | undefined {
+  const direct = resolveAgentId(raw);
+  if (direct) return direct;
+  if (action === 'start' && isTaskTool(raw)) return resolveSyntheticAgentId(raw);
+  return undefined;
+}
+
 function resolveShipRole(raw: Record<string, unknown>): string | undefined {
+  const toolInput = resolveToolInput(raw);
   const fields = [
     asString(raw['description']),
     asString(raw['subagent_description']),
     asString(raw['agent_type']),
+    asString(toolInput['description']),
+    asString(toolInput['prompt']),
+    asString(toolInput['subagent_type']),
   ];
   for (const field of fields) {
     const match = field.match(SHIP_ROLE_PATTERN);
@@ -76,9 +122,13 @@ function resolveShipRole(raw: Record<string, unknown>): string | undefined {
 }
 
 function resolveRunInBackground(raw: Record<string, unknown>): boolean {
+  const toolInput = resolveToolInput(raw);
   if (raw['run_in_background'] === true || raw['runInBackground'] === true) return true;
+  if (toolInput['run_in_background'] === true || toolInput['runInBackground'] === true) return true;
   if (asString(raw['run_in_background']).toLowerCase() === 'true') return true;
   if (asString(raw['runInBackground']).toLowerCase() === 'true') return true;
+  if (asString(toolInput['run_in_background']).toLowerCase() === 'true') return true;
+  if (asString(toolInput['runInBackground']).toLowerCase() === 'true') return true;
   return true;
 }
 
@@ -110,8 +160,13 @@ async function main() {
     }
 
     const action = resolveSyncAction(raw);
-    const agentId = resolveAgentId(raw);
-    if (!sessionId || !agentId || !action) {
+    if (!sessionId || !action) {
+      emit('{}');
+      return;
+    }
+
+    const agentId = resolveAgentIdForSync(raw, action);
+    if (!agentId) {
       emit('{}');
       return;
     }
@@ -127,6 +182,7 @@ async function main() {
       const shipRole = resolveShipRole(raw);
       if (shipRole) {
         state = { ...state, agent_role: shipRole };
+        saveShipParentPointer(sessionId);
       }
       log({ level: 'INFO', action: 'add', agent_id: agentId, session_id: sessionId, ...(shipRole ? { agent_role: shipRole } : {}) });
     } else {
@@ -149,4 +205,13 @@ if (import.meta.main) {
   void main();
 }
 
-export { HOOK_NAME, main, resolveSyncAction, resolveShipRole, addBackgroundTask, removeBackgroundTask };
+export {
+  HOOK_NAME,
+  main,
+  resolveSyncAction,
+  resolveShipRole,
+  resolveAgentIdForSync,
+  isTaskTool,
+  addBackgroundTask,
+  removeBackgroundTask,
+};

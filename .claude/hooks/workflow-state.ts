@@ -93,6 +93,32 @@ export function saveWorkflowState(sessionId: string, state: WorkflowState): void
   writeFileSync(getWorkflowStatePath(sessionId), JSON.stringify(state, null, 2), 'utf8');
 }
 
+
+export interface ShipParentPointer {
+  sessionId: string;
+  updatedAt: string;
+}
+
+const SHIP_PARENT_POINTER = join(STATE_DIR, '_ship_parent.json');
+
+export function saveShipParentPointer(sessionId: string): void {
+  if (!sessionId) return;
+  if (!existsSync(STATE_DIR)) mkdirSync(STATE_DIR, { recursive: true });
+  const pointer: ShipParentPointer = { sessionId, updatedAt: new Date().toISOString() };
+  writeFileSync(SHIP_PARENT_POINTER, JSON.stringify(pointer), 'utf8');
+}
+
+export function loadShipParentPointer(): ShipParentPointer | null {
+  if (!existsSync(SHIP_PARENT_POINTER)) return null;
+  try {
+    const parsed = JSON.parse(readFileSync(SHIP_PARENT_POINTER, 'utf8')) as Partial<ShipParentPointer>;
+    if (!parsed.sessionId || !parsed.updatedAt) return null;
+    return { sessionId: parsed.sessionId, updatedAt: parsed.updatedAt };
+  } catch {
+    return null;
+  }
+}
+
 export function countPendingTodos(state: WorkflowState): number {
   return state.todos.filter((t) => t.status === 'pending' || t.status === 'in_progress').length;
 }

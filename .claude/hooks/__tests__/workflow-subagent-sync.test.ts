@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { existsSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { homedir } from 'os';
 import { Readable } from 'stream';
 import { clearGateConfigCache } from '../gate-config.js';
 import { main, addBackgroundTask, removeBackgroundTask } from '../workflow-subagent-sync.js';
@@ -24,6 +25,8 @@ describe('workflow-subagent-sync', () => {
     const statePath = getWorkflowStatePath(sessionId);
     if (existsSync(statePath)) rmSync(statePath, { force: true });
     if (existsSync(GATE_CONFIG)) rmSync(GATE_CONFIG, { force: true });
+    const shipPointerPath = join(homedir(), '.claude', 'workflow-state', '_ship_parent.json');
+    if (existsSync(shipPointerPath)) rmSync(shipPointerPath, { force: true });
   });
 
   it('subagentStart adds active_background_tasks entry', async () => {
@@ -119,4 +122,27 @@ describe('workflow-subagent-sync', () => {
     const state = removeBackgroundTask(defaultWorkflowState(), 'missing');
     expect(state.active_background_tasks).toHaveLength(0);
   });
+  it('preToolUse Task syncs agent_role on parent session without agent_id', async () => {
+    const parentSessionId = `parent-${Date.now()}`;
+    saveWorkflowState(parentSessionId, defaultWorkflowState());
+    process.stdin = Readable.from([
+      JSON.stringify({
+        tool_name: 'Task',
+        tool_input: {
+          description: 'ship-sa',
+          prompt: 'ship task',
+          subagent_type: 'shell',
+          run_in_background: true,
+        },
+        session_id: parentSessionId,
+        cwd: PROJECT_ROOT,
+      }),
+    ]);
+    await main();
+    const state = loadWorkflowState(parentSessionId);
+    expect(state.agent_role).toBe('ship-sa');
+    expect(state.active_background_tasks).toHaveLength(1);
+    expect(state.active_background_tasks[0]?.agentId).toMatch(/^pending-/);
+  });
+
 });
