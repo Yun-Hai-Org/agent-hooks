@@ -458,12 +458,7 @@ export function getWorktreeBranch(worktreePath: string, repoCwd?: string): strin
   for (const [path, branch] of listWorktrees(repoCwd)) {
     if (worktreePathsEqual(path, resolvedPath)) return branch;
   }
-  const head = execCommand('git rev-parse --abbrev-ref HEAD', { cwd: resolvedPath });
-  if (head.success) {
-    const branch = head.stdout.trim();
-    if (branch && branch !== 'HEAD') return branch;
-  }
-  return null;
+  return resolveGitBranchName(resolvedPath);
 }
 
 export function buildProtectedBranchDeleteDenyReason(branch: string): string {
