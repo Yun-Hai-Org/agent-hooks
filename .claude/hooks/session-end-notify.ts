@@ -152,6 +152,7 @@ export function shouldSendSessionEndNotify(input: ConversationEndInput, platform
 
 export async function handleSessionEndNotify(data: Record<string, unknown>) {
   const input = parseConversationEndInput(data);
+  const agent_id = typeof data['agent_id'] === 'string' ? data['agent_id'] : '';
   const config = getSessionEndNotifyConfig(input.cwd, input.platform);
   if (!config.enabled) {
     return { sent: false, reason: 'gate disabled' };
@@ -188,6 +189,7 @@ export async function handleSessionEndNotify(data: Record<string, unknown>) {
       ...(input.durationMs !== undefined ? { durationMs: input.durationMs } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(uncommittedHint !== undefined ? { uncommittedHint } : {}),
+      ...(agent_id ? { agent_id } : {}),
     },
     input.cwd,
     { maxSummaryChars: config.maxSummaryChars, timeoutMs: config.timeoutMs },

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect, afterEach } from 'bun:test';
 import {
   getPlatform,
   normalizeInput,
@@ -10,7 +10,10 @@ import {
   isShellTool,
   isFileEditTool,
   normalizeFileEditInput,
+  deriveAgentMode,
+  isOrchestratorInWorkflow,
 } from '../hook-adapter.js';
+import { defaultWorkflowState, type WorkflowState } from '../workflow-state.js';
 
 describe('hook-adapter', () => {
   it('默认 platform 为 claude', () => {
@@ -162,5 +165,70 @@ describe('hook-adapter', () => {
     expect(out.reason).toBe('fix it');
     if (prev) process.env.HOOK_PLATFORM = prev;
     else delete process.env.HOOK_PLATFORM;
+  });
+});
+
+describe('deriveAgentMode / isOrchestratorInWorkflow', () => {
+  const prevAgentMode = process.env['AGENT_MODE'];
+
+  afterEach(() => {
+    if (prevAgentMode === undefined) delete process.env['AGENT_MODE'];
+    else process.env['AGENT_MODE'] = prevAgentMode;
+  });
+
+  function stateWithPendingTodo(): WorkflowState {
+    const state = defaultWorkflowState();
+    state.todos = [{ id: 't1', content: 'impl x', kind: 'impl', status: 'pending' }];
+    return state;
+  }
+
+  it('env AGENT_MODE 覆盖优先', () => {
+    process.env['AGENT_MODE'] = 'ask';
+    const state = stateWithPendingTodo();
+    expect(deriveAgentMode({ agent_id: 'x', agent_mode: 'orchestrator' }, state)).toBe('ask');
+  });
+
+  it('raw agent_mode 次优先', () => {
+    delete process.env['AGENT_MODE'];
+    const state = stateWithPendingTodo();
+    expect(deriveAgentMode({ agent_mode: 'orchestrator' }, state)).toBe('orchestrator');
+  });
+
+  it('agent_id 在场 → subagent', () => {
+    delete process.env['AGENT_MODE'];
+    const state = stateWithPendingTodo();
+    expect(deriveAgentMode({ agent_id: 'abc' }, state)).toBe('subagent');
+  });
+
+  it('无 agent_id + 工作流活跃 → orchestrator', () => {
+    delete process.env['AGENT_MODE'];
+    const state = stateWithPendingTodo();
+    expect(deriveAgentMode({}, state)).toBe('orchestrator');
+  });
+
+  it('无 agent_id + 工作流不活跃 → ask', () => {
+    delete process.env['AGENT_MODE'];
+    expect(deriveAgentMode({}, defaultWorkflowState())).toBe('ask');
+  });
+
+  it('非法 env 值回退到 raw agent_mode', () => {
+    process.env['AGENT_MODE'] = 'foo';
+    const state = stateWithPendingTodo();
+    expect(deriveAgentMode({ agent_mode: 'subagent' }, state)).toBe('subagent');
+  });
+
+  it('非法 raw agent_mode 回退到 agent_id 判定', () => {
+    delete process.env['AGENT_MODE'];
+    const state = stateWithPendingTodo();
+    expect(deriveAgentMode({ agent_mode: 'foo', agent_id: 'x' }, state)).toBe('subagent');
+  });
+
+  it('isOrchestratorInWorkflow 仅在 orchestrator 模式为 true', () => {
+    delete process.env['AGENT_MODE'];
+    const active = stateWithPendingTodo();
+    const inactive = defaultWorkflowState();
+    expect(isOrchestratorInWorkflow({}, active)).toBe(true);
+    expect(isOrchestratorInWorkflow({}, inactive)).toBe(false);
+    expect(isOrchestratorInWorkflow({ agent_id: 'x' }, active)).toBe(false);
   });
 });

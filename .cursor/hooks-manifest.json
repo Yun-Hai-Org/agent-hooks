@@ -5,7 +5,10 @@
     "sessionEnd",
     "afterFileEdit",
     "afterAgentResponse",
-    "postToolUse"
+    "postToolUse",
+    "preToolUse",
+    "subagentStart",
+    "subagentStop"
   ],
   "requiredCommandTokens": [
     "session-end-notify",

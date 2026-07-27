@@ -63,11 +63,15 @@ export interface HookToolInput {
   new_string?: string;
 }
 
+export type AgentMode = 'orchestrator' | 'ask' | 'subagent';
+
 export interface HookInput {
   tool_name: string;
   tool_input: HookToolInput;
   session_id: string;
   cwd: string;
+  agent_id?: string;
+  agent_mode?: AgentMode;
 }
 
 export type QualityGateProfile = 'commit' | 'full';
@@ -125,6 +129,7 @@ export interface NotificationEvent {
   projectName?: string;
   platform?: string;
   sessionId?: string;
+  agentId?: string;
 }
 
 export interface NotificationChannel {

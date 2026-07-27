@@ -53,7 +53,7 @@ function buildSummaryText(operation: GitOperationKind, cwd: string, branch: stri
   }
 }
 
-export async function handleGitOperationNotify(operation: GitOperationKind, cwd: string) {
+export async function handleGitOperationNotify(operation: GitOperationKind, cwd: string, agent_id?: string) {
   const config = getGitOperationNotifyConfig(cwd);
   if (!config.enabled) {
     return { sent: false, reason: 'gate disabled' };
@@ -73,6 +73,7 @@ export async function handleGitOperationNotify(operation: GitOperationKind, cwd:
       branch,
       summaryText: buildSummaryText(operation, cwd, branch),
       ...(commitSha ? { commitSha } : {}),
+      ...(agent_id ? { agent_id } : {}),
     },
     cwd,
     { maxSummaryChars: config.maxSummaryChars, timeoutMs: config.timeoutMs },

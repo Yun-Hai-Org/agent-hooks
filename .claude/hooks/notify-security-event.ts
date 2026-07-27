@@ -30,6 +30,7 @@ interface SecurityEventInput {
   message?: string;
   session_id?: string;
   cwd?: string;
+  agent_id?: string;
 }
 
 export async function notifySecurityEvent(input: SecurityEventInput) {

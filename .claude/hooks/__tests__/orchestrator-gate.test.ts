@@ -1,14 +1,20 @@
 import { describe, it, expect, afterEach, beforeEach } from 'bun:test';
 import { join } from 'path';
 import { Readable } from 'stream';
-import { isOrchestrator, isReadTool, isWriteTool, main as orchestratorMain } from '../orchestrator-gate.js';
+import { isOrchestratorInWorkflow } from '../hook-adapter.js';
+import { defaultWorkflowState, mergeTodoWriteItems } from '../workflow-state.js';
+import { isReadTool, isWriteTool, main as orchestratorMain } from '../orchestrator-gate.js';
 import { clearGateConfigCache } from '../gate-config.js';
 import { expectAllow, expectDeny, PROJECT_ROOT } from './helpers.js';
 
 describe('orchestrator-gate helpers', () => {
-  it('isOrchestrator when no agent_id', () => {
-    expect(isOrchestrator({})).toBe(true);
-    expect(isOrchestrator({ agent_id: 'ship-sa-1' })).toBe(false);
+  it('isOrchestratorInWorkflow derives mode from agent_id/state', () => {
+    const idle = defaultWorkflowState();
+    const active = mergeTodoWriteItems(defaultWorkflowState(), [{ id: '1', content: 'x', status: 'pending' }]);
+    expect(isOrchestratorInWorkflow({}, idle)).toBe(false);
+    expect(isOrchestratorInWorkflow({}, active)).toBe(true);
+    expect(isOrchestratorInWorkflow({ agent_id: 'ship-sa-1' }, active)).toBe(false);
+    expect(isOrchestratorInWorkflow({ agent_mode: 'orchestrator' }, idle)).toBe(true);
   });
 
   it('tool kind detection', () => {
@@ -42,13 +48,28 @@ describe('orchestrator-gate main()', () => {
     clearGateConfigCache();
   });
 
-  it('denies orchestrator Write', async () => {
+  it('allows ask-mode Write (agent_id omitted, no todos)', async () => {
     process.stdin = Readable.from([
       JSON.stringify({
         tool_name: 'Write',
         tool_input: { file_path: 'foo.ts' },
         session_id: 'orch-test',
         cwd: PROJECT_ROOT,
+        agent_mode: 'ask',
+      }),
+    ]);
+    await orchestratorMain();
+    expect(expectAllow(output[0]!)).toBe(true);
+  });
+
+  it('denies orchestrator-mode Write', async () => {
+    process.stdin = Readable.from([
+      JSON.stringify({
+        tool_name: 'Write',
+        tool_input: { file_path: 'foo.ts' },
+        session_id: 'orch-test',
+        cwd: PROJECT_ROOT,
+        agent_mode: 'orchestrator',
       }),
     ]);
     await orchestratorMain();
@@ -83,7 +104,7 @@ describe('orchestrator-gate main()', () => {
     expect(expectAllow(output[0]!)).toBe(true);
   });
 
-  it('allows orchestrator Read of any file (agent_id omitted)', async () => {
+  it('allows ask-mode Read of any file (agent_id omitted)', async () => {
     process.stdin = Readable.from([
       JSON.stringify({
         tool_name: 'Read',
@@ -96,7 +117,7 @@ describe('orchestrator-gate main()', () => {
     expect(expectAllow(output[0]!)).toBe(true);
   });
 
-  it('allows orchestrator Write to _bmad-output planning artifact (agent_id omitted)', async () => {
+  it('allows ask-mode Write to _bmad-output planning artifact (agent_id omitted)', async () => {
     process.stdin = Readable.from([
       JSON.stringify({
         tool_name: 'Write',

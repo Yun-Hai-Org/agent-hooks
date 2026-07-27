@@ -13,8 +13,8 @@ import {
   formatDenyOutput,
   formatAllowOutput,
   getPlatform,
+  isOrchestratorInWorkflow,
 } from './hook-adapter.js';
-import { asString } from './types.js';
 import { isGateNodeEnabled } from './gate-config.js';
 import { countPendingTodos, loadWorkflowState } from './workflow-state.js';
 import { isAllowedPathOnMain } from './branch-gate.js';
@@ -47,11 +47,6 @@ function isReadTool(toolName: string): boolean {
 
 function isWriteTool(toolName: string): boolean {
   return /^(write|edit|tabwrite)$/i.test(toolName);
-}
-
-function isOrchestrator(raw: Record<string, unknown>): boolean {
-  const agentId = asString(raw['agent_id']);
-  return !agentId;
 }
 
 async function readWorkflowInput() {
@@ -90,11 +85,16 @@ async function main() {
     }
 
     const state = loadWorkflowState(session_id);
-    const pending = countPendingTodos(state);
-    const orchestrator = isOrchestrator(raw);
 
-    if (pending === 0 && orchestrator) {
-      log({ level: 'BLOCKED', reason: 'no todos', tool: tool_name, session_id, orchestrator });
+    if (!isOrchestratorInWorkflow(raw, state)) {
+      emit(allow());
+      return;
+    }
+
+    const pending = countPendingTodos(state);
+
+    if (pending === 0) {
+      log({ level: 'BLOCKED', reason: 'no todos', tool: tool_name, session_id });
       emit(
         deny(
           '🔒 [workflow-gate] 请先 TodoWrite（≥1 条即可，含 explore 项如「读取 plan 文件」），再 dispatch 后台子代理。',
@@ -103,27 +103,22 @@ async function main() {
       return;
     }
 
-    if (orchestrator) {
-      if (isRead) {
-        emit(allow());
-        return;
-      }
-      const filePath = (data.tool_input?.file_path as string) ?? '';
-      if (isAllowedPathOnMain(filePath)) {
-        emit(allow());
-        return;
-      }
-      log({ level: 'BLOCKED', reason: 'orchestrator direct tool', tool: tool_name, session_id });
-      const action = isRead ? 'Read' : 'Write';
-      emit(
-        deny(
-          `🔒 [workflow-gate] 禁止 Orchestrator 直接 ${action}。请 Task(background) dispatch ${isRead ? 'explore' : 'implementer'} 子代理。`,
-        ),
-      );
+    if (isRead) {
+      emit(allow());
       return;
     }
-
-    emit(allow());
+    const filePath = (data.tool_input?.file_path as string) ?? '';
+    if (isAllowedPathOnMain(filePath)) {
+      emit(allow());
+      return;
+    }
+    log({ level: 'BLOCKED', reason: 'orchestrator direct tool', tool: tool_name, session_id });
+    const action = isRead ? 'Read' : 'Write';
+    emit(
+      deny(
+        `🔒 [workflow-gate] 禁止 Orchestrator 直接 ${action}。请 Task(background) dispatch ${isRead ? 'explore' : 'implementer'} 子代理。`,
+      ),
+    );
   } catch (e: unknown) {
     log({ level: 'ERROR', error: e instanceof Error ? e.message : String(e) });
     emit(allow());
@@ -134,4 +129,4 @@ if (import.meta.main) {
   void main();
 }
 
-export { HOOK_NAME, isReadTool, isWriteTool, isOrchestrator, main };
+export { HOOK_NAME, isReadTool, isWriteTool, main };

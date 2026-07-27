@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Orchestrator Gate - beforeReadFile / preToolUse Read|Write|Shell
- * Denies Orchestrator (no agent_id) direct Read/Write and Shell file writes; complements workflow-gate.
+ * Denies Orchestrator-in-workflow direct Read/Write and Shell file writes; complements workflow-gate.
  */
 
 import { existsSync, appendFileSync, mkdirSync } from 'fs';
@@ -15,10 +15,11 @@ import {
   getPlatform,
   isShellHookInput,
   isShellTool,
+  isOrchestratorInWorkflow,
 } from './hook-adapter.js';
-import { asString } from './types.js';
 import { isGateNodeEnabled } from './gate-config.js';
 import { isAllowedPathOnMain, isFileWriteCommand, getWritePatternName } from './branch-gate.js';
+import { loadWorkflowState } from './workflow-state.js';
 
 const HOOK_NAME = 'orchestrator-gate';
 
@@ -48,10 +49,6 @@ function isReadTool(toolName: string): boolean {
 
 function isWriteTool(toolName: string): boolean {
   return /^(write|edit|tabwrite)$/i.test(toolName);
-}
-
-export function isOrchestrator(raw: Record<string, unknown>): boolean {
-  return !asString(raw['agent_id']);
 }
 
 async function readGateInput() {
@@ -96,7 +93,9 @@ async function main() {
       return;
     }
 
-    if (!isOrchestrator(raw)) {
+    const state = loadWorkflowState(session_id);
+
+    if (!isOrchestratorInWorkflow(raw, state)) {
       emit(allow());
       return;
     }

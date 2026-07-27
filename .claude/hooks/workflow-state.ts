@@ -4,7 +4,7 @@
  * Stored at ~/.claude/workflow-state/<session_id>.json
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
@@ -90,7 +90,10 @@ export function loadWorkflowState(sessionId: string): WorkflowState {
 export function saveWorkflowState(sessionId: string, state: WorkflowState): void {
   if (!sessionId) return;
   if (!existsSync(STATE_DIR)) mkdirSync(STATE_DIR, { recursive: true });
-  writeFileSync(getWorkflowStatePath(sessionId), JSON.stringify(state, null, 2), 'utf8');
+  const finalPath = getWorkflowStatePath(sessionId);
+  const tmpPath = `${finalPath}.tmp.${process.pid}`;
+  writeFileSync(tmpPath, JSON.stringify(state, null, 2), 'utf8');
+  renameSync(tmpPath, finalPath);
 }
 
 
@@ -187,7 +190,7 @@ function normalizeTodoStatus(value: string): WorkflowTodoStatus {
 }
 
 export function isWorkflowActive(state: WorkflowState): boolean {
-  return state.todos.length > 0;
+  return countPendingTodos(state) > 0;
 }
 
 export function countPendingImplTodos(state: WorkflowState): number {
@@ -203,7 +206,6 @@ export function isImplPhaseComplete(state: WorkflowState): boolean {
 }
 
 export function needsShipBeforeStop(state: WorkflowState): boolean {
-  if (!isWorkflowActive(state)) return false;
   if (!isImplPhaseComplete(state)) return false;
   return state.ship_status !== 'merge_ok';
 }

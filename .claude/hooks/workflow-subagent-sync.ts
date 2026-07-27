@@ -1,217 +1,131 @@
 #!/usr/bin/env bun
 /**
- * Workflow Subagent Sync - subagentStart / subagentStop / preToolUse Task
- * Tracks active background tasks in ~/.claude/workflow-state/<session>.json
+ * workflow-subagent-sync — Layer 1/3 of agent-scoped signal routing.
+ *
+ * Wired in .cursor/hooks.json.example under `subagentStart` / `subagentStop`
+ * (and, when present, `preToolUse` Task with env WORKFLOW_SUBAGENT_SYNC=start).
+ *
+ * Phase is selected by env `WORKFLOW_SUBAGENT_SYNC` = 'start' | 'stop'; falls back
+ * to the stdin `hook_event_name` (subagentStart|subagentStop) so the file activates
+ * under the existing wiring even before env vars are added.
+ *
+ * start: write an AgentRegistryEntry (status dispatched) + append an
+ *        ActiveBackgroundTask to the dispatcher's WorkflowState.
+ * stop:  update the registry entry to completed + commitSha + worktree.
+ *        ActiveBackgroundTasks are NOT cleared here (reclaim is T5's job).
+ *
+ * Always emits '{}' on stdout (Cursor) so it never blocks. Fail-open.
  */
 
-import { existsSync, appendFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { LOG_DIR, readStdin } from './security-orchestrator.js';
+import { readStdin, execCommand, log } from './security-orchestrator.js';
 import { asString } from './types.js';
-import { isGateNodeEnabled } from './gate-config.js';
+import {
+  saveEntry,
+  updateEntry,
+  type AgentRegistryEntry,
+  type AgentTaskKind,
+} from './agent-registry.js';
 import {
   loadWorkflowState,
   saveWorkflowState,
   type ActiveBackgroundTask,
-  type WorkflowState,
-  saveShipParentPointer,
 } from './workflow-state.js';
 
-const HOOK_NAME = 'workflow-subagent-sync';
-const SHIP_ROLE_PATTERN = /ship-sa|integrator-sa|merge-sa|ci-fixer-sa/;
+type SyncPhase = 'start' | 'stop';
 
-function log(data: Record<string, unknown>) {
-  try {
-    if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
-    const file = join(LOG_DIR, `${new Date().toISOString().slice(0, 10)}.jsonl`);
-    appendFileSync(file, JSON.stringify({ ts: new Date().toISOString(), hook: HOOK_NAME, ...data }) + '\n');
-  } catch {}
-}
-
-function emit(out: string) {
-  process.stdout.write(`${out}\n`);
-}
-
-function normalizeHookEvent(raw: Record<string, unknown>): string {
-  return asString(raw['hook_event_name']) || asString(raw['hookEventName']);
-}
-
-function isSubagentStartEvent(event: string): boolean {
-  return event.replace(/_/g, '').toLowerCase() === 'subagentstart';
-}
-
-function isSubagentStopEvent(event: string): boolean {
-  return event.replace(/_/g, '').toLowerCase() === 'subagentstop';
-}
-
-function isTaskTool(raw: Record<string, unknown>): boolean {
-  const toolName = asString(raw['tool_name']) || asString(raw['toolName']);
-  return toolName === 'Task';
-}
-
-function resolveToolInput(raw: Record<string, unknown>): Record<string, unknown> {
-  const toolInput = raw['tool_input'] ?? raw['toolInput'];
-  if (toolInput && typeof toolInput === 'object') return toolInput as Record<string, unknown>;
-  return {};
-}
-
-function resolveSyncAction(raw: Record<string, unknown>): 'start' | 'stop' | null {
-  const event = normalizeHookEvent(raw);
-  if (isSubagentStartEvent(event)) return 'start';
-  if (isSubagentStopEvent(event)) return 'stop';
-
-  const envAction = process.env['WORKFLOW_SUBAGENT_SYNC'];
-  if (envAction === 'start' || envAction === 'stop') return envAction;
-
-  if (isTaskTool(raw)) return 'start';
-
-  if (raw['last_assistant_message'] != null || raw['lastAssistantMessage'] != null) {
-    return 'stop';
-  }
-
+function resolvePhase(): SyncPhase | null {
+  const env = process.env['WORKFLOW_SUBAGENT_SYNC'];
+  if (env === 'start' || env === 'stop') return env;
   return null;
 }
 
-function resolveAgentId(raw: Record<string, unknown>): string {
-  return asString(raw['agent_id']) || asString(raw['agentId']);
+function phaseFromEvent(hookEvent: string): SyncPhase | null {
+  const lower = hookEvent.toLowerCase();
+  if (lower === 'subagentstart' || lower === 'pretooluse') return 'start';
+  if (lower === 'subagentstop') return 'stop';
+  return null;
 }
 
-function simpleHash(value: string): string {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) {
-    hash = (hash * 31 + value.charCodeAt(i)) | 0;
+function inferAgentKind(subagentType: string, description: string): AgentTaskKind {
+  const text = `${subagentType} ${description}`.toLowerCase();
+  if (/explore|读取|read|调研|分析/.test(text)) return 'explore';
+  if (/ship|commit|push|merge|提交|推送|合并|ci-/.test(text)) return 'ship';
+  if (/impl|实现|编写|修改|fix|开发|general/.test(text)) return 'impl';
+  return 'other';
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+async function main(): Promise<void> {
+  const raw = await readStdin();
+  const sessionId = asString(raw['session_id']) || asString(raw['conversation_id']);
+  const agentId = asString(raw['agent_id']);
+  if (!agentId || !sessionId) {
+    console.log('{}');
+    return;
   }
-  return Math.abs(hash).toString(36).slice(0, 8);
-}
 
-function resolveSyntheticAgentId(raw: Record<string, unknown>): string {
-  const toolInput = resolveToolInput(raw);
-  const description =
-    asString(toolInput['description']) ||
-    asString(raw['description']) ||
-    asString(toolInput['prompt']) ||
-    asString(raw['prompt']);
-  if (description) return `pending-${simpleHash(description)}`;
-  const shipRole = resolveShipRole(raw);
-  if (shipRole) return `pending-${shipRole}`;
-  return 'pending-task';
-}
-
-function resolveAgentIdForSync(raw: Record<string, unknown>, action: 'start' | 'stop'): string | undefined {
-  const direct = resolveAgentId(raw);
-  if (direct) return direct;
-  if (action === 'start' && isTaskTool(raw)) return resolveSyntheticAgentId(raw);
-  return undefined;
-}
-
-function resolveShipRole(raw: Record<string, unknown>): string | undefined {
-  const toolInput = resolveToolInput(raw);
-  const fields = [
-    asString(raw['description']),
-    asString(raw['subagent_description']),
-    asString(raw['agent_type']),
-    asString(toolInput['description']),
-    asString(toolInput['prompt']),
-    asString(toolInput['subagent_type']),
-  ];
-  for (const field of fields) {
-    const match = field.match(SHIP_ROLE_PATTERN);
-    if (match) return match[0];
+  let phase = resolvePhase();
+  if (!phase) {
+    const hookEvent = asString(raw['hook_event_name']);
+    phase = phaseFromEvent(hookEvent);
   }
-  return undefined;
-}
+  if (!phase) {
+    console.log('{}');
+    return;
+  }
 
-function resolveRunInBackground(raw: Record<string, unknown>): boolean {
-  const toolInput = resolveToolInput(raw);
-  if (raw['run_in_background'] === true || raw['runInBackground'] === true) return true;
-  if (toolInput['run_in_background'] === true || toolInput['runInBackground'] === true) return true;
-  if (asString(raw['run_in_background']).toLowerCase() === 'true') return true;
-  if (asString(raw['runInBackground']).toLowerCase() === 'true') return true;
-  if (asString(toolInput['run_in_background']).toLowerCase() === 'true') return true;
-  if (asString(toolInput['runInBackground']).toLowerCase() === 'true') return true;
-  return true;
-}
+  const dispatcherSessionId = sessionId;
+  const todoId = asString(raw['todo_id']) || asString(raw['todoId']) || undefined;
+  const subagentType = asString(raw['subagent_type']) || asString(raw['subagentType']);
+  const description = asString(raw['description']);
+  const agentRole = asString(raw['agent_role']) || undefined;
+  const cwd = asString(raw['cwd']) || process.cwd();
 
-function addBackgroundTask(state: WorkflowState, task: ActiveBackgroundTask): WorkflowState {
-  const rest = state.active_background_tasks.filter((t) => t.agentId !== task.agentId);
-  return { ...state, active_background_tasks: [...rest, task] };
-}
+  if (phase === 'start') {
+    const entry: AgentRegistryEntry = {
+      agent_id: agentId,
+      dispatcherSessionId,
+      kind: inferAgentKind(subagentType, description),
+      status: 'dispatched',
+      startedAt: nowIso(),
+    };
+    if (todoId) entry.todoId = todoId;
+    if (agentRole) entry.agent_role = agentRole;
+    saveEntry(entry);
 
-function removeBackgroundTask(state: WorkflowState, agentId: string): WorkflowState {
-  return {
-    ...state,
-    active_background_tasks: state.active_background_tasks.filter((t) => t.agentId !== agentId),
-  };
-}
-
-async function main() {
-  try {
-    const raw = await readStdin();
-    const sessionId = asString(raw['session_id']) || asString(raw['conversation_id']);
-    const cwd =
-      asString(raw['cwd']) ||
-      (Array.isArray(raw['workspace_roots']) && typeof raw['workspace_roots'][0] === 'string'
-        ? raw['workspace_roots'][0]
-        : process.cwd());
-
-    if (!isGateNodeEnabled('ide.workflow-subagent-sync', cwd)) {
-      emit('{}');
-      return;
-    }
-
-    const action = resolveSyncAction(raw);
-    if (!sessionId || !action) {
-      emit('{}');
-      return;
-    }
-
-    const agentId = resolveAgentIdForSync(raw, action);
-    if (!agentId) {
-      emit('{}');
-      return;
-    }
-
-    let state = loadWorkflowState(sessionId);
-
-    if (action === 'start') {
-      state = addBackgroundTask(state, {
+    const state = loadWorkflowState(dispatcherSessionId);
+    const exists = state.active_background_tasks.some((t) => t.agentId === agentId);
+    if (!exists) {
+      const task: ActiveBackgroundTask = {
         agentId,
-        runInBackground: resolveRunInBackground(raw),
-        startedAt: new Date().toISOString(),
-      });
-      const shipRole = resolveShipRole(raw);
-      if (shipRole) {
-        state = { ...state, agent_role: shipRole };
-        saveShipParentPointer(sessionId);
-      }
-      log({ level: 'INFO', action: 'add', agent_id: agentId, session_id: sessionId, ...(shipRole ? { agent_role: shipRole } : {}) });
-    } else {
-      state = removeBackgroundTask(state, agentId);
-      if (state.active_background_tasks.length === 0) {
-        state = { ...state, agent_role: undefined };
-      }
-      log({ level: 'INFO', action: 'remove', agent_id: agentId, session_id: sessionId });
+        runInBackground: true,
+        startedAt: nowIso(),
+      };
+      if (todoId) task.todoId = todoId;
+      state.active_background_tasks.push(task);
+      saveWorkflowState(dispatcherSessionId, state);
     }
-
-    saveWorkflowState(sessionId, state);
-    emit('{}');
-  } catch (e: unknown) {
-    log({ level: 'ERROR', error: e instanceof Error ? e.message : String(e) });
-    emit('{}');
+  } else {
+    const commitResult = execCommand('git rev-parse HEAD', { cwd, timeout: 5000 });
+    const commitSha = commitResult.success ? commitResult.stdout.trim() : undefined;
+    updateEntry(agentId, {
+      status: 'completed',
+      completedAt: nowIso(),
+      worktree: cwd,
+      ...(commitSha ? { commitSha } : {}),
+    });
   }
+
+  console.log('{}');
 }
 
-if (import.meta.main) {
-  void main();
-}
-
-export {
-  HOOK_NAME,
-  main,
-  resolveSyncAction,
-  resolveShipRole,
-  resolveAgentIdForSync,
-  isTaskTool,
-  addBackgroundTask,
-  removeBackgroundTask,
-};
+main().catch((e: unknown) => {
+  log('workflow-subagent-sync', {
+    level: 'ERROR',
+    error: e instanceof Error ? e.message : String(e),
+  });
+  console.log('{}');
+});
