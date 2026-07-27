@@ -20,6 +20,7 @@ import {
 import { isGateNodeEnabled } from './gate-config.js';
 import { isAllowedPathOnMain, isFileWriteCommand, getWritePatternName } from './branch-gate.js';
 import { loadWorkflowState } from './workflow-state.js';
+import { asString } from './types.js';
 
 const HOOK_NAME = 'orchestrator-gate';
 

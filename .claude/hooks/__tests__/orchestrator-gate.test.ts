@@ -137,6 +137,7 @@ describe('orchestrator-gate main()', () => {
         tool_input: { command: 'sed -i "s/old/new/" file.txt' },
         session_id: 'orch-test',
         cwd: PROJECT_ROOT,
+        agent_mode: 'orchestrator',
       }),
     ]);
     await orchestratorMain();
