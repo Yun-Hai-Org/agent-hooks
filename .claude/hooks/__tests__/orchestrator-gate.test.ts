@@ -70,7 +70,7 @@ describe('orchestrator-gate main()', () => {
     expect(expectAllow(output[0]!)).toBe(true);
   });
 
-  it('allows Shell (not handled by orchestrator-gate)', async () => {
+  it('allows orchestrator non-write shell (git status)', async () => {
     process.stdin = Readable.from([
       JSON.stringify({
         tool_name: 'Shell',
@@ -103,6 +103,36 @@ describe('orchestrator-gate main()', () => {
         tool_input: { file_path: '_bmad-output/spec.md' },
         session_id: 'orch-test',
         cwd: PROJECT_ROOT,
+      }),
+    ]);
+    await orchestratorMain();
+    expect(expectAllow(output[0]!)).toBe(true);
+  });
+
+  it('denies orchestrator shell file write (sed -i)', async () => {
+    process.stdin = Readable.from([
+      JSON.stringify({
+        tool_name: 'Shell',
+        tool_input: { command: 'sed -i "s/old/new/" file.txt' },
+        session_id: 'orch-test',
+        cwd: PROJECT_ROOT,
+      }),
+    ]);
+    await orchestratorMain();
+    expect(expectDeny(output[0]!)).toBe(true);
+    expect(output[0]).toContain('orchestrator-gate');
+    expect(output[0]).toContain('Shell');
+    expect(output[0]).toContain('sed 原地编辑');
+  });
+
+  it('allows subagent shell file write', async () => {
+    process.stdin = Readable.from([
+      JSON.stringify({
+        tool_name: 'Shell',
+        tool_input: { command: 'sed -i "s/old/new/" file.txt' },
+        session_id: 'orch-test',
+        cwd: PROJECT_ROOT,
+        agent_id: 'impl-sa-1',
       }),
     ]);
     await orchestratorMain();

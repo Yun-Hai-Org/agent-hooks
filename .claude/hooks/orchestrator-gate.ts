@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
- * Orchestrator Gate - beforeReadFile / preToolUse Read|Write
- * Denies Orchestrator (no agent_id) direct Read/Write; complements workflow-gate.
+ * Orchestrator Gate - beforeReadFile / preToolUse Read|Write|Shell
+ * Denies Orchestrator (no agent_id) direct Read/Write and Shell file writes; complements workflow-gate.
  */
 
 import { existsSync, appendFileSync, mkdirSync } from 'fs';
@@ -13,10 +13,12 @@ import {
   formatDenyOutput,
   formatAllowOutput,
   getPlatform,
+  isShellHookInput,
+  isShellTool,
 } from './hook-adapter.js';
 import { asString } from './types.js';
 import { isGateNodeEnabled } from './gate-config.js';
-import { isAllowedPathOnMain } from './branch-gate.js';
+import { isAllowedPathOnMain, isFileWriteCommand, getWritePatternName } from './branch-gate.js';
 
 const HOOK_NAME = 'orchestrator-gate';
 
@@ -65,13 +67,14 @@ async function readGateInput() {
   let tool_name = data.tool_name;
   if (/^write$/i.test(tool_name)) tool_name = 'Write';
   if (/^read$/i.test(tool_name)) tool_name = 'Read';
+  if (isShellTool(tool_name)) tool_name = 'Shell';
   return { raw, data: { ...data, tool_name } };
 }
 
 async function main() {
   try {
     const { raw, data } = await readGateInput();
-    const { tool_name, session_id, cwd } = data;
+    const { tool_name, tool_input, session_id, cwd } = data;
     const workingDir = cwd || process.cwd();
 
     if (!isGateNodeEnabled('ide.orchestrator-gate', workingDir)) {
@@ -79,10 +82,16 @@ async function main() {
       return;
     }
 
+    const isShell = tool_name === 'Shell';
     const isRead = isReadTool(tool_name) || tool_name === 'Read';
     const isWrite = isWriteTool(tool_name);
 
-    if (!isRead && !isWrite) {
+    if (!isRead && !isWrite && !isShell) {
+      emit(allow());
+      return;
+    }
+
+    if (isShell && !isShellHookInput(data) && !asString(raw['command'])) {
       emit(allow());
       return;
     }
@@ -94,6 +103,23 @@ async function main() {
 
     if (isRead) {
       emit(allow());
+      return;
+    }
+
+    if (isShell) {
+      const cmd = asString(raw['command'] ?? tool_input.command);
+      if (!cmd || !isFileWriteCommand(cmd)) {
+        emit(allow());
+        return;
+      }
+
+      const patternName = getWritePatternName(cmd);
+      log({ level: 'BLOCKED', reason: 'orchestrator shell file write', cmd: cmd.slice(0, 200), session_id });
+      emit(
+        deny(
+          `🔒 [orchestrator-gate] 禁止 Orchestrator 通过 Shell 写文件${patternName ? ` (${patternName})` : ''}。请 Task(background, generalPurpose) dispatch implementer 子代理。`,
+        ),
+      );
       return;
     }
 
