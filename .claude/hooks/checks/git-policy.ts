@@ -449,10 +449,21 @@ export function listWorktrees(repoCwd?: string): Map<string, string> {
 }
 
 export function getWorktreeBranch(worktreePath: string, repoCwd?: string): string | null {
+  // Resolve relative worktree paths against repoCwd (not process.cwd()): the hook process
+  // may be spawned with a cwd that differs from the repo root, which would otherwise make
+  // realpathSync / execCommand resolve the relative path against the wrong base and fail to
+  // match the worktree branch — turning a safe `git worktree remove <relpath>` into a false deny.
+  const base = repoCwd ?? process.cwd();
+  const resolvedPath = isAbsolute(worktreePath) ? worktreePath : join(base, worktreePath);
   for (const [path, branch] of listWorktrees(repoCwd)) {
-    if (worktreePathsEqual(path, worktreePath)) return branch;
+    if (worktreePathsEqual(path, resolvedPath)) return branch;
   }
-  return resolveGitBranchName(worktreePath);
+  const head = execCommand('git rev-parse --abbrev-ref HEAD', { cwd: resolvedPath });
+  if (head.success) {
+    const branch = head.stdout.trim();
+    if (branch && branch !== 'HEAD') return branch;
+  }
+  return null;
 }
 
 export function buildProtectedBranchDeleteDenyReason(branch: string): string {
