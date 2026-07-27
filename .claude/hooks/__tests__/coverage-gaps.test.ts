@@ -501,15 +501,23 @@ describe('hook main in-process', () => {
 
 describe('runQualityGate full profile', () => {
   it('full profile 跳过 hook-unit-tests 可运行', async () => {
-    const result = await runQualityGate({
-      profile: 'full',
-      cwd: PROJECT_ROOT,
-      skipCheckIds: ['hook-unit-tests'],
-    });
-    expect(result.results.length).toBeGreaterThan(10);
-    expect(result).toHaveProperty('passed');
-    const hookUnit = result.results.find((r) => r.checkId === 'hook-unit-tests');
-    expect(hookUnit?.decision).toBe(DECISION.SKIP);
+    const repoDir = createTempGitRepo('feat/full-profile');
+    mkdirSync(join(repoDir, '.claude'), { recursive: true });
+    writeFileSync(join(repoDir, '.claude', 'quality-gate.yaml'), 'git:\n  pre-push:\n    enabled: true\n');
+    clearGateConfigCache();
+    try {
+      const result = await runQualityGate({
+        profile: 'full',
+        cwd: repoDir,
+        skipCheckIds: ['hook-unit-tests'],
+      });
+      expect(result.results.length).toBeGreaterThan(10);
+      expect(result).toHaveProperty('passed');
+      const hookUnit = result.results.find((r) => r.checkId === 'hook-unit-tests');
+      expect(hookUnit?.decision).toBe(DECISION.SKIP);
+    } finally {
+      cleanupTempGitRepo(repoDir);
+    }
   }, 300_000);
 });
 

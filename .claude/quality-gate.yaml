@@ -1059,3 +1059,499 @@ git:
       - commit
       - push
       - merge
+
+  # commit-msg ????? commit message ?????
+  commit-msg:
+    enabled: true
+    checks:
+      # Conventional commit ?????????/???
+      commit-msg:
+        enabled: true
+
+  # pre-commit ?????? commit profile ???????? 5 ???
+  pre-commit:
+    enabled: true
+    autoFix: true
+    timeout: 5m
+    checks:
+      # ??? main/master ????????????????
+      branch-check:
+        enabled: true
+      # ??????? .env????????
+      # controlIds: PIPL-Min, SOX-404
+      sensitive-files:
+        enabled: true
+      # ?????????? bun audit ??
+      # controlIds: PCI-6.3.2, PCI-6.3.3
+      dep-audit:
+        enabled: true
+      # ??? TS/Python ?????tsc/pyright?
+      type-check:
+        enabled: true
+      # ?????????? pytest/bun ??
+      related-tests:
+        enabled: true
+      # ??? lint ???
+      lint-staged:
+        enabled: true
+      # ??? ESLint?JS/TS??? __tests__?
+      lint-staged-eslint:
+        enabled: true
+        autoFix: true
+      # ??? Ruff lint?Python?
+      lint-staged-ruff:
+        enabled: true
+        autoFix: true
+      # ??? format ???
+      format-staged:
+        enabled: true
+      # ??? Prettier format check
+      format-staged-prettier:
+        enabled: true
+        autoFix: true
+      # ??? Ruff format check
+      format-staged-ruff:
+        enabled: true
+        autoFix: true
+      # ??? gitleaks diff ????
+      # controlIds: PCI-6.3.3, SOX-404
+      gitleaks-staged:
+        enabled: true
+      # ??? Semgrep ????
+      # controlIds: PCI-6.3.3, PCI-6.5
+      semgrep-staged:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? AI code review?????
+      code-review-staged:
+        enabled: true
+      # hooks ??????????
+      hook-adversarial:
+        enabled: false # CI: pr9898/ci-templates
+      # ????? lint ???
+      extended-staged:
+        enabled: false # CI: pr9898/ci-templates
+      # ????? lint ????
+      extended-staged-extended:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? markdownlint
+      lint-staged-markdownlint:
+        enabled: true
+        autoFix: true
+      # ??? shfmt ????
+      format-staged-shfmt:
+        enabled: true
+        autoFix: true
+      # ??? shellcheck
+      lint-staged-shellcheck:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? hadolint Dockerfile ??
+      lint-staged-hadolint:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? docker/podman compose ????
+      lint-staged-compose:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? taplo TOML ????
+      format-staged-taplo:
+        enabled: true
+        autoFix: true
+      # ??? sqlfluff SQL lint
+      lint-staged-sqlfluff:
+        enabled: false # CI: pr9898/ci-templates
+        autoFix: true
+      # ??? stylelint CSS ??
+      lint-staged-stylelint:
+        enabled: false # CI: pr9898/ci-templates
+        autoFix: true
+      # ??? JSON/YAML schema ???
+      schema-staged:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? schema ????
+      schema-staged-schema:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? check-jsonschema ??
+      schema-staged-check-jsonschema:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? jq JSON ????
+      schema-staged-jq:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? yq YAML ????
+      schema-staged-yq:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? K8s manifest ???
+      k8s-staged:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? kubeconform ??
+      k8s-staged-kubeconform:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? kube-linter ??
+      k8s-staged-kube-linter:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? OpenAPI ?????
+      openapi-staged:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? oasdiff breaking change ??
+      openapi-staged-oasdiff:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? lockfile ? manifest ???
+      lockfile-freshness:
+        enabled: false # CI: pr9898/ci-templates
+      # ??? Semgrep PCI/OWASP ?????
+      # controlIds: PCI-6.3.3, PCI-6.5
+      semgrep-pci-staged:
+        enabled: false # CI: pr9898/ci-templates
+      # ??????????/SRI/CSP ??
+      # controlIds: PCI-6.4.3
+      payment-page-staged:
+        enabled: false # CI: pr9898/ci-templates
+
+  # pre-push ???full profile ???????? 15 ???
+  pre-push:
+    enabled: false
+    timeout: 15m
+    checks:
+      # Hook ?? bun test --coverage ????
+      hook-unit-tests:
+        enabled: true
+        timeout: 12m
+      # ????????? hook-unit-tests??? SKIP?
+      coverage:
+        enabled: true
+      # ?? TS/Python ????
+      type-check:
+        enabled: true
+      # ?? lint ???
+      lint-full:
+        enabled: true
+      # ?? ESLint
+      lint-eslint:
+        enabled: true
+      # ?? Ruff lint
+      lint-ruff:
+        enabled: true
+      # ???????
+      full-tests:
+        enabled: true
+      # ?? pytest
+      full-test-py:
+        enabled: true
+      # ?? bun ?????
+      full-test-js:
+        enabled: true
+      # Hook ?????????
+      hook-adversarial:
+        enabled: false # CI: pr9898/ci-templates
+      # ?? JS ?? bun audit
+      # controlIds: PCI-6.3.2, PCI-6.3.3
+      dep-audit:
+        enabled: true
+      # Python ?? osv-scanner/pip-audit
+      # controlIds: PCI-6.3.2, PCI-6.3.3
+      py-dep-audit:
+        enabled: true
+      # ?? gitleaks ??
+      # controlIds: PCI-6.3.3, SOX-404
+      gitleaks:
+        enabled: true
+      # ?? Semgrep ????
+      # controlIds: PCI-6.3.3, PCI-6.5
+      semgrep:
+        enabled: true
+      # ?? knip ?????
+      knip:
+        enabled: true
+      # ?? Trivy ??/????
+      # controlIds: PCI-6.3.2, PCI-6.3.3
+      trivy:
+        enabled: true
+      # ?? format ???
+      format-full:
+        enabled: true
+      # ?? Prettier format check
+      format-prettier:
+        enabled: true
+      # ?? Ruff format check
+      format-ruff:
+        enabled: true
+      # ?? AI code review
+      code-review:
+        enabled: true
+      # ???? lint ???
+      extended-full:
+        enabled: true
+      # ???? lint ????
+      extended-full-extended:
+        enabled: true
+      # ?? markdownlint
+      lint-markdownlint:
+        enabled: true
+      # ?? shfmt ????
+      format-shfmt:
+        enabled: true
+      # ?? shellcheck
+      lint-shellcheck:
+        enabled: true
+      # ?? hadolint
+      lint-hadolint:
+        enabled: true
+      # ?? compose ????
+      lint-compose:
+        enabled: true
+      # ?? taplo ????
+      format-taplo:
+        enabled: true
+      # ?? sqlfluff
+      lint-sqlfluff:
+        enabled: true
+      # ?? stylelint
+      lint-stylelint:
+        enabled: true
+      # ?? JSON/YAML schema ???
+      schema-full:
+        enabled: true
+      # ?? schema ????
+      schema-full-schema:
+        enabled: true
+      # ?? check-jsonschema ??
+      schema-full-check-jsonschema:
+        enabled: true
+      # ?? jq JSON ????
+      schema-full-jq:
+        enabled: true
+      # ?? yq YAML ????
+      schema-full-yq:
+        enabled: true
+      # ?? K8s manifest ???
+      k8s-full:
+        enabled: true
+      # ?? kubeconform ??
+      k8s-full-kubeconform:
+        enabled: true
+      # ?? kube-linter ??
+      k8s-full-kube-linter:
+        enabled: true
+      # Kind ?? smoke ?????????
+      k8s-kind-smoke:
+        enabled: true
+      # ?? OpenAPI ?????
+      openapi-full:
+        enabled: true
+      # ?? oasdiff ??
+      openapi-full-oasdiff:
+        enabled: true
+      # ?? lockfile ?????
+      lockfile-freshness:
+        enabled: false # CI: pr9898/ci-templates
+      # CycloneDX SBOM ????????
+      # controlIds: PCI-6.3.2, DORA-Art6
+      sbom-archive:
+        enabled: true
+        timeout: 5m
+      # ?? Semgrep PCI/OWASP ????
+      # controlIds: PCI-6.3.3
+      semgrep-pci:
+        enabled: true
+      # ???????/SRI ??
+      # controlIds: PCI-6.4.3, PCI-11.6.1
+      payment-page-full:
+        enabled: true
+        timeout: 3m
+      # OWASP ZAP API baseline?OpenAPI ???
+      # controlIds: PCI-11.3
+      zap-api-dast:
+        enabled: true
+        timeout: 10m
+      # OpenAPI ???????? token / ? token ? 401/403?
+      openapi-auth-negative:
+        enabled: true
+        timeout: 5m
+      # Conftest/OPA ???PCI-DORA Rego?
+      # controlIds: DORA-Art6, SOX-404
+      opa-conftest:
+        enabled: true
+        timeout: 3m
+      # Checkov IaC ???Terraform/K8s/Dockerfile?
+      # controlIds: PCI-6.3.3
+      iac-checkov:
+        enabled: true
+        timeout: 5m
+      # SLSA/Cosign ?? provenance ??
+      # controlIds: PCI-6.3.2, SLSA-L3
+      slsa-cosign:
+        enabled: true
+        timeout: 2m
+
+  # pre-merge-commit ???? pre-push ??? full profile ???
+  pre-merge-commit:
+    enabled: false
+    timeout: 15m
+    checks:
+      # Hook ?? bun test --coverage ????
+      hook-unit-tests:
+        enabled: true
+        timeout: 12m
+      # ????????? hook-unit-tests??? SKIP?
+      coverage:
+        enabled: true
+      # ?? TS/Python ????
+      type-check:
+        enabled: true
+      # ?? lint ???
+      lint-full:
+        enabled: true
+      # ?? ESLint
+      lint-eslint:
+        enabled: true
+      # ?? Ruff lint
+      lint-ruff:
+        enabled: true
+      # ???????
+      full-tests:
+        enabled: true
+      # ?? pytest
+      full-test-py:
+        enabled: true
+      # ?? bun ?????
+      full-test-js:
+        enabled: true
+      # Hook ?????????
+      hook-adversarial:
+        enabled: false # CI: pr9898/ci-templates
+      # ?? JS ?? bun audit
+      # controlIds: PCI-6.3.2, PCI-6.3.3
+      dep-audit:
+        enabled: true
+      # Python ?? osv-scanner/pip-audit
+      # controlIds: PCI-6.3.2, PCI-6.3.3
+      py-dep-audit:
+        enabled: true
+      # ?? gitleaks ??
+      # controlIds: PCI-6.3.3, SOX-404
+      gitleaks:
+        enabled: true
+      # ?? Semgrep ????
+      # controlIds: PCI-6.3.3, PCI-6.5
+      semgrep:
+        enabled: true
+      # ?? knip ?????
+      knip:
+        enabled: true
+      # ?? Trivy ??/????
+      # controlIds: PCI-6.3.2, PCI-6.3.3
+      trivy:
+        enabled: true
+      # ?? format ???
+      format-full:
+        enabled: true
+      # ?? Prettier format check
+      format-prettier:
+        enabled: true
+      # ?? Ruff format check
+      format-ruff:
+        enabled: true
+      # ?? AI code review
+      code-review:
+        enabled: true
+      # ???? lint ???
+      extended-full:
+        enabled: true
+      # ???? lint ????
+      extended-full-extended:
+        enabled: true
+      # ?? markdownlint
+      lint-markdownlint:
+        enabled: true
+      # ?? shfmt ????
+      format-shfmt:
+        enabled: true
+      # ?? shellcheck
+      lint-shellcheck:
+        enabled: true
+      # ?? hadolint
+      lint-hadolint:
+        enabled: true
+      # ?? compose ????
+      lint-compose:
+        enabled: true
+      # ?? taplo ????
+      format-taplo:
+        enabled: true
+      # ?? sqlfluff
+      lint-sqlfluff:
+        enabled: true
+      # ?? stylelint
+      lint-stylelint:
+        enabled: true
+      # ?? JSON/YAML schema ???
+      schema-full:
+        enabled: true
+      # ?? schema ????
+      schema-full-schema:
+        enabled: true
+      # ?? check-jsonschema ??
+      schema-full-check-jsonschema:
+        enabled: true
+      # ?? jq JSON ????
+      schema-full-jq:
+        enabled: true
+      # ?? yq YAML ????
+      schema-full-yq:
+        enabled: true
+      # ?? K8s manifest ???
+      k8s-full:
+        enabled: true
+      # ?? kubeconform ??
+      k8s-full-kubeconform:
+        enabled: true
+      # ?? kube-linter ??
+      k8s-full-kube-linter:
+        enabled: true
+      # Kind ?? smoke ?????????
+      k8s-kind-smoke:
+        enabled: true
+      # ?? OpenAPI ?????
+      openapi-full:
+        enabled: true
+      # ?? oasdiff ??
+      openapi-full-oasdiff:
+        enabled: true
+      # ?? lockfile ?????
+      lockfile-freshness:
+        enabled: false # CI: pr9898/ci-templates
+      # CycloneDX SBOM ????????
+      # controlIds: PCI-6.3.2, DORA-Art6
+      sbom-archive:
+        enabled: true
+        timeout: 5m
+      # ?? Semgrep PCI/OWASP ????
+      # controlIds: PCI-6.3.3
+      semgrep-pci:
+        enabled: true
+      # ???????/SRI ??
+      # controlIds: PCI-6.4.3, PCI-11.6.1
+      payment-page-full:
+        enabled: true
+        timeout: 3m
+      # OWASP ZAP API baseline?OpenAPI ???
+      # controlIds: PCI-11.3
+      zap-api-dast:
+        enabled: true
+        timeout: 10m
+      # OpenAPI ???????? token / ? token ? 401/403?
+      openapi-auth-negative:
+        enabled: true
+        timeout: 5m
+      # Conftest/OPA ???PCI-DORA Rego?
+      # controlIds: DORA-Art6, SOX-404
+      opa-conftest:
+        enabled: true
+        timeout: 3m
+      # Checkov IaC ???Terraform/K8s/Dockerfile?
+      # controlIds: PCI-6.3.3
+      iac-checkov:
+        enabled: true
+        timeout: 5m
+      # SLSA/Cosign ?? provenance ??
+      # controlIds: PCI-6.3.2, SLSA-L3
+      slsa-cosign:
+        enabled: true
+        timeout: 2m

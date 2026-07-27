@@ -315,8 +315,7 @@ function mergeSettings(base?: GateSettings, override?: GateSettings): GateSettin
   }
   if (base.worktree || override.worktree) {
     const worktree: WorktreeSettings = {};
-    const forbidCreateFromMain =
-      override.worktree?.forbidCreateFromMain ?? base.worktree?.forbidCreateFromMain;
+    const forbidCreateFromMain = override.worktree?.forbidCreateFromMain ?? base.worktree?.forbidCreateFromMain;
     const integratorMergeRequiresFull =
       override.worktree?.integratorMergeRequiresFull ?? base.worktree?.integratorMergeRequiresFull;
     if (forbidCreateFromMain !== undefined) worktree.forbidCreateFromMain = forbidCreateFromMain;
@@ -868,6 +867,22 @@ function channelUrl(entry?: NotificationChannelConfig): string | undefined {
   return url;
 }
 
+const CHANNEL_ENV_VARS: Record<'wechat' | 'feishu' | 'slack', string> = {
+  wechat: 'WECOM_WEBHOOK_URL',
+  feishu: 'FEISHU_WEBHOOK_URL',
+  slack: 'SLACK_WEBHOOK_URL',
+};
+
+function resolveChannelUrl(
+  channel: 'wechat' | 'feishu' | 'slack',
+  entry?: NotificationChannelConfig,
+): string | undefined {
+  const fromYaml = channelUrl(entry);
+  if (fromYaml) return fromYaml;
+  const fromEnv = process.env[CHANNEL_ENV_VARS[channel]]?.trim();
+  return fromEnv || undefined;
+}
+
 export function getNotificationSettings(cwd: string = process.cwd()): ResolvedNotificationSettings {
   const notifications = loadGateConfig(cwd).settings?.notifications;
   let timeoutMs = DEFAULT_NOTIFICATION_TIMEOUT_MS;
@@ -880,9 +895,9 @@ export function getNotificationSettings(cwd: string = process.cwd()): ResolvedNo
   }
   const channels = notifications?.channels ?? {};
   const resolved: ResolvedNotificationSettings['channels'] = {};
-  const wechatUrl = channelUrl(channels.wechat);
-  const feishuUrl = channelUrl(channels.feishu);
-  const slackUrl = channelUrl(channels.slack);
+  const wechatUrl = resolveChannelUrl('wechat', channels.wechat);
+  const feishuUrl = resolveChannelUrl('feishu', channels.feishu);
+  const slackUrl = resolveChannelUrl('slack', channels.slack);
   if (wechatUrl) resolved.wechat = wechatUrl;
   if (feishuUrl) resolved.feishu = feishuUrl;
   if (slackUrl) resolved.slack = slackUrl;

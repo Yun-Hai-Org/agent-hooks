@@ -14,7 +14,13 @@ import {
   buildGateRetryMergeSuccessMessage,
   buildGateRetryMergeFailureMessage,
 } from './gate-fix.js';
-import { getPlatform, formatStopContinueOutput, formatStopSuccessOutput } from './hook-adapter.js';
+import {
+  getPlatform,
+  formatStopContinueOutput,
+  formatStopSuccessOutput,
+  detectPlatformFromStdin,
+  setDetectedPlatform,
+} from './hook-adapter.js';
 import { isGateNodeEnabled } from './gate-config.js';
 import { loadWorkflowState, needsShipBeforeStop } from './workflow-state.js';
 import type { GatePendingEntry } from './types.js';
@@ -129,6 +135,7 @@ async function main() {
 
   try {
     const data = input.trim() ? (JSON.parse(input) as Record<string, unknown>) : {};
+    setDetectedPlatform(detectPlatformFromStdin(data), typeof data['cwd'] === 'string' ? data['cwd'] : undefined);
     const { sessionId, hookEvent, loopCount, status, cwd } = parseStopInput(data);
     const platform = getPlatform();
 
