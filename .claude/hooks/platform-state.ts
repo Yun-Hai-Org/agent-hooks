@@ -88,3 +88,8 @@ export function setDetectedPlatform(platform: HookPlatform | undefined, cwd?: st
 export function getDetectedPlatform(): HookPlatform | undefined {
   return _detectedPlatform;
 }
+
+/** 测试用：清空进程级检测状态，避免跨用例污染 getPlatform()。 */
+export function resetDetectedPlatform(): void {
+  _detectedPlatform = undefined;
+}
