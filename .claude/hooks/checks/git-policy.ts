@@ -251,7 +251,8 @@ export function isGitCommitCommand(cmd: string): boolean {
 }
 
 export function isGitMergeCommand(cmd: string): boolean {
-  return /\bgit\s+merge\b/.test(cmd);
+  // 用前瞻要求 merge 后是空白或行尾，避免误匹配 `git merge-base`（- 处的 \b 会误命中）
+  return /\bgit\s+merge(?=\s|$)/.test(cmd);
 }
 
 export function resolveMergeHeadPath(cwd: string): string | null {

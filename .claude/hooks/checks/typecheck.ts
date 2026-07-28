@@ -61,11 +61,11 @@ export async function runStagedTypecheck(cwd?: string, options?: GateCheckRunOpt
     }
     if (execCommand('which pyright', { cwd }).success) {
       const files = stagedPyFiles.map((f) => `"${f}"`).join(' ');
-      resolve({ tool: 'pyright', ...execCommand(`pyright ${files}`, { cwd, timeout: timeoutMs }) });
+      resolve({ tool: 'pyright', ...execCommand(`pyright --clear-cache ${files}`, { cwd, timeout: timeoutMs }) });
       return;
     }
     const files = stagedPyFiles.map((f) => `"${f}"`).join(' ');
-    resolve({ tool: 'pyright (uv)', ...execCommand(`uv run pyright ${files}`, { cwd, timeout: timeoutMs }) });
+    resolve({ tool: 'pyright (uv)', ...execCommand(`uv run pyright --clear-cache ${files}`, { cwd, timeout: timeoutMs }) });
   });
 
   const tscPromise = new Promise((resolve) => {
@@ -118,10 +118,10 @@ export async function runFullTypecheck(cwd?: string, options?: GateCheckRunOptio
       return;
     }
     if (execCommand('which pyright', { cwd }).success) {
-      resolve({ tool: 'pyright', ...execCommand('pyright', { cwd, timeout: timeoutMs }) });
+      resolve({ tool: 'pyright', ...execCommand('pyright --clear-cache', { cwd, timeout: timeoutMs }) });
       return;
     }
-    resolve({ tool: 'pyright (uv)', ...execCommand('uv run pyright', { cwd, timeout: timeoutMs }) });
+    resolve({ tool: 'pyright (uv)', ...execCommand('uv run pyright --clear-cache', { cwd, timeout: timeoutMs }) });
   });
 
   const tscPromise = new Promise((resolve) => {

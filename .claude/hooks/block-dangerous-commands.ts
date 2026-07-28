@@ -12,7 +12,7 @@
  */
 
 import { appendFileSync, mkdirSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, resolve, isAbsolute } from 'path';
 import { LOG_DIR, getCurrentBranch } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
 import { notifySecurityEventAsync } from './notify-security-event.js';
@@ -440,13 +440,26 @@ export interface MergeNoFfCheckResult {
 
 const MERGE_IN_PROGRESS = /\bgit\s+merge\b[^\n]*--(?:abort|continue|quit)(?:\s|$)/;
 
+function extractGitCwdTarget(cmd: string): string | null {
+  // 解析 `git -C <path> ...` 或 `git --git-dir=<path>` / `git -C <path>` 指向的工作目录
+  const m1 = /\bgit\s+-C\s+([^\s]+)/.exec(cmd);
+  if (m1) return m1[1];
+  const m2 = /\bgit\s+--git-dir=([^\s]+)/.exec(cmd);
+  if (m2) return m2[1];
+  return null;
+}
+
 function isCompositeMergeOntoProtectedBranch(cmd: string): boolean {
-  return /\bgit\s+(?:checkout|switch)\b[^\n]*\b(main|master)\b[\s\S]*\bgit\s+merge\b/.test(cmd);
+  // 用前瞻要求 merge 后是空白或行尾，避免误匹配 `git merge-base`
+  return /\bgit\s+(?:checkout|switch)\b[^\n]*\b(main|master)\b[\s\S]*\bgit\s+merge(?=\s|$)/.test(cmd);
 }
 
 function isMergeOntoProtectedBranch(cmd: string, cwd?: string): boolean {
   if (isCompositeMergeOntoProtectedBranch(cmd)) return true;
-  const branch = getCurrentBranch(cwd ?? process.cwd());
+  const baseDir = cwd ?? process.cwd();
+  const target = extractGitCwdTarget(cmd);
+  const targetDir = target ? (isAbsolute(target) ? target : resolve(baseDir, target)) : baseDir;
+  const branch = getCurrentBranch(targetDir);
   return branch !== null && isProtectedBranch(branch);
 }
 
