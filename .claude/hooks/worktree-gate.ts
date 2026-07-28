@@ -5,7 +5,7 @@
  */
 
 import { existsSync, appendFileSync, mkdirSync, realpathSync } from 'fs';
-import { join, resolve, isAbsolute, basename } from 'path';
+import { join, resolve, isAbsolute, basename, dirname } from 'path';
 import { LOG_DIR, readStdin, isGitRepo, execCommand } from './security-orchestrator.js';
 import { repoRelativePathFromAbs } from './checks/scan-scope.js';
 import {
@@ -148,6 +148,38 @@ async function main() {
     if (insideWorktree && isFeatBranch(branch)) {
       emit(allow());
       return;
+    }
+
+    if (tool_name !== 'Shell' && typeof tool_input.file_path === 'string') {
+      const rawFilePath = tool_input.file_path;
+      const absFilePath = isAbsolute(rawFilePath) ? rawFilePath : resolve(workingDir, rawFilePath);
+      let dir = dirname(absFilePath);
+      let fileWorktreeRoot: string | null = null;
+      while (dir !== '/' && dir.length >= workingDir.length) {
+        const dotGit = join(dir, '.git');
+        if (existsSync(dotGit)) {
+          fileWorktreeRoot = dir;
+          break;
+        }
+        if (dir === workingDir) break;
+        dir = dirname(dir);
+      }
+      if (fileWorktreeRoot) {
+        const fileBranch = getCurrentBranch(fileWorktreeRoot);
+        if (isFeatBranch(fileBranch)) {
+          log({
+            level: 'INFO',
+            reason: 'write inside feat worktree (by file path)',
+            file: rawFilePath,
+            worktree: fileWorktreeRoot,
+            branch: fileBranch,
+            tool: tool_name,
+            session_id,
+          });
+          emit(allow());
+          return;
+        }
+      }
     }
 
     const detail = tool_name === 'Shell' ? (tool_input.command ?? '').slice(0, 120) : (tool_input.file_path ?? '');

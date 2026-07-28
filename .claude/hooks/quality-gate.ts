@@ -69,6 +69,7 @@ import type {
   GateTiming,
   GateTimingEntry,
   GatePathPrefix,
+  DecideResult,
 } from './types.js';
 
 export interface RunConfiguredCheckOptions {
@@ -112,10 +113,22 @@ export async function runConfiguredCheck(options: RunConfiguredCheckOptions): Pr
 }
 
 function skipHookResult(hookPath: string): QualityGateResult {
-  const skip = formatResult('quality-gate', DECISION.SKIP, `${hookPath} 未在 quality-gate.yaml 中启用`);
-  const decision = decide([skip]);
+  const skipReason = `${hookPath} 未在 quality-gate.yaml 中启用`;
+  const skip = formatResult('quality-gate', DECISION.SKIP, skipReason);
   const failClosed = hookPath === 'git.pre-push' || hookPath === 'git.pre-merge-commit';
-  return { passed: !failClosed, results: [skip], decision, timing: computeTiming([skip]) };
+  if (failClosed) {
+    // fail-closed：未启用的 pre-push/pre-merge-commit 拒绝，且 decision 必须为 DENY 并带真实原因，
+    // 不能用 decide([skip]) 返回的 ALLOW/"所有检查通过"（否则会出现「显示所有检查通过却拦截」的矛盾）
+    const decision: DecideResult = {
+      decision: DECISION.DENY,
+      reason: `${skipReason}，按 fail-closed 拒绝`,
+      denyResults: [],
+      warnResults: [],
+    };
+    return { passed: false, results: [skip], decision, timing: computeTiming([skip]) };
+  }
+  const decision = decide([skip]);
+  return { passed: true, results: [skip], decision, timing: computeTiming([skip]) };
 }
 
 const MERGE_ONLY_CHECK_IDS = new Set(['sbom-archive', 'slsa-cosign', 'payment-page-full']);
@@ -184,6 +197,12 @@ export async function runQualityGate(
     gatePathPrefix?: GatePathPrefix;
     /** 测试专用：跳过指定 checkId（避免 hook-unit-tests 递归触发全量单测） */
     skipCheckIds?: string[];
+    /**
+     * 当门未配置/未启用时是否放行（passed:true）而非 fail-closed。
+     * merge-conclude 由已启用的 pre-commit 触发，若用户在 yaml 禁用了 pre-merge-commit，
+     * 表示不想要合并门，此时应跳过放行，而不是 fail-closed 拦截合并提交。
+     */
+    allowOnSkip?: boolean;
   },
 ): Promise<QualityGateResult> {
   const { profile, cwd, commitCmd, commitMsgFile, skipCheckIds = [] } = options;
@@ -191,6 +210,17 @@ export async function runQualityGate(
 
   const hookNode = resolveGateNode(gatePathPrefix, cwd);
   if (!hookNode.configured || !hookNode.enabled) {
+    if (options.allowOnSkip) {
+      const skipReason = `${gatePathPrefix} 未在 quality-gate.yaml 中启用，按 allowOnSkip 放行`;
+      const skip = formatResult('quality-gate', DECISION.SKIP, skipReason);
+      const decision: DecideResult = {
+        decision: DECISION.ALLOW,
+        reason: skipReason,
+        denyResults: [],
+        warnResults: [],
+      };
+      return { passed: true, results: [skip], decision, timing: computeTiming([skip]) };
+    }
     return skipHookResult(gatePathPrefix);
   }
 
