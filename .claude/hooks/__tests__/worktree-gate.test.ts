@@ -187,4 +187,43 @@ describe('worktree-gate main()', () => {
       cleanupTempGitRepo(repo);
     }
   });
+
+  it('allows Write to in-repo .cursor/plans/ absolute path on main checkout', async () => {
+    const repo = createTempGitRepo('main');
+    try {
+      const planPath = join(repo, '.cursor', 'plans', 'foo.plan.md');
+      process.stdin = Readable.from([
+        JSON.stringify({
+          tool_name: 'Write',
+          tool_input: { file_path: planPath, content: 'x' },
+          session_id: 's8',
+          cwd: repo,
+        }),
+      ]);
+      await worktreeMain();
+      expect(output).toHaveLength(1);
+      expect(expectAllow(output[0]!)).toBe(true);
+    } finally {
+      cleanupTempGitRepo(repo);
+    }
+  });
+
+  it('allows Write to in-repo .cursor/plans/ relative path on main checkout', async () => {
+    const repo = createTempGitRepo('main');
+    try {
+      process.stdin = Readable.from([
+        JSON.stringify({
+          tool_name: 'Write',
+          tool_input: { file_path: '.cursor/plans/foo.plan.md', content: 'x' },
+          session_id: 's9',
+          cwd: repo,
+        }),
+      ]);
+      await worktreeMain();
+      expect(output).toHaveLength(1);
+      expect(expectAllow(output[0]!)).toBe(true);
+    } finally {
+      cleanupTempGitRepo(repo);
+    }
+  });
 });

@@ -109,6 +109,7 @@ async function main() {
       }
     }
 
+    let repoRelPath: string | null = null;
     if (tool_name === 'Write' || tool_name === 'Edit' || tool_name === 'StrReplace') {
       const rawFilePath = tool_input.file_path ?? '';
       if (rawFilePath) {
@@ -116,8 +117,8 @@ async function main() {
         try { absPath = realpathSync(absPath); } catch { absPath = join(realpathSync(resolve(absPath, '..')), basename(absPath)); }
         const rootResult = execCommand('git rev-parse --show-toplevel', { cwd: workingDir });
         if (rootResult.success && rootResult.stdout.trim()) {
-          const rel = repoRelativePathFromAbs(absPath, rootResult.stdout.trim());
-          if (rel === null) {
+          repoRelPath = repoRelativePathFromAbs(absPath, rootResult.stdout.trim());
+          if (repoRelPath === null) {
             log({ level: 'INFO', reason: 'write outside repo allowed', file: absPath, tool: tool_name, session_id });
             emit(allow());
             return;
@@ -134,7 +135,7 @@ async function main() {
         return;
       }
     } else {
-      const filePath = tool_input.file_path ?? '';
+      const filePath = repoRelPath ?? tool_input.file_path ?? '';
       if (isAllowedPathOnMain(filePath)) {
         log({ level: 'INFO', reason: 'allowed planning path', file: filePath, tool: tool_name, session_id });
         emit(allow());
