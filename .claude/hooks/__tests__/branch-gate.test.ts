@@ -92,6 +92,10 @@ describe('branch-gate', () => {
       expect(isAllowedPathOnMain('_bmad-output/implementation-artifacts/sprint-plan.md')).toBe(true);
     });
 
+    it('应该允许 .cursor/plans/ 开头的路径', () => {
+      expect(isAllowedPathOnMain('.cursor/plans/foo.plan.md')).toBe(true);
+    });
+
     it('不应该允许普通代码文件', () => {
       expect(isAllowedPathOnMain('src/app.js')).toBe(false);
     });

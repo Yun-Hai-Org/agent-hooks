@@ -20,7 +20,7 @@ import { notifySecurityEventAsync } from './notify-security-event.js';
 import { isGateNodeEnabled, resolveWorktreeSettings } from './gate-config.js';
 
 const MAIN_BRANCHES = ['main', 'master'];
-const ALLOWED_PATHS_ON_MAIN = ['_bmad-output/'];
+const ALLOWED_PATHS_ON_MAIN = ['_bmad-output/', '.cursor/plans/'];
 const GIT_INIT_REQUIRED_MESSAGE =
   '🔒 [branch-gate] 当前目录不是 Git 仓库。请先运行 git init 初始化仓库，再执行写入操作。';
 const SAFE_COMMAND_PATTERNS = [/^\s*git\s+(checkout|branch|stash|log|status|show|diff)\b/];
