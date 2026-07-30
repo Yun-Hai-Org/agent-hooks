@@ -209,6 +209,12 @@ ide:
       # 拦截 python3 script.py，请用 uv run
       python3-script:
         enabled: true
+      # 拦截 python -m module，请用 uv run
+      python-module:
+        enabled: true
+      # 拦截 python3 -m module，请用 uv run
+      python3-module:
+        enabled: true
       # 拦截 node script.js，请用 bun
       node-script:
         enabled: true
@@ -283,15 +289,16 @@ ide:
   workflow-stop-gate:
     enabled: true
 
-  # beforeReadFile/preToolUse：Orchestrator 禁直接 Read/Write（complement workflow-gate）
+  # subagentStart/subagentStop：同步 active_background_tasks 供 workflow-stop-gate
+  workflow-subagent-sync:
+    enabled: true
+
+  # beforeReadFile/preToolUse Shell：Orchestrator 禁直接 Read/Write 及 Shell 写文件（complement workflow-gate）
   orchestrator-gate:
     enabled: true
 
   # beforeShellExecution/preToolUse Shell：Orchestrator 禁 git commit/push/merge；仅 ship-sa 子代理
   git-ship-gate:
-    enabled: true
-
-  workflow-subagent-sync:
     enabled: true
 
   # beforeShellExecution：限制删除未 merge 分支与 worktree prune
