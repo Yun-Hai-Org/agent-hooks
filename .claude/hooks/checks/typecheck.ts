@@ -31,6 +31,19 @@ function formatTypecheckToolOutput(result: TypecheckToolResult) {
   return text || `${result.tool ?? 'tool'}: failed (exit non-zero)`;
 }
 
+/** 检查 pyright --help 输出是否包含 --clear-cache 选项（纯函数，便于单测） */
+export function helpTextSupportsClearCache(text: string): boolean {
+  return text.includes('--clear-cache');
+}
+
+/** 通过 `pyright --help`（或 `uv run pyright --help`）探测是否支持 --clear-cache */
+export function pyrightSupportsClearCache(cwd: string): boolean {
+  const invocation = execCommand('which pyright', { cwd }).success ? 'pyright' : 'uv run pyright';
+  const result = execCommand(`${invocation} --help`, { cwd, timeout: 10_000 });
+  const text = `${result.stdout}\n${result.stderr}`;
+  return helpTextSupportsClearCache(text);
+}
+
 export async function runStagedTypecheck(cwd?: string, options?: GateCheckRunOptions) {
   const timeoutMs = options?.timeoutMs ?? COMMIT_GATE_TIMEOUT_MS;
   const stagedFiles = getScopedStagedFiles(cwd);
@@ -59,13 +72,16 @@ export async function runStagedTypecheck(cwd?: string, options?: GateCheckRunOpt
       resolve({ tool: 'pyright', success: true, stdout: '无暂存的 .py 文件，跳过', stderr: '' });
       return;
     }
+    const clearCache = pyrightSupportsClearCache(cwd) ? '--clear-cache' : '';
     if (execCommand('which pyright', { cwd }).success) {
       const files = stagedPyFiles.map((f) => `"${f}"`).join(' ');
-      resolve({ tool: 'pyright', ...execCommand(`pyright --clear-cache ${files}`, { cwd, timeout: timeoutMs }) });
+      const cmd = `pyright ${clearCache} ${files}`.trim().replace(/\s+/g, ' ');
+      resolve({ tool: 'pyright', ...execCommand(cmd, { cwd, timeout: timeoutMs }) });
       return;
     }
     const files = stagedPyFiles.map((f) => `"${f}"`).join(' ');
-    resolve({ tool: 'pyright (uv)', ...execCommand(`uv run pyright --clear-cache ${files}`, { cwd, timeout: timeoutMs }) });
+    const cmd = `uv run pyright ${clearCache} ${files}`.trim().replace(/\s+/g, ' ');
+    resolve({ tool: 'pyright (uv)', ...execCommand(cmd, { cwd, timeout: timeoutMs }) });
   });
 
   const tscPromise = new Promise((resolve) => {
@@ -117,11 +133,14 @@ export async function runFullTypecheck(cwd?: string, options?: GateCheckRunOptio
       resolve({ tool: 'pyright', success: true, stdout: 'no pyproject.toml, skip', stderr: '' });
       return;
     }
+    const clearCache = pyrightSupportsClearCache(cwd) ? '--clear-cache' : '';
     if (execCommand('which pyright', { cwd }).success) {
-      resolve({ tool: 'pyright', ...execCommand('pyright --clear-cache', { cwd, timeout: timeoutMs }) });
+      const cmd = `pyright ${clearCache}`.trim().replace(/\s+/g, ' ');
+      resolve({ tool: 'pyright', ...execCommand(cmd, { cwd, timeout: timeoutMs }) });
       return;
     }
-    resolve({ tool: 'pyright (uv)', ...execCommand('uv run pyright --clear-cache', { cwd, timeout: timeoutMs }) });
+    const cmd = `uv run pyright ${clearCache}`.trim().replace(/\s+/g, ' ');
+    resolve({ tool: 'pyright (uv)', ...execCommand(cmd, { cwd, timeout: timeoutMs }) });
   });
 
   const tscPromise = new Promise((resolve) => {

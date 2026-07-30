@@ -157,6 +157,26 @@ describe('block-dangerous-commands', () => {
     expect(r.blocked).toBe(true);
   });
 
+  it('应该阻止 python -m <module>', () => {
+    const r = checkCommand('python -m pytest');
+    expect(r.blocked).toBe(true);
+  });
+
+  it('应该阻止 python3 -m <module>', () => {
+    const r = checkCommand('python3 -m some.module');
+    expect(r.blocked).toBe(true);
+  });
+
+  it('应该允许 uv run python -m module', () => {
+    const r = checkCommand('uv run python -m module');
+    expect(r.blocked).toBe(false);
+  });
+
+  it('应该允许 uv run python script.py', () => {
+    const r = checkCommand('uv run python my_script.py');
+    expect(r.blocked).toBe(false);
+  });
+
   it('应该阻止 node script.js', () => {
     const r = checkCommand('node my_script.js');
     expect(r.blocked).toBe(true);

@@ -54,6 +54,8 @@ import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
 // @rule:npx
 // @rule:python-script
 // @rule:python3-script
+// @rule:python-module
+// @rule:python3-module
 // @rule:node-script
 // @rule:hook-bypass-path
 // @rule:hook-bypass-config
@@ -116,6 +118,8 @@ const CHECK_COMMAND_SAMPLES: Record<string, string> = {
   npx: 'npx eslint .',
   'python-script': 'python script.py',
   'python3-script': 'python3 script.py',
+  'python-module': 'python -m pytest',
+  'python3-module': 'python3 -m some.module',
   'node-script': 'node script.js',
   'hook-bypass-path': 'git -c core.hooksPath=/dev/null commit -m x',
   'hook-bypass-config': 'git config core.hooksPath /tmp/hooks',
