@@ -9,6 +9,7 @@ import {
   checkProtectedBranchDelete,
 } from '../block-dangerous-commands.js';
 import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
+import { clearGateConfigCache } from '../gate-config.js';
 
 describe('block-dangerous-commands', () => {
   // CRITICAL level
@@ -33,9 +34,7 @@ describe('block-dangerous-commands', () => {
   });
 
   it('应该允许 dual-track-eval git commit（eval-exec 防误报）', () => {
-    const r = checkCommand(
-      'git add dual-track-eval/engine/foo.py && git commit -m "feat(dual-track-eval): x"',
-    );
+    const r = checkCommand('git add dual-track-eval/engine/foo.py && git commit -m "feat(dual-track-eval): x"');
     expect(r.blocked).toBe(false);
   });
 
@@ -322,9 +321,37 @@ describe('block-dangerous-commands - main/master merge --no-ff', () => {
   });
 
   it('git checkout main && git merge feat/x 应被阻止', () => {
-    const r = checkMergeNoFfRequired('git checkout main && git merge feat/x', process.cwd());
+    mainRepo = createTempGitRepo('main');
+    const r = checkMergeNoFfRequired('git checkout main && git merge feat/x', mainRepo);
     expect(r.blocked).toBe(true);
     expect(r.id).toBe('merge-ff-bypass');
+  });
+
+  it('main + remote + forcePrWhenRemote 默认开启时 git merge --no-ff 应被 PR 策略阻止', () => {
+    mainRepo = createTempGitRepo('main');
+    execSync('git branch -M main', { cwd: mainRepo });
+    execSync('git remote add origin git@github.com:org/repo.git', { cwd: mainRepo });
+    clearGateConfigCache();
+
+    const r = checkMergeNoFfRequired('git merge --no-ff feat/x', mainRepo);
+    expect(r.blocked).toBe(true);
+    expect(r.id).toBe('merge-local-blocked-by-pr-policy');
+  });
+
+  it('main + remote + forcePrWhenRemote 关闭时 git merge --no-ff 应允许', () => {
+    mainRepo = createTempGitRepo('main');
+    execSync('git branch -M main', { cwd: mainRepo });
+    execSync('git remote add origin git@github.com:org/repo.git', { cwd: mainRepo });
+    writeFile(mainRepo, '.claude/quality-gate.yaml', 'settings:\n  forcePrWhenRemote: false\n');
+    clearGateConfigCache();
+
+    const r = checkMergeNoFfRequired('git merge --no-ff feat/x', mainRepo);
+    expect(r.blocked).toBe(false);
+  });
+
+  it('gh pr merge 现由 checkCommand 允许（由 git-ship-gate 管控）', () => {
+    const r = checkCommand('gh pr merge 1 --merge');
+    expect(r.blocked).toBe(false);
   });
 });
 

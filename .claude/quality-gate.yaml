@@ -34,11 +34,11 @@ settings:
     cooldown: 5m
     channels:
       wechat:
-        url: ""
+        url: ''
       feishu:
-        url: ""
+        url: ''
       slack:
-        url: ""
+        url: ''
   diffCoverageThreshold:
     lines: 80
     enforceOn:
@@ -50,9 +50,9 @@ settings:
       - scripts/lib/**
       - scripts/cursor-yingmi-hooks/**
     exclude:
-      - "**/*.test.ts"
-      - "**/__tests__/**"
-      - "**/*.d.ts"
+      - '**/*.test.ts'
+      - '**/__tests__/**'
+      - '**/*.d.ts'
       - tests/**
   testFilePairing:
     enabled: true
@@ -63,9 +63,9 @@ settings:
       - scripts/lib/**/*.py
       - scripts/cursor-yingmi-hooks/**/*.sh
     exclude:
-      - "**/*.d.ts"
-      - "**/__tests__/**"
-      - "**/native/run-*.ts"
+      - '**/*.d.ts'
+      - '**/__tests__/**'
+      - '**/native/run-*.ts'
   coreModuleCoverage:
     lines: 90
     functions: 90
@@ -222,9 +222,6 @@ ide:
         enabled: true
       # 拦截 git merge --no-verify
       merge-no-verify:
-        enabled: true
-      # 拦截 gh pr merge 绕过本地门
-      gh-pr-merge:
         enabled: true
       # 拦截 git pull 产生 merge commit 绕过
       git-pull-merge:
