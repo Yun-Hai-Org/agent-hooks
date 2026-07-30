@@ -54,6 +54,7 @@ describe('gate-registry', () => {
     const yaml = generateExampleYaml();
     expect(yaml).toContain('settings:');
     expect(yaml).toContain('coverageThreshold');
+    expect(yaml).toContain('forcePrWhenRemote: true');
     expect(yaml).toContain('openapi-auth-negative');
   });
 

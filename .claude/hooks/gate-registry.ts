@@ -793,6 +793,7 @@ export function generateExampleYaml(): string {
     '      - main',
     '      - master',
     '    exclude: []',
+    '  forcePrWhenRemote: true',
     '  worktree:',
     '    forbidCreateFromMain: true',
     '    integratorMergeRequiresFull: false',
