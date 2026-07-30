@@ -117,6 +117,7 @@ export interface GateSettings {
   securityRuleCoverage?: SecurityRuleCoverageYaml;
   scanScope?: ScanScopeConfig;
   pushMergeBranches?: PushMergeBranchPolicy;
+  forcePrWhenRemote?: boolean;
   worktree?: WorktreeSettings;
   licenseDenylist?: string[];
   notifications?: NotificationSettings;
@@ -720,6 +721,12 @@ export function resolvePushMergeBranchPolicy(cwd: string = process.cwd()): Resol
   };
 }
 
+export function resolveForcePrWhenRemote(cwd: string = process.cwd()): boolean {
+  const config = loadGateConfig(cwd);
+  const raw = config.settings?.forcePrWhenRemote;
+  return raw ?? true;
+}
+
 export interface ResolvedWorktreeSettings {
   forbidCreateFromMain: boolean;
   integratorMergeRequiresFull: boolean;
@@ -906,10 +913,7 @@ export function getNotificationSettings(cwd: string = process.cwd()): ResolvedNo
 
 export function getOnBlockedNotificationSettings(cwd: string = process.cwd()): ResolvedOnBlockedNotificationSettings {
   const onBlocked = loadGateConfig(cwd).settings?.notifications?.onBlocked;
-  const excludeHooks = new Set<string>([
-    ...DEFAULT_ON_BLOCKED_EXCLUDE,
-    ...(onBlocked?.excludeHooks ?? []),
-  ]);
+  const excludeHooks = new Set<string>([...DEFAULT_ON_BLOCKED_EXCLUDE, ...(onBlocked?.excludeHooks ?? [])]);
   return {
     enabled: onBlocked?.enabled !== false,
     excludeHooks,

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { execSync } from 'child_process';
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { disableGlobalGitHooks } from '../helpers.js';
+import { disableGlobalGitHooks, createTempGitRepo, cleanupTempGitRepo } from '../helpers.js';
 import {
   isGitPushCommand,
   isGitCommitCommand,
@@ -18,6 +18,7 @@ import {
   buildUncommittedWorktreeDenyReason,
   isFeatTaskBranch,
   resolveParentEpicBranch,
+  hasRemote,
 } from '../../checks/git-policy.js';
 
 describe('adversarial: git-policy command detection', () => {
@@ -102,5 +103,25 @@ describe('adversarial: git-policy uncommitted worktree', () => {
     const msg = buildUncommittedWorktreeDenyReason(repoPath, 'merge');
     expect(msg).toContain('git commit');
     expect(msg).toContain('git merge');
+  });
+});
+
+describe('adversarial: git-policy hasRemote', () => {
+  let repo: string;
+
+  afterEach(() => {
+    if (repo) cleanupTempGitRepo(repo);
+    repo = '';
+  });
+
+  it('有 remote 时返回 true', () => {
+    repo = createTempGitRepo('feat/test');
+    execSync('git remote add origin git@github.com:org/repo.git', { cwd: repo, stdio: 'pipe' });
+    expect(hasRemote(repo)).toBe(true);
+  });
+
+  it('无 remote 时返回 false', () => {
+    repo = createTempGitRepo('feat/test');
+    expect(hasRemote(repo)).toBe(false);
   });
 });

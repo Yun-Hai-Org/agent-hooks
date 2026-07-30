@@ -405,6 +405,11 @@ export function resolveBaseBranch(cwd?: string): 'main' | 'master' | null {
   return null;
 }
 
+export function hasRemote(cwd?: string): boolean {
+  const result = execCommand('git remote', { cwd });
+  return result.success && result.stdout.trim().length > 0;
+}
+
 export function isBranchMergedInto(branch: string, base: string, cwd?: string): boolean {
   const normalized = normalizeBranchRef(branch);
   const candidates = [normalized, `origin/${normalized}`];

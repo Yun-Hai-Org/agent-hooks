@@ -25,11 +25,7 @@ function bash(id: string, rule: string, reason?: string): PermissionDenyEntry {
   return { id, rule: `Bash(${rule})`, source: 'block-dangerous-commands', reason };
 }
 
-function hookOnly(
-  id: string,
-  source: PermissionDenySource,
-  reason?: string,
-): PermissionDenyEntry {
+function hookOnly(id: string, source: PermissionDenySource, reason?: string): PermissionDenyEntry {
   return { id, source, hookOnly: true, reason };
 }
 
@@ -109,7 +105,6 @@ const BLOCK_DANGEROUS_ENTRIES: PermissionDenyEntry[] = [
   bash('no-verify-short', 'git commit * -n*', 'commit hook bypass via -n'),
   bash('push-no-verify', 'git push * --no-verify*', 'push hook bypass'),
   bash('merge-no-verify', 'git merge * --no-verify*', 'merge hook bypass'),
-  bash('gh-pr-merge', 'gh pr merge*', 'gh pr merge bypasses local merge gate'),
   hookOnly('git-pull-merge', 'block-dangerous-commands', 'git pull merge requires branch context'),
   bash('git-update-ref-delete', 'git update-ref -d refs/heads/*', 'update-ref branch delete bypass'),
   bash('git-force-any', 'git push * --force*', 'force push any branch'),

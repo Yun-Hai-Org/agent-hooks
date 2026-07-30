@@ -61,7 +61,6 @@ import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
 // @rule:no-verify-short
 // @rule:push-no-verify
 // @rule:merge-no-verify
-// @rule:gh-pr-merge
 // @rule:git-pull-merge
 // @rule:git-update-ref-delete
 // @rule:git-force-any
@@ -124,7 +123,6 @@ const CHECK_COMMAND_SAMPLES: Record<string, string> = {
   'no-verify-short': 'git commit -n -m x',
   'push-no-verify': 'git push --no-verify',
   'merge-no-verify': 'git merge --no-verify feat/x',
-  'gh-pr-merge': 'gh pr merge 1 --merge',
   'git-pull-merge': 'git pull origin main',
   'git-update-ref-delete': 'git update-ref -d refs/heads/main',
   'git-force-any': 'git push --force origin feat/x',
