@@ -202,6 +202,12 @@ ide:
       # 拦截 python3 script.py，请用 uv run
       python3-script:
         enabled: true
+      # 拦截 python -m module，请用 uv run
+      python-module:
+        enabled: true
+      # 拦截 python3 -m module，请用 uv run
+      python3-module:
+        enabled: true
       # 拦截 node script.js，请用 bun
       node-script:
         enabled: true
