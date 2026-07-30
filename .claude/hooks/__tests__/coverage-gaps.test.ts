@@ -13,7 +13,12 @@ import {
 } from './helpers.js';
 import { runFormatStaged } from '../checks/format-staged.js';
 import { runLintStaged } from '../checks/lint-staged.js';
-import { runStagedTypecheck, runFullTypecheck } from '../checks/typecheck.js';
+import {
+  runStagedTypecheck,
+  runFullTypecheck,
+  pyrightSupportsClearCache,
+  helpTextSupportsClearCache,
+} from '../checks/typecheck.js';
 import { formatFileOnWrite } from '../checks/format-on-write.js';
 import { runRelatedTests, runHookAdversarialIfStaged } from '../checks/tests.js';
 import { runOpenApiContractStaged } from '../checks/openapi-contract.js';
@@ -548,4 +553,20 @@ describe('iac-checkov targets', () => {
     const r = await runIacCheckov(repoDir);
     expect([DECISION.ALLOW, DECISION.DENY, DECISION.SKIP]).toContain(r.decision);
   }, 120_000);
+});
+
+describe('pyright --clear-cache feature detection', () => {
+  it('helpTextSupportsClearCache 识别含 --clear-cache 的帮助文本', () => {
+    expect(helpTextSupportsClearCache('Options:\n  --clear-cache   Clear cache\n')).toBe(true);
+  });
+
+  it('helpTextSupportsClearCache 不含 --clear-cache 时返回 false', () => {
+    expect(helpTextSupportsClearCache('Options:\n  --version   Show version\n')).toBe(false);
+  });
+
+  it('pyrightSupportsClearCache 对真实 cwd 返回 boolean 且不抛出', () => {
+    const result = pyrightSupportsClearCache(PROJECT_ROOT);
+    expect(typeof result).toBe('boolean');
+    expect(() => pyrightSupportsClearCache(PROJECT_ROOT)).not.toThrow();
+  });
 });

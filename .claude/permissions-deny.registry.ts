@@ -98,6 +98,8 @@ const BLOCK_DANGEROUS_ENTRIES: PermissionDenyEntry[] = [
   bash('npx', 'npx *', 'use bunx instead of npx'),
   bash('python-script', 'python * *.py*', 'use uv run instead of python script'),
   bash('python3-script', 'python3 * *.py*', 'use uv run instead of python3 script'),
+  bash('python-module', 'python * -m *', 'use uv run instead of python -m'),
+  bash('python3-module', 'python3 * -m *', 'use uv run instead of python3 -m'),
   bash('node-script', 'node * *.js*', 'use bun instead of node script'),
   bash('hook-bypass-path', 'git * -c core.hooksPath=*', 'hook path bypass'),
   bash('hook-bypass-config', 'git config * core.hooksPath*', 'persistent hook path bypass'),

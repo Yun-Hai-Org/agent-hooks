@@ -283,7 +283,11 @@ const PATTERNS = [
     regex: /\bpython3\s+[^-\s][^\s]*\.py\b/,
     reason: '请使用 uv run python <script.py>',
   },
-  // 31. node <script>
+  // python -m <module>
+  { level: 'strict', id: 'python-module', regex: /\bpython\s+-m\s+\S+/, reason: '请使用 uv run python -m <module>' },
+  // python3 -m <module>
+  { level: 'strict', id: 'python3-module', regex: /\bpython3\s+-m\s+\S+/, reason: '请使用 uv run python -m <module>' },
+  // 33. node <script>
   { level: 'strict', id: 'node-script', regex: /\bnode\s+[^-\s][^\s]*\.js\b/, reason: '请使用 bun <script.js>' },
 
   // ==================== STRICT - Hook 绕过防护 ====================
@@ -388,6 +392,7 @@ const ALLOW_PATTERNS = [
   /\bbun\s+--version\b/,
   /\buv\s+--version\b/,
   /\bgit\s+checkout\s+(main|master)\b/, // 切换到主分支本身不阻止
+  /\buv\s+run\s+python3?\b/, // uv run python ... 形式放行
 ];
 
 type PatternLevel = 'critical' | 'high' | 'strict';
