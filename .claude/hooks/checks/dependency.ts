@@ -6,7 +6,7 @@ import { denyIfToolMissing, denyOnToolError, getBunAuditInvocation } from './too
 import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 const DEP_AUDIT_TIMEOUT_MS = 30000;
-const DEP_AUDIT_TRIGGER_FILES = ['package.json', 'bun.lock', 'bun.lockb', 'package-lock.json', 'yarn.lock'] as const;
+const DEP_AUDIT_TRIGGER_FILES = ['package.json', 'bun.lock', 'bun.lockb', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'] as const;
 
 /** audit 走 npmjs.org；install 仍可用 ~/.npmrc 镜像 */
 export const NPM_AUDIT_REGISTRY = 'https://registry.npmjs.org';

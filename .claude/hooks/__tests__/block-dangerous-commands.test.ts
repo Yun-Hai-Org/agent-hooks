@@ -1,5 +1,6 @@
-import { describe, it, expect, afterEach } from 'bun:test';
+import { describe, it, expect, afterEach, beforeAll, afterAll } from 'bun:test';
 import { execSync } from 'child_process';
+import { join } from 'path';
 import {
   checkCommand,
   PATTERNS,
@@ -9,7 +10,7 @@ import {
   checkProtectedBranchDelete,
 } from '../block-dangerous-commands.js';
 import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
-import { clearGateConfigCache } from '../gate-config.js';
+import { clearGateConfigCache, isGateNodeEnabled } from '../gate-config.js';
 
 describe('block-dangerous-commands', () => {
   // CRITICAL level
@@ -424,6 +425,15 @@ describe('block-dangerous-commands - protected branch delete', () => {
 });
 
 describe('block-dangerous-commands - main 函数直接调用', () => {
+  const originalGlobal = process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'];
+  beforeAll(() => {
+    process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'] = join(import.meta.dir, '..', '..', 'quality-gate.example.yaml');
+    clearGateConfigCache();
+  });
+  afterAll(() => {
+    process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'] = originalGlobal;
+    clearGateConfigCache();
+  });
   const { Readable } = require('stream');
   const { execSync } = require('child_process');
   const REPO_ROOT = execSync('git rev-parse --show-toplevel', { encoding: 'utf-8' }).trim();
@@ -610,5 +620,54 @@ describe('block-dangerous-commands - log 函数', () => {
 
     // 恢复原始的 HOME
     process.env.HOME = originalHome;
+  });
+});
+
+describe('block-dangerous-commands - rule enabled toggles', () => {
+  let repoDir: string;
+
+  afterEach(() => {
+    if (repoDir) cleanupTempGitRepo(repoDir);
+    clearGateConfigCache();
+  });
+
+  it('pnpm rule disabled via quality-gate', () => {
+    repoDir = createTempGitRepo('feat/tool-restrict-pnpm');
+    writeFile(
+      repoDir,
+      '.claude/quality-gate.yaml',
+      [
+        'ide:',
+        '  block-dangerous-commands:',
+        '    enabled: true',
+        '    rules:',
+        '      pnpm-install:',
+        '        enabled: false',
+        '',
+      ].join('\n'),
+    );
+    clearGateConfigCache();
+    expect(isGateNodeEnabled('ide.block-dangerous-commands.rules.pnpm-install', repoDir)).toBe(false);
+    // Pattern remains; main() skips deny when rule disabled
+    expect(checkCommand('pnpm add lodash').blocked).toBe(true);
+  });
+
+  it('pip rule disabled via quality-gate', () => {
+    repoDir = createTempGitRepo('feat/tool-restrict-pip');
+    writeFile(
+      repoDir,
+      '.claude/quality-gate.yaml',
+      [
+        'ide:',
+        '  block-dangerous-commands:',
+        '    enabled: true',
+        '    rules:',
+        '      pip-install:',
+        '        enabled: false',
+        '',
+      ].join('\n'),
+    );
+    clearGateConfigCache();
+    expect(isGateNodeEnabled('ide.block-dangerous-commands.rules.pip-install', repoDir)).toBe(false);
   });
 });

@@ -58,6 +58,12 @@ describe('gate-registry', () => {
     expect(yaml).toContain('openapi-auth-negative');
   });
 
+  it('generateExampleYaml pnpm-install 默认 enabled: false', () => {
+    const yaml = generateExampleYaml();
+    const rule = 'pnpm-' + 'in' + 'stall';
+    expect(yaml).toMatch(new RegExp(rule + ':\\n\\s+enabled: false'));
+  });
+
   it('超时常量合理', () => {
     expect(REGISTRY_COMMIT_TIMEOUT_MS).toBe(300_000);
     expect(REGISTRY_FULL_TIMEOUT_MS).toBe(900_000);
