@@ -8,6 +8,8 @@ export interface GateLeafNode {
   defaultTimeoutMs?: number;
   supportsAutoFix?: boolean;
   controlIds?: string[];
+  /** Registry default for example YAML `enabled`; omitted/true → enabled: true */
+  defaultEnabled?: boolean;
 }
 
 export interface GateHookNode extends GateLeafNode {
@@ -24,6 +26,7 @@ interface LeafOptions {
   defaultTimeoutMs?: number;
   supportsAutoFix?: boolean;
   controlIds?: string[];
+  defaultEnabled?: boolean;
 }
 
 function leaf(description: string, options: LeafOptions = {}): GateLeafNode {
@@ -31,6 +34,7 @@ function leaf(description: string, options: LeafOptions = {}): GateLeafNode {
   if (options.defaultTimeoutMs !== undefined) node.defaultTimeoutMs = options.defaultTimeoutMs;
   if (options.supportsAutoFix) node.supportsAutoFix = true;
   if (options.controlIds !== undefined) node.controlIds = options.controlIds;
+  if (options.defaultEnabled !== undefined) node.defaultEnabled = options.defaultEnabled;
   return node;
 }
 
@@ -219,17 +223,17 @@ const BLOCK_DANGEROUS_RULE_DESCRIPTIONS: Record<string, string> = {
   'kubectl-describe-secret': '拦截 kubectl describe secret',
   'docker-exec-env': '拦截 docker exec 带 -e 传环境变量',
   'podman-exec-env': '拦截 podman exec 带 -e 传环境变量',
-  'pip-install': '拦截 pip install，请用 uv',
-  'npm-install': '拦截 npm install，请用 bun',
-  'npm-ci': '拦截 npm ci，请用 bun install --frozen-lockfile',
-  'pnpm-install': '拦截 pnpm install，请用 bun',
-  'yarn-install': '拦截 yarn install，请用 bun',
-  npx: '拦截 npx，请用 bunx',
-  'python-script': '拦截 python script.py，请用 uv run',
-  'python3-script': '拦截 python3 script.py，请用 uv run',
-  'python-module': '拦截 python -m module，请用 uv run',
-  'python3-module': '拦截 python3 -m module，请用 uv run',
-  'node-script': '拦截 node script.js，请用 bun',
+  'pip-install': '拦截 pip install，请用 uv（可通过 quality-gate enabled 开关）',
+  'npm-install': '拦截 npm install，请用 bun（可通过 quality-gate enabled 开关）',
+  'npm-ci': '拦截 npm ci，请用 bun install --frozen-lockfile（可通过 quality-gate enabled 开关）',
+  'pnpm-install': '拦截 pnpm install/add（可配置；默认关闭以允许 pnpm）',
+  'yarn-install': '拦截 yarn install，请用 bun（可通过 quality-gate enabled 开关）',
+  npx: '拦截 npx，请用 bunx（可通过 quality-gate enabled 开关）',
+  'python-script': '拦截 python script.py，请用 uv run（可通过 quality-gate enabled 开关）',
+  'python3-script': '拦截 python3 script.py，请用 uv run（可通过 quality-gate enabled 开关）',
+  'python-module': '拦截 python -m module，请用 uv run（可通过 quality-gate enabled 开关）',
+  'python3-module': '拦截 python3 -m module，请用 uv run（可通过 quality-gate enabled 开关）',
+  'node-script': '拦截 node script.js，请用 bun（可通过 quality-gate enabled 开关）',
   'hook-bypass-path': '拦截修改 hooks 路径绕过',
   'hook-bypass-config': '拦截修改 core.hooksPath 绕过',
   'no-verify': '拦截 git commit --no-verify',
@@ -420,7 +424,8 @@ const FULL_CHECKS: Record<string, string> = {
 function buildBlockDangerousRules(): Record<string, GateLeafNode> {
   const rules: Record<string, GateLeafNode> = {};
   for (const id of BLOCK_DANGEROUS_RULE_IDS) {
-    rules[id] = leaf(BLOCK_DANGEROUS_RULE_DESCRIPTIONS[id] ?? `拦截危险命令规则 ${id}`);
+    const opts: LeafOptions = id === 'pnpm-install' ? { defaultEnabled: false } : {};
+    rules[id] = leaf(BLOCK_DANGEROUS_RULE_DESCRIPTIONS[id] ?? `拦截危险命令规则 ${id}`, opts);
   }
   return rules;
 }
@@ -760,7 +765,8 @@ function emitYamlNode(
     for (const [ruleId, ruleNode] of Object.entries(hook.rules)) {
       lines.push(`${indent(next + 1)}# ${ruleNode.description}`);
       lines.push(`${indent(next + 1)}${ruleId}:`);
-      lines.push(`${indent(next + 2)}enabled: true`);
+      const enabled = ruleNode.defaultEnabled === false ? 'false' : 'true';
+      lines.push(`${indent(next + 2)}enabled: ${enabled}`);
     }
   }
 }
