@@ -273,7 +273,7 @@ describe('commit-gate', () => {
 
   describe('依赖审计', () => {
     it('应该识别触发审计的文件', () => {
-      const triggers = ['package.json', 'bun.lock', 'bun.lockb', 'package-lock.json', 'yarn.lock'];
+      const triggers = ['package.json', 'bun.lock', 'bun.lockb', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'];
       expect(triggers.some((t) => 'package.json'.endsWith(t))).toBe(true);
       expect(triggers.some((t) => 'bun.lock'.endsWith(t))).toBe(true);
       expect(triggers.some((t) => 'src/app.js'.endsWith(t))).toBe(false);
