@@ -7,6 +7,7 @@ import {
   resolveScanScope,
   resolvePushMergeBranchPolicy,
   resolveLicenseDenylist,
+  resolveForcePrWhenRemote,
   parseDuration,
   normalizeTimeout,
   formatGateTimeoutLabel,
@@ -107,6 +108,40 @@ describe('gate-config settings', () => {
     const t = resolveCoverageThresholds(PROJECT_ROOT);
     expect(t.lines).toBeGreaterThanOrEqual(79);
     expect(t.functions).toBeGreaterThanOrEqual(80);
+  });
+
+  it('forcePrWhenRemote 无 yaml 时默认 true', () => {
+    expect(resolveForcePrWhenRemote(repoDir)).toBe(true);
+  });
+
+  it('forcePrWhenRemote 显式 true', () => {
+    mkdirSync(join(repoDir, '.claude'), { recursive: true });
+    writeFileSync(join(repoDir, '.claude/quality-gate.yaml'), 'settings:\n  forcePrWhenRemote: true\n');
+    clearGateConfigCache();
+    expect(resolveForcePrWhenRemote(repoDir)).toBe(true);
+  });
+
+  it('forcePrWhenRemote 显式 false', () => {
+    mkdirSync(join(repoDir, '.claude'), { recursive: true });
+    writeFileSync(join(repoDir, '.claude/quality-gate.yaml'), 'settings:\n  forcePrWhenRemote: false\n');
+    clearGateConfigCache();
+    expect(resolveForcePrWhenRemote(repoDir)).toBe(false);
+  });
+
+  it('forcePrWhenRemote merge override (base true + override false → false)', () => {
+    const originalGlobal = process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'];
+    try {
+      const globalPath = join(repoDir, 'global-config.yaml');
+      writeFileSync(globalPath, 'settings:\n  forcePrWhenRemote: true\n');
+      process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'] = globalPath;
+      mkdirSync(join(repoDir, '.claude'), { recursive: true });
+      writeFileSync(join(repoDir, '.claude/quality-gate.yaml'), 'settings:\n  forcePrWhenRemote: false\n');
+      clearGateConfigCache();
+      expect(resolveForcePrWhenRemote(repoDir)).toBe(false);
+    } finally {
+      process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'] = originalGlobal;
+      clearGateConfigCache();
+    }
   });
 });
 

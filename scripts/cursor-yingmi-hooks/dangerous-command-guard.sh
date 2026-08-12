@@ -44,10 +44,9 @@ if [[ "$command_norm" =~ rm[[:space:]]+-[rf]+[[:space:]]*/ ]]; then
   deny "禁止执行针对系统关键目录的递归删除。" "该 rm 命令针对系统关键路径，已被安全策略拒绝。请仅在项目目录内执行删除，并避免使用 -rf / 等危险用法。"
 fi
 # 高危：格式化或直接写磁盘设备
-# format 使用词边界，避免 information / information_schema 等子串误报
+# 仅拦截 mkfs / dd if= / > /dev/sd；裸 format 词会误伤 ruff/prettier/black 等代码格式化工具
 dev_write_re='[^[:space:]]+>[[:space:]]*/dev/sd'
 if [[ "$command_norm" =~ mkfs ]] \
-  || [[ "$command_norm" =~ (^|[[:space:]]|/)format([^[:alnum:]_]|$) ]] \
   || [[ "$command_norm" =~ dd[[:space:]]+if= ]] \
   || [[ "$command_norm" =~ $dev_write_re ]]; then
   deny "禁止执行格式化或直接写磁盘设备。" "该命令可能格式化磁盘或写入裸设备，已被安全策略拒绝。"

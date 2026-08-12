@@ -23,13 +23,11 @@ def validate_hooks_manifest(
     hooks_doc = load_json(hooks_path)
     content = hooks_path.read_text(encoding="utf-8")
 
-    errors: list[str] = []
-
-    for token in manifest.get("requiredCommandTokens", []):
-        if token not in content:
-            errors.append(
-                f"error: hooks.json.example missing required token: {token}",
-            )
+    errors: list[str] = [
+        f"error: hooks.json.example missing required token: {token}"
+        for token in manifest.get("requiredCommandTokens", [])
+        if token not in content
+    ]
 
     hooks = hooks_doc.get("hooks", {})
     for event in manifest.get("requiredEvents", []):

@@ -1,0 +1,38 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: ["**"]
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+jobs:
+  ci-bun:
+    uses: Yun-Hai-Org/ci-templates/.github/workflows/standard-ci.yml@main
+    with:
+      project-type: "bun"
+      run-static-analysis: true
+      run-security-scan: true
+      run-dependency-audit: true
+      run-knip: true
+      run-unit-tests: true
+      run-integration-tests: true
+      run-e2e-tests: true
+      run-release-gates: false
+      wecom-notify: false
+    secrets: inherit
+  ci-python:
+    uses: Yun-Hai-Org/ci-templates/.github/workflows/standard-ci.yml@main
+    with:
+      project-type: "python"
+      python-version: "3.12"
+      run-static-analysis: true
+      run-security-scan: true
+      run-dependency-audit: true
+      run-unit-tests: true
+      run-integration-tests: true
+      run-e2e-tests: true
+      run-release-gates: false
+      wecom-notify: false
+    secrets: inherit
