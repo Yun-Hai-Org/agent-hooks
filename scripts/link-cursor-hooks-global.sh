@@ -84,9 +84,13 @@ if [[ ! -x "$HOME/.cursor/bun" ]]; then
 	exit 1
 fi
 
+# Bootstrap only when missing: example defaults git.pre-push / git.pre-merge-commit
+# to enabled: false (local full gates OFF; check trees kept for rollback).
+# Existing ~/.claude/quality-gate.yaml is left untouched - re-copy or edit manually
+# if you still have local full gates enabled.
 if [ ! -f "$HOME/.claude/quality-gate.yaml" ] && [ -f "$HOOKS_REPO/.claude/quality-gate.example.yaml" ]; then
 	cp "$HOOKS_REPO/.claude/quality-gate.example.yaml" "$HOME/.claude/quality-gate.yaml"
-	echo "bootstrapped ~/.claude/quality-gate.yaml from example"
+	echo "bootstrapped ~/.claude/quality-gate.yaml from example (local full gates OFF)"
 fi
 
 echo "linked ~/.claude/hooks -> $HOOKS_REPO/.claude/hooks"

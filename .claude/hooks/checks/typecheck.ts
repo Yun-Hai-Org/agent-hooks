@@ -1,5 +1,6 @@
-import { execCommand, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
-import { getScopedStagedFiles } from './scan-scope.js';
+import { execCommand, execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
+import { filterPathsByScope, getScanScope, getScopedStagedFiles } from './scan-scope.js';
+import { listTrackedFiles } from './file-patterns.js';
 import {
   denyIfPyrightMissing,
   denyIfToolMissing,
@@ -44,6 +45,49 @@ export function pyrightSupportsClearCache(cwd: string): boolean {
   return helpTextSupportsClearCache(text);
 }
 
+async function runPyrightOnFiles(
+  files: string[],
+  cwd: string | undefined,
+  timeoutMs: number,
+): Promise<TypecheckToolResult> {
+  if (files.length === 0) {
+    return { tool: 'pyright', success: true, stdout: '无 .py 文件，跳过', stderr: '' };
+  }
+  const clearCache = pyrightSupportsClearCache(cwd ?? process.cwd()) ? '--clear-cache' : '';
+  const fileArgs = files.map((f) => `"${f}"`).join(' ');
+  if (execCommand('which pyright', { cwd }).success) {
+    const cmd = `pyright ${clearCache} ${fileArgs}`.trim().replace(/\s+/g, ' ');
+    return {
+      tool: 'pyright',
+      ...(await withTimeout(
+        execCommandAsync(cmd, { cwd, timeout: timeoutMs }),
+        timeoutMs,
+        gateTimeoutMessage('pyright', timeoutMs),
+      )),
+    };
+  }
+  const cmd = `uv run pyright ${clearCache} ${fileArgs}`.trim().replace(/\s+/g, ' ');
+  return {
+    tool: 'pyright (uv)',
+    ...(await withTimeout(
+      execCommandAsync(cmd, { cwd, timeout: timeoutMs }),
+      timeoutMs,
+      gateTimeoutMessage('pyright', timeoutMs),
+    )),
+  };
+}
+
+async function runTsc(cwd: string | undefined, timeoutMs: number): Promise<TypecheckToolResult> {
+  return {
+    tool: 'tsc',
+    ...(await withTimeout(
+      execCommandAsync(`${getBunxInvocation(cwd)} tsc --noEmit`, { cwd, timeout: timeoutMs }),
+      timeoutMs,
+      gateTimeoutMessage('tsc', timeoutMs),
+    )),
+  };
+}
+
 export async function runStagedTypecheck(cwd?: string, options?: GateCheckRunOptions) {
   const timeoutMs = options?.timeoutMs ?? COMMIT_GATE_TIMEOUT_MS;
   const stagedFiles = getScopedStagedFiles(cwd);
@@ -67,43 +111,24 @@ export async function runStagedTypecheck(cwd?: string, options?: GateCheckRunOpt
     if (missing) return missing;
   }
 
-  const pyrightPromise = new Promise((resolve) => {
-    if (stagedPyFiles.length === 0) {
-      resolve({ tool: 'pyright', success: true, stdout: '无暂存的 .py 文件，跳过', stderr: '' });
-      return;
-    }
-    const clearCache = pyrightSupportsClearCache(cwd) ? '--clear-cache' : '';
-    if (execCommand('which pyright', { cwd }).success) {
-      const files = stagedPyFiles.map((f) => `"${f}"`).join(' ');
-      const cmd = `pyright ${clearCache} ${files}`.trim().replace(/\s+/g, ' ');
-      resolve({ tool: 'pyright', ...execCommand(cmd, { cwd, timeout: timeoutMs }) });
-      return;
-    }
-    const files = stagedPyFiles.map((f) => `"${f}"`).join(' ');
-    const cmd = `uv run pyright ${clearCache} ${files}`.trim().replace(/\s+/g, ' ');
-    resolve({ tool: 'pyright (uv)', ...execCommand(cmd, { cwd, timeout: timeoutMs }) });
-  });
+  const pyrightPromise: Promise<TypecheckToolResult> =
+    stagedPyFiles.length === 0
+      ? Promise.resolve({ tool: 'pyright', success: true, stdout: '无暂存的 .py 文件，跳过', stderr: '' })
+      : runPyrightOnFiles(stagedPyFiles, cwd, timeoutMs);
 
-  const tscPromise = new Promise((resolve) => {
+  const tscPromise: Promise<TypecheckToolResult> = (async () => {
     if (nonTestJsTsFiles.length === 0) {
-      resolve({ tool: 'tsc', success: true, stdout: '暂存区无非测试代码文件，跳过', stderr: '' });
-      return;
+      return { tool: 'tsc', success: true, stdout: '暂存区无非测试代码文件，跳过', stderr: '' };
     }
     if (!execCommand('test -f tsconfig.json', { cwd }).success) {
-      resolve({ tool: 'tsc', success: true, stdout: 'no tsconfig.json, skip', stderr: '' });
-      return;
+      return { tool: 'tsc', success: true, stdout: 'no tsconfig.json, skip', stderr: '' };
     }
-    resolve({ tool: 'tsc', ...execCommand(`${getBunxInvocation(cwd)} tsc --noEmit`, { cwd, timeout: timeoutMs }) });
-  });
+    return runTsc(cwd, timeoutMs);
+  })();
 
   try {
-    const results = await Promise.allSettled([
-      withTimeout(pyrightPromise, timeoutMs, gateTimeoutMessage('pyright', timeoutMs)),
-      withTimeout(tscPromise, timeoutMs, gateTimeoutMessage('tsc', timeoutMs)),
-    ]);
-    const failures = fulfilledToolResults(results as PromiseSettledResult<TypecheckToolResult>[]).filter(
-      (v) => !v.success,
-    );
+    const results = await Promise.allSettled([pyrightPromise, tscPromise]);
+    const failures = fulfilledToolResults(results).filter((v) => !v.success);
     if (failures.length > 0) {
       const messages = failures.map((f) => formatTypecheckToolOutput(f)).join('\n\n');
       return formatResult('type-check', DECISION.DENY, `类型检查失败:\n${messages.slice(0, 800)}`, { failures });
@@ -116,6 +141,7 @@ export async function runStagedTypecheck(cwd?: string, options?: GateCheckRunOpt
 
 export async function runFullTypecheck(cwd?: string, options?: GateCheckRunOptions) {
   const timeoutMs = options?.timeoutMs ?? FULL_GATE_TIMEOUT_MS;
+  const root = cwd ?? process.cwd();
   const hasPyproject = execCommand('test -f pyproject.toml', { cwd }).success;
   const hasTsconfig = execCommand('test -f tsconfig.json', { cwd }).success;
 
@@ -128,37 +154,33 @@ export async function runFullTypecheck(cwd?: string, options?: GateCheckRunOptio
     if (missing) return missing;
   }
 
-  const pyrightPromise = new Promise((resolve) => {
-    if (!hasPyproject) {
-      resolve({ tool: 'pyright', success: true, stdout: 'no pyproject.toml, skip', stderr: '' });
-      return;
-    }
-    const clearCache = pyrightSupportsClearCache(cwd) ? '--clear-cache' : '';
-    if (execCommand('which pyright', { cwd }).success) {
-      const cmd = `pyright ${clearCache}`.trim().replace(/\s+/g, ' ');
-      resolve({ tool: 'pyright', ...execCommand(cmd, { cwd, timeout: timeoutMs }) });
-      return;
-    }
-    const cmd = `uv run pyright ${clearCache}`.trim().replace(/\s+/g, ' ');
-    resolve({ tool: 'pyright (uv)', ...execCommand(cmd, { cwd, timeout: timeoutMs }) });
-  });
+  const scopedPyFiles = hasPyproject
+    ? filterPathsByScope(
+        listTrackedFiles((f) => f.endsWith('.py'), root),
+        getScanScope(root),
+      )
+    : [];
 
-  const tscPromise = new Promise((resolve) => {
-    if (!hasTsconfig) {
-      resolve({ tool: 'tsc', success: true, stdout: 'no tsconfig.json, skip', stderr: '' });
-      return;
+  const pyrightPromise: Promise<TypecheckToolResult> = (async () => {
+    if (!hasPyproject) {
+      return { tool: 'pyright', success: true, stdout: 'no pyproject.toml, skip', stderr: '' };
     }
-    resolve({ tool: 'tsc', ...execCommand(`${getBunxInvocation(cwd)} tsc --noEmit`, { cwd, timeout: timeoutMs }) });
-  });
+    if (scopedPyFiles.length === 0) {
+      return { tool: 'pyright', success: true, stdout: 'scanScope 内无 .py 文件，跳过', stderr: '' };
+    }
+    return runPyrightOnFiles(scopedPyFiles, cwd, timeoutMs);
+  })();
+
+  const tscPromise: Promise<TypecheckToolResult> = (async () => {
+    if (!hasTsconfig) {
+      return { tool: 'tsc', success: true, stdout: 'no tsconfig.json, skip', stderr: '' };
+    }
+    return runTsc(cwd, timeoutMs);
+  })();
 
   try {
-    const results = await Promise.allSettled([
-      withTimeout(pyrightPromise, timeoutMs, gateTimeoutMessage('pyright', timeoutMs)),
-      withTimeout(tscPromise, timeoutMs, gateTimeoutMessage('tsc', timeoutMs)),
-    ]);
-    const failures = fulfilledToolResults(results as PromiseSettledResult<TypecheckToolResult>[]).filter(
-      (v) => !v.success,
-    );
+    const results = await Promise.allSettled([pyrightPromise, tscPromise]);
+    const failures = fulfilledToolResults(results).filter((v) => !v.success);
     if (failures.length > 0) {
       const messages = failures.map((f) => formatTypecheckToolOutput(f)).join('\n\n');
       return formatResult('type-check', DECISION.DENY, `类型检查失败:\n${messages.slice(0, 800)}`, { failures });

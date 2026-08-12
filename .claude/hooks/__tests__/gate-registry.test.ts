@@ -64,6 +64,14 @@ describe('gate-registry', () => {
     expect(yaml).toMatch(new RegExp(rule + ':\\n\\s+enabled: false'));
   });
 
+  it('generateExampleYaml local full gates 默认 enabled: false', () => {
+    const yaml = generateExampleYaml();
+    expect(yaml).toMatch(/pre-push:\n\s+enabled: false/);
+    expect(yaml).toMatch(/pre-merge-commit:\n\s+enabled: false/);
+    expect(GATE_REGISTRY.git['pre-push']?.defaultEnabled).toBe(false);
+    expect(GATE_REGISTRY.git['pre-merge-commit']?.defaultEnabled).toBe(false);
+  });
+
   it('超时常量合理', () => {
     expect(REGISTRY_COMMIT_TIMEOUT_MS).toBe(300_000);
     expect(REGISTRY_FULL_TIMEOUT_MS).toBe(900_000);
