@@ -27,16 +27,20 @@
 `export PATH="${HOME}/.cursor:..."` 对齐），供 `session-start` 工具检测、`execCommand` 与
 `resolve-hook-path` spawn 使用。
 
-## B. 本地质量三门（Git native only）
+## B. 本地质量门 vs CI full
 
-| 操作           | Native Hook      | profile                            | 失败                   |
-| -------------- | ---------------- | ---------------------------------- | ---------------------- |
-| git commit     | pre-commit       | commit；merge 结论 → full 或 cache | exit 1                 |
-| commit message | commit-msg       | message 规则                       | exit 1                 |
-| git push       | pre-push         | full                               | exit 1 + gate-pending  |
-| git merge      | pre-merge-commit | full @ 合并树                      | exit 1（保留合并状态） |
+**分工**：本地 = **实时安全（A）+ 提交门（commit）**；**full = CI**（PR 流水线 / 中央 CI 模板，详见 `docs/ci-cd-migration.md`）。
 
-**merge 结论**：`pre-merge-commit` 失败时 exit 1（保留 MERGE_HEAD，不自动 abort）。
+| 操作           | Native Hook      | profile / 职责                     | 状态 / 失败 |
+| -------------- | ---------------- | ---------------------------------- | ----------- |
+| git commit     | pre-commit       | commit（暂存区增量）               | **启用**；exit 1 |
+| commit message | commit-msg       | message 规则                       | **启用**；exit 1 |
+| git push       | pre-push         | full                               | **已禁用**（`git.pre-push.enabled: false`）；权威检查在 CI |
+| git merge      | pre-merge-commit | full @ 合并树                      | **已禁用**（`git.pre-merge-commit.enabled: false`）；权威检查在 CI |
+
+本地 hook 代码与 check 树保留，翻回 `enabled: true` 即可恢复本地 full。
+
+**merge 结论（仅当本地 pre-merge 重新启用时）**：`pre-merge-commit` 失败时 exit 1（保留 MERGE_HEAD，不自动 abort）。
 
 IDE 禁止 `git commit` 收尾（须 `git merge --continue` 或 `--abort`）。
 
@@ -44,16 +48,17 @@ IDE 禁止 `git commit` 收尾（须 `git merge --continue` 或 `--abort`）。
 
 合并收尾必须在**系统终端**执行 `git merge --continue`，不要依赖 IDE 内 Agent 执行 `git commit`。
 
-**推荐合并工作流**（IDE 内 merge 易失败，或需先验 full 门时）：
+**推荐合并工作流**（本地 full 已禁用时走 PR + CI；仅回滚启用本地 full 时）：
 
 ```bash
-# 在目标分支（如 master）上
-git merge --no-ff --no-commit <branch>   # 不触发 pre-merge-commit
-bun run .claude/hooks/quality-gate.ts --profile=full   # 通过后自动写入 gate cache
-git merge --continue                      # 终端执行；cache 命中时跳过重复 full 扫描
-```
+# 默认：feature 分支 push → 开 PR → CI full 通过后合并
+git push -u origin <feature-分支>
 
-若 full 门失败：修复问题后重新跑 full 门，再 `git merge --continue`；或 `git merge --abort` 取消合并。
+# 仅当 git.pre-merge-commit.enabled: true 时的本地先验：
+git merge --no-ff --no-commit <branch>
+bun run .claude/hooks/quality-gate.ts --profile=full
+git merge --continue
+```
 
 **main/master 须 `--no-ff`**：Fast-forward 与 `--squash` 均不触发 `pre-merge-commit`。
 终端：`branch.main/master.mergeoptions`（`configure-merge-no-ff-global.sh`）；
@@ -112,11 +117,11 @@ IDE：`block-dangerous-commands` 拦截无 `--no-ff` 的 merge 与 `--squash`。
 
 共享实现：`checks/*.ts` + `quality-gate.ts` + `~/.claude/hooks/native/*.ts`
 
-**commit profile 检查**：分支/msg/敏感文件/暂存 lint/format/测试/安全扫描等。
+**commit profile 检查**（本地启用）：分支/msg/敏感文件/暂存 lint/format/测试/安全扫描等。
 
-**full profile 检查**：全仓库 lint/format/测试/semgrep/trivy/gitleaks 等（knip 仅 hooks 项目）。
+**full profile 检查**（由 CI 权威执行；本地 pre-push/pre-merge 默认禁用）：全仓库 lint/format/测试/semgrep/trivy/gitleaks 等（knip 仅 hooks 项目）。
 
-### settings.coverageThreshold（push/merge 双覆盖率门禁）
+### settings.coverageThreshold（full / CI 覆盖率门禁）
 
 `quality-gate.yaml` 顶层 `settings.coverageThreshold` 为 SSOT（**不在** `bunfig.toml` 设阈值）：
 
@@ -130,12 +135,12 @@ settings:
 
 | 拦截点       | profile                   | 检查项            | 行为                                    |
 | ------------ | ------------------------- | ----------------- | --------------------------------------- |
-| `git push`   | full (`pre-push`)         | `hook-unit-tests` | 跑 coverage 单测；Lines/Funcs 均 ≥ 阈值 |
-|              |                           |                   | 未达标则 DENY exit 1                    |
-| `git merge`  | full (`pre-merge-commit`) | `hook-unit-tests` | 同上                                    |
+| CI / PR      | full（中央 CI 模板）      | `hook-unit-tests` | 权威执行覆盖率阈值；本地 pre-push/pre-merge 默认不跑 |
+| `git push`   | full (`pre-push`)         | `hook-unit-tests` | **本地已禁用**；回滚启用后 DENY exit 1  |
+| `git merge`  | full (`pre-merge-commit`) | `hook-unit-tests` | **本地已禁用**；回滚启用后同上          |
 | `git commit` | commit                    | —                 | 不检查覆盖率（coverage 为 SKIP 占位）   |
 
-**commit vs push 摘要**：`git commit`（pre-commit / commit profile）只做暂存区 lint、测试与安全扫描，**不**跑 Bun/pytest 覆盖率阈值；`git push` 与 `git merge`（full profile）通过 `hook-unit-tests` 强制执行 Lines/Funcs 覆盖率下限。本地/CI 可用 `bun test --coverage`、`uv run pytest --cov`、`scripts/run-shell-coverage.sh`（bats；kcov 可选）独立验证。
+**commit vs full 摘要**：`git commit`（pre-commit / commit profile）只做暂存区 lint、测试与安全扫描，**不**跑 Bun/pytest 覆盖率阈值；full 覆盖率由 **CI** 权威执行（本地 pre-push/pre-merge 默认 `enabled: false`）。本地可用 `bun test --coverage`、`uv run pytest --cov`、`scripts/run-shell-coverage.sh`（bats；kcov 可选）独立验证。
 
 DENY 示例：`Hook 单测通过但覆盖率未达标：Lines 78% < 80%；Funcs 76% < 80%`
 
