@@ -693,7 +693,7 @@ export interface ResolvedScanScope {
   exclude: string[];
 }
 
-const BUILTIN_SCAN_EXCLUDE = ['_bmad', '_bmad-output', 'node_modules', '.venv', '.claude/worktrees'];
+const BUILTIN_SCAN_EXCLUDE = ['_bmad', '_bmad-output', 'node_modules', '.venv', '.claude/worktrees', '.worktrees'];
 
 export function resolveScanScope(cwd: string = process.cwd()): ResolvedScanScope {
   const config = loadGateConfig(cwd);
