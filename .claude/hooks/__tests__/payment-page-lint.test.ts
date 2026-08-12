@@ -26,7 +26,12 @@ describe('payment-page-lint', () => {
 
   it('isPaymentPageTarget 匹配 payment 路径', () => {
     expect(isPaymentPageTarget('src/payment/checkout.html')).toBe(true);
+    expect(isPaymentPageTarget('payment/page.tsx')).toBe(true);
     expect(isPaymentPageTarget('README.md')).toBe(false);
+  });
+
+  it('isPaymentPageTarget 不匹配 data/evals 报告 html', () => {
+    expect(isPaymentPageTarget('data/evals/x/reports/y.html')).toBe(false);
   });
 });
 

@@ -2,13 +2,12 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import yaml from 'js-yaml';
 import { formatResult, DECISION } from '../security-orchestrator.js';
-import { getStagedFiles } from './git-policy.js';
 import { listTrackedFiles } from './file-patterns.js';
-import { filterPathsByScope, getScanScope } from './scan-scope.js';
+import { filterPathsByScope, getScanScope, getScopedStagedFiles } from './scan-scope.js';
 import type { CheckResult, GateCheckRunOptions } from '../types.js';
 
 const ALLOWLIST_PATH = '.hooks/payment-script-allowlist.yaml';
-const PAYMENT_PATH_PATTERN = /(?:^|\/)(payment|checkout|pay|billing)(?:\/|$)|\.html?$/i;
+const PAYMENT_PATH_PATTERN = /(?:^|\/)(payment|checkout|pay|billing)(?:\/|$)/i;
 const EXTERNAL_SCRIPT = /<script[^>]+src=["']https?:\/\/[^"']+["'][^>]*>/gi;
 const SRI_ATTR = /\bintegrity=["'][^"']+["']/i;
 
@@ -102,7 +101,7 @@ function lintFiles(files: string[], cwd: string, checkId: string): CheckResult {
 
 export function runPaymentPageStaged(cwd?: string, _options?: GateCheckRunOptions): CheckResult {
   const root = cwd ?? process.cwd();
-  return lintFiles(getStagedFiles(root), root, 'payment-page-staged');
+  return lintFiles(getScopedStagedFiles(root), root, 'payment-page-staged');
 }
 
 export function runPaymentPageFull(cwd?: string, _options?: GateCheckRunOptions): CheckResult {

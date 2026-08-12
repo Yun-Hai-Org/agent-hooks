@@ -179,6 +179,13 @@ describe('extended-lint', () => {
       expect(content).toContain('--dialect ansi');
     });
 
+    it('runExtendedLintStaged 应使用 getScopedStagedFiles', () => {
+      const sourceFile = join(import.meta.dir, '..', 'checks', 'extended-lint.ts');
+      const content = readFileSync(sourceFile, 'utf-8');
+      expect(content).toContain('getScopedStagedFiles');
+      expect(content).not.toContain('getStagedFiles(');
+    });
+
     it('应包含 container runtime compose config 校验', () => {
       const sourceFile = join(import.meta.dir, '..', 'checks', 'extended-lint.ts');
       const content = readFileSync(sourceFile, 'utf-8');
