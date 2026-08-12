@@ -4,9 +4,10 @@
  * Deny file writes on main checkout; allow inside git worktrees on feat/* branches.
  */
 
-import { existsSync, appendFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { LOG_DIR, readStdin, isGitRepo } from './security-orchestrator.js';
+import { existsSync, appendFileSync, mkdirSync, realpathSync } from 'fs';
+import { join, resolve, isAbsolute, basename, dirname } from 'path';
+import { LOG_DIR, readStdin, isGitRepo, execCommand } from './security-orchestrator.js';
+import { repoRelativePathFromAbs } from './checks/scan-scope.js';
 import {
   normalizeInput,
   normalizeFileEditInput,
@@ -108,6 +109,24 @@ async function main() {
       }
     }
 
+    let repoRelPath: string | null = null;
+    if (tool_name === 'Write' || tool_name === 'Edit' || tool_name === 'StrReplace') {
+      const rawFilePath = tool_input.file_path ?? '';
+      if (rawFilePath) {
+        let absPath = isAbsolute(rawFilePath) ? rawFilePath : resolve(workingDir, rawFilePath);
+        try { absPath = realpathSync(absPath); } catch { absPath = join(realpathSync(resolve(absPath, '..')), basename(absPath)); }
+        const rootResult = execCommand('git rev-parse --show-toplevel', { cwd: workingDir });
+        if (rootResult.success && rootResult.stdout.trim()) {
+          repoRelPath = repoRelativePathFromAbs(absPath, rootResult.stdout.trim());
+          if (repoRelPath === null) {
+            log({ level: 'INFO', reason: 'write outside repo allowed', file: absPath, tool: tool_name, session_id });
+            emit(allow());
+            return;
+          }
+        }
+      }
+    }
+
     if (tool_name === 'Shell') {
       const command = tool_input.command ?? '';
       if (ALLOWED_PATHS_ON_MAIN.some((p) => command.includes(p))) {
@@ -116,7 +135,7 @@ async function main() {
         return;
       }
     } else {
-      const filePath = tool_input.file_path ?? '';
+      const filePath = repoRelPath ?? tool_input.file_path ?? '';
       if (isAllowedPathOnMain(filePath)) {
         log({ level: 'INFO', reason: 'allowed planning path', file: filePath, tool: tool_name, session_id });
         emit(allow());
@@ -130,6 +149,38 @@ async function main() {
     if (insideWorktree && isFeatBranch(branch)) {
       emit(allow());
       return;
+    }
+
+    if (tool_name !== 'Shell' && typeof tool_input.file_path === 'string') {
+      const rawFilePath = tool_input.file_path;
+      const absFilePath = isAbsolute(rawFilePath) ? rawFilePath : resolve(workingDir, rawFilePath);
+      let dir = dirname(absFilePath);
+      let fileWorktreeRoot: string | null = null;
+      while (dir !== '/' && dir.length >= workingDir.length) {
+        const dotGit = join(dir, '.git');
+        if (existsSync(dotGit)) {
+          fileWorktreeRoot = dir;
+          break;
+        }
+        if (dir === workingDir) break;
+        dir = dirname(dir);
+      }
+      if (fileWorktreeRoot) {
+        const fileBranch = getCurrentBranch(fileWorktreeRoot);
+        if (isFeatBranch(fileBranch)) {
+          log({
+            level: 'INFO',
+            reason: 'write inside feat worktree (by file path)',
+            file: rawFilePath,
+            worktree: fileWorktreeRoot,
+            branch: fileBranch,
+            tool: tool_name,
+            session_id,
+          });
+          emit(allow());
+          return;
+        }
+      }
     }
 
     const detail = tool_name === 'Shell' ? (tool_input.command ?? '').slice(0, 120) : (tool_input.file_path ?? '');

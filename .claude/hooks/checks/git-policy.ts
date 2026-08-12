@@ -251,7 +251,8 @@ export function isGitCommitCommand(cmd: string): boolean {
 }
 
 export function isGitMergeCommand(cmd: string): boolean {
-  return /\bgit\s+merge\b/.test(cmd);
+  // 用前瞻要求 merge 后是空白或行尾，避免误匹配 `git merge-base`（- 处的 \b 会误命中）
+  return /\bgit\s+merge(?=\s|$)/.test(cmd);
 }
 
 export function resolveMergeHeadPath(cwd: string): string | null {
@@ -404,6 +405,11 @@ export function resolveBaseBranch(cwd?: string): 'main' | 'master' | null {
   return null;
 }
 
+export function hasRemote(cwd?: string): boolean {
+  const result = execCommand('git remote', { cwd });
+  return result.success && result.stdout.trim().length > 0;
+}
+
 export function isBranchMergedInto(branch: string, base: string, cwd?: string): boolean {
   const normalized = normalizeBranchRef(branch);
   const candidates = [normalized, `origin/${normalized}`];
@@ -449,10 +455,16 @@ export function listWorktrees(repoCwd?: string): Map<string, string> {
 }
 
 export function getWorktreeBranch(worktreePath: string, repoCwd?: string): string | null {
+  // Resolve relative worktree paths against repoCwd (not process.cwd()): the hook process
+  // may be spawned with a cwd that differs from the repo root, which would otherwise make
+  // realpathSync / execCommand resolve the relative path against the wrong base and fail to
+  // match the worktree branch — turning a safe `git worktree remove <relpath>` into a false deny.
+  const base = repoCwd ?? process.cwd();
+  const resolvedPath = isAbsolute(worktreePath) ? worktreePath : join(base, worktreePath);
   for (const [path, branch] of listWorktrees(repoCwd)) {
-    if (worktreePathsEqual(path, worktreePath)) return branch;
+    if (worktreePathsEqual(path, resolvedPath)) return branch;
   }
-  return resolveGitBranchName(worktreePath);
+  return resolveGitBranchName(resolvedPath);
 }
 
 export function buildProtectedBranchDeleteDenyReason(branch: string): string {

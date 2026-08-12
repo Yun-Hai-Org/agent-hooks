@@ -130,6 +130,15 @@ describe('branch-delete-gate', () => {
     expect(evaluateBranchDeleteCommand(`git worktree remove "${wtPath}"`, repoPath)).toBeNull();
   });
 
+  it('相对路径 worktree remove（repoCwd != process.cwd()）已合并应放行', () => {
+    const branch = createUnmergedFeatureBranch('feat/wt-rel-merged');
+    execSync(`git merge ${branch} --no-edit`, { cwd: repoPath, stdio: 'pipe' });
+    const wtAbs = join(tempDir, 'wt-rel-merged');
+    execSync(`git worktree add "${wtAbs}" "${branch}"`, { cwd: repoPath, stdio: 'pipe' });
+    // 相对 repoPath 的路径；process.cwd()（bun 运行目录）≠ repoPath，旧代码会用 process.cwd() 解析相对路径而失败
+    expect(evaluateBranchDeleteCommand('git worktree remove ../wt-rel-merged', repoPath)).toBeNull();
+  });
+
   it('feat/*-task-* 未 merge 进父 epic 时 worktree remove 应 deny', () => {
     const epic = 'feat/hooks-restore-workflow';
     const taskBranch = 'feat/hooks-restore-workflow-task-unmerged';

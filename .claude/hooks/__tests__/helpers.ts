@@ -65,7 +65,9 @@ export function disableGlobalGitHooks(cwd: string) {
 
 /** 为测试仓库写入 quality-gate 白名单（从项目 example 复制） */
 export function bootstrapQualityGateYaml(repoDir: string): void {
-  const src = join(PROJECT_ROOT, '.claude', 'quality-gate.yaml');
+  const example = join(PROJECT_ROOT, '.claude', 'quality-gate.example.yaml');
+  const override = join(PROJECT_ROOT, '.claude', 'quality-gate.yaml');
+  const src = existsSync(example) ? example : override;
   // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal -- repoDir 为受信临时测试仓库根
   const destDir = join(repoDir, '.claude');
   mkdirSync(destDir, { recursive: true });

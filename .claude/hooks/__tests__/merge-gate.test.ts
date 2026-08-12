@@ -1,8 +1,14 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { execSync } from 'child_process';
+import { join } from 'path';
+import { Readable } from 'stream';
 import { formatResult, decide, DECISION } from '../security-orchestrator.js';
 import { extractMergeTarget } from '../checks/git-policy.js';
 import { getCurrentBranch } from '../security-orchestrator.js';
 import { summarizeResults } from '../quality-gate.js';
+import { main as mergeMain } from '../merge-gate.js';
+import { clearGateConfigCache } from '../gate-config.js';
+import { createTempGitRepo, cleanupTempGitRepo, expectDeny } from './helpers.js';
 
 describe('merge-gate', () => {
   describe('extractMergeTarget', () => {
@@ -51,5 +57,76 @@ describe('merge-gate', () => {
       expect(summary).toContain('semgrep');
       expect(summary).toContain('✅');
     });
+  });
+});
+
+describe('merge-gate main() PR-policy guard', () => {
+  let originalStdin: typeof process.stdin;
+  let originalStdoutWrite: typeof process.stdout.write;
+  let originalConsoleLog: typeof console.log;
+  let output: string[];
+  let repo: string;
+
+  beforeEach(() => {
+    originalStdin = process.stdin;
+    originalStdoutWrite = process.stdout.write.bind(process.stdout);
+    originalConsoleLog = console.log;
+    output = [];
+    console.log = ((...args: unknown[]) => {
+      output.push(args.map((a) => (typeof a === 'string' ? a : String(a))).join(' '));
+    }) as typeof console.log;
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      output.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString());
+      return true;
+    }) as typeof process.stdout.write;
+    process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'] = join(import.meta.dir, 'empty-global-quality-gate.yaml');
+    clearGateConfigCache();
+  });
+
+  afterEach(() => {
+    process.stdin = originalStdin;
+    process.stdout.write = originalStdoutWrite;
+    console.log = originalConsoleLog;
+    if (repo) cleanupTempGitRepo(repo);
+    repo = '';
+    process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'] = join(import.meta.dir, 'empty-global-quality-gate.yaml');
+    clearGateConfigCache();
+  });
+
+  it('main + remote + forcePrWhenRemote 开启时 deny PR 策略', async () => {
+    repo = createTempGitRepo('main');
+    execSync('git branch -M main', { cwd: repo });
+    execSync('git remote add origin git@github.com:org/repo.git', { cwd: repo });
+    clearGateConfigCache();
+    process.stdin = Readable.from([
+      JSON.stringify({
+        tool_name: 'Shell',
+        tool_input: { command: 'git merge feat/x' },
+        session_id: 'mg-pr-policy',
+        cwd: repo,
+      }),
+    ]);
+    await mergeMain();
+    const combined = output.join('');
+    expect(expectDeny(combined)).toBe(true);
+    expect(combined).toContain('forcePrWhenRemote');
+  });
+
+  it('main 无 remote 时跳过 PR 策略守卫进入既有逻辑', async () => {
+    repo = createTempGitRepo('main');
+    execSync('git branch -M main', { cwd: repo });
+    clearGateConfigCache();
+    process.stdin = Readable.from([
+      JSON.stringify({
+        tool_name: 'Shell',
+        tool_input: { command: 'git merge' },
+        session_id: 'mg-no-remote',
+        cwd: repo,
+      }),
+    ]);
+    await mergeMain();
+    const combined = output.join('');
+    expect(expectDeny(combined)).toBe(true);
+    expect(combined).not.toContain('forcePrWhenRemote');
   });
 });

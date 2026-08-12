@@ -1,0 +1,5 @@
+docs/handoff-ci-templates-fix.md
+
+# Python bytecode / caches
+__pycache__/
+*.pyc

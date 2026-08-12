@@ -1,0 +1,26 @@
+# Gitleaks configuration for the agent-hooks repo.
+#
+# Extends the built-in default rules and allowlists the known false
+# positives in this repo:
+#   * Bun hook test fixtures that deliberately contain fake secrets
+#     (OPENAI_API_KEY=sk-..., DD_API_KEY=..., RSA key fragments, ...).
+#   * BMAD knowledge docs with example/expired JWT tokens.
+#   * The BMAD files-manifest CSV whose "secrets" are SHA-256 content
+#     hashes of bundled resource files.
+#
+# CI runs `gitleaks detect --source .` (full git history, fetch-depth 0),
+# so the allowlist targets paths that appear in both the working tree and
+# history (including the deleted .js variants of the hook tests).
+
+[extend]
+# Extend the built-in default gitleaks rules (embedded in the binary).
+useDefault = true
+
+[allowlist]
+description = "Test fixtures, knowledge docs, and files-manifest CSV contain fake/example secrets and content hashes."
+
+paths = [
+  '''^\.claude/hooks/__tests__/.*''',
+  '''^_bmad/_config/files-manifest\.csv$''',
+  '''^_bmad/tea/.*/resources/knowledge/api-testing-patterns\.md$''',
+]

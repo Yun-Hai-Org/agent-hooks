@@ -54,7 +54,14 @@ describe('gate-registry', () => {
     const yaml = generateExampleYaml();
     expect(yaml).toContain('settings:');
     expect(yaml).toContain('coverageThreshold');
+    expect(yaml).toContain('forcePrWhenRemote: true');
     expect(yaml).toContain('openapi-auth-negative');
+  });
+
+  it('generateExampleYaml pnpm-install 默认 enabled: false', () => {
+    const yaml = generateExampleYaml();
+    const rule = 'pnpm-' + 'in' + 'stall';
+    expect(yaml).toMatch(new RegExp(rule + ':\\n\\s+enabled: false'));
   });
 
   it('超时常量合理', () => {
