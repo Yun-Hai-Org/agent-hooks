@@ -32,8 +32,9 @@
 
 CI 不应取代本地 hook，而是作为 **远程最终保障**：
 
-- **本地门**：做"快速反馈"，依赖 git 暂存区、会话上下文的检查（如 lint-staged、branch-gate）
-- **CI 门**：做"全量权威检查"，纯静态分析、全量安全扫描、跨 PR 的依赖审计
+- **本地门**：做"快速反馈"——**实时安全 + 提交门（commit）**；依赖 git 暂存区、会话上下文的检查（如 lint-staged、branch-gate）
+- **CI 门**：做"全量权威检查"（**full**）——纯静态分析、全量安全扫描、跨 PR 的依赖审计
+- **状态**：本地 `git.pre-push` / `git.pre-merge-commit` **已禁用**（`enabled: false`），full 由中央 CI 模板在 PR 流水线接管；详见 CLAUDE.md / `hooks-responsibility-matrix.md`
 
 ---
 
