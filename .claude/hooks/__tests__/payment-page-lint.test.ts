@@ -29,9 +29,14 @@ describe('payment-page-lint', () => {
   it('isPaymentPageTarget 匹配 payment 路径，不把任意 html 当支付页', () => {
     expect(isPaymentPageTarget('src/payment/checkout.html')).toBe(true);
     expect(isPaymentPageTarget('checkout/page.tsx')).toBe(true);
+    expect(isPaymentPageTarget('payment/page.tsx')).toBe(true);
     expect(isPaymentPageTarget('docs/random.html')).toBe(false);
     expect(isPaymentPageTarget('index.htm')).toBe(false);
     expect(isPaymentPageTarget('README.md')).toBe(false);
+  });
+
+  it('isPaymentPageTarget 不匹配 data/evals 报告 html', () => {
+    expect(isPaymentPageTarget('data/evals/x/reports/y.html')).toBe(false);
   });
 
   it('runPaymentPageStaged 应使用 getScopedStagedFiles 且路径模式不含任意 html', () => {
