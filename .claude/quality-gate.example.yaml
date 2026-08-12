@@ -17,6 +17,7 @@ settings:
       - .mypy_cache/
       - htmlcov/
       - coverage/
+      - .worktrees/
   pushMergeBranches:
     mode: selected
     include:

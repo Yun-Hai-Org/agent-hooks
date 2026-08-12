@@ -98,9 +98,24 @@ export function execCommandAsync(command: string, options: ExecCommandAsyncOptio
   return new Promise((resolve) => {
     const timeout = rest.timeout ?? 30000;
     let settled = false;
-    const finish = (result: ExecResult) => {
+    let backupTimer: ReturnType<typeof setTimeout> | null = null;
+    let killGraceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearTimers = (keepKillGrace = false) => {
+      if (backupTimer !== null) {
+        clearTimeout(backupTimer);
+        backupTimer = null;
+      }
+      if (!keepKillGrace && killGraceTimer !== null) {
+        clearTimeout(killGraceTimer);
+        killGraceTimer = null;
+      }
+    };
+
+    const finish = (result: ExecResult, keepKillGrace = false) => {
       if (settled) return;
       settled = true;
+      clearTimers(keepKillGrace);
       resolve(result);
     };
 
@@ -126,13 +141,35 @@ export function execCommandAsync(command: string, options: ExecCommandAsyncOptio
       },
     );
 
-    setTimeout(() => {
-      child.kill('SIGTERM');
-      finish({
-        success: false,
-        stdout: '',
-        stderr: `Command timed out after ${String(timeout)}ms`,
-      });
+    const killProcessTree = (signal: NodeJS.Signals) => {
+      const pid = child.pid;
+      if (pid === undefined) return;
+      try {
+        process.kill(-pid, signal);
+      } catch {
+        try {
+          child.kill(signal);
+        } catch {
+          // process already exited
+        }
+      }
+    };
+
+    backupTimer = setTimeout(() => {
+      backupTimer = null;
+      killProcessTree('SIGTERM');
+      killGraceTimer = setTimeout(() => {
+        killGraceTimer = null;
+        killProcessTree('SIGKILL');
+      }, 500);
+      finish(
+        {
+          success: false,
+          stdout: '',
+          stderr: `Command timed out after ${String(timeout)}ms`,
+        },
+        true,
+      );
     }, timeout + 1000);
   });
 }
