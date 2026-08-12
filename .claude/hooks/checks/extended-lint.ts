@@ -1,6 +1,6 @@
 import { execCommandAsync, formatResult, withTimeout, DECISION } from '../security-orchestrator.js';
 import type { CheckResult, HadolintIssue, GateCheckRunOptions, GatePathPrefix } from '../types.js';
-import { getStagedFiles } from './git-policy.js';
+import { getScopedStagedFiles } from './scan-scope.js';
 import {
   classifyFiles,
   hasStylelintConfig,
@@ -608,7 +608,7 @@ export async function runExtendedLintStaged(cwd?: string, options?: GateCheckRun
   const root = cwd ?? process.cwd();
   const gatePathPrefix: GatePathPrefix = options?.gatePathPrefix ?? 'git.pre-commit';
   const timeoutMs = options?.timeoutMs ?? COMMIT_GATE_TIMEOUT_MS;
-  const staged = getStagedFiles(cwd);
+  const staged = getScopedStagedFiles(cwd);
   const classified = classifyFiles(staged, cwd);
   const hasTargets =
     classified.md.length +
