@@ -77,6 +77,7 @@ describe('getScanScope from yaml', () => {
     expect(scope.exclude).toContain('_bmad-output');
     expect(scope.exclude).toContain('node_modules');
     expect(scope.exclude).toContain('.worktrees');
+    expect(scope.exclude).toContain('data/evals');
   });
 
   it('yaml scanScope 合并 exclude', () => {

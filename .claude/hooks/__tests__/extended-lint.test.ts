@@ -197,6 +197,17 @@ describe('extended-lint', () => {
       expect(shfmtPos).toBeGreaterThan(0);
       expect(shellcheckPos).toBeGreaterThan(shfmtPos);
     });
+
+    it('runExtendedLintStaged 应使用 getScopedStagedFiles', () => {
+      const sourceFile = join(import.meta.dir, '..', 'checks', 'extended-lint.ts');
+      const content = readFileSync(sourceFile, 'utf-8');
+      expect(content).toContain('getScopedStagedFiles');
+      const stagedFn = content.indexOf('export async function runExtendedLintStaged');
+      expect(stagedFn).toBeGreaterThanOrEqual(0);
+      const stagedBody = content.slice(stagedFn, stagedFn + 500);
+      expect(stagedBody).toContain('getScopedStagedFiles');
+      expect(stagedBody).not.toMatch(/\bgetStagedFiles\b/);
+    });
   });
 
   describe('parseMarkdownlintOutput', () => {
