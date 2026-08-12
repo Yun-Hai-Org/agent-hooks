@@ -582,13 +582,15 @@ export const GATE_REGISTRY: GateRegistryRoot = {
       checks: buildPreCommitChecks(),
     },
     'pre-push': {
-      description: 'pre-push 钩子：full profile 质量门（总项默认 15 分钟）',
+      description: 'pre-push 钩子：full profile 质量门（总项默认 15 分钟；本地默认关闭，CI 启用）',
       defaultTimeoutMs: REGISTRY_FULL_TIMEOUT_MS,
+      defaultEnabled: false,
       checks: buildFullHookChecks(),
     },
     'pre-merge-commit': {
-      description: 'pre-merge-commit 钩子：与 pre-push 相同的 full profile 质量门',
+      description: 'pre-merge-commit 钩子：与 pre-push 相同的 full profile 质量门（本地默认关闭，CI 启用）',
       defaultTimeoutMs: REGISTRY_FULL_TIMEOUT_MS,
+      defaultEnabled: false,
       checks: buildFullHookChecks(),
     },
     'git-operation-notify': {
@@ -731,7 +733,8 @@ function emitYamlNode(
   }
   lines.push(`${indent(level)}${key}:`);
   const next = level + 1;
-  lines.push(`${indent(next)}enabled: true`);
+  const enabled = node.defaultEnabled === false ? 'false' : 'true';
+  lines.push(`${indent(next)}enabled: ${enabled}`);
   const hookAutoFix = node.supportsAutoFix === true || parentAutoFix === true;
   if (isHook && hookAutoFix) {
     lines.push(`${indent(next)}autoFix: true`);
@@ -771,7 +774,7 @@ function emitYamlNode(
   }
 }
 
-/** 生成完整 example YAML（全部 enabled: true + registry 默认 timeout） */
+/** 生成完整 example YAML（registry defaultEnabled + 默认 timeout；check 树保留便于回滚） */
 export function generateExampleYaml(): string {
   const lines: string[] = [
     '# 质量门全量白名单配置 — 由 gate-registry.generateExampleYaml() 生成',
