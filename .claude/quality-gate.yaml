@@ -5,3 +5,8 @@ ide:
     rules:
       pnpm-install:
         enabled: false
+git:
+  pre-push:
+    enabled: false
+  pre-merge-commit:
+    enabled: false

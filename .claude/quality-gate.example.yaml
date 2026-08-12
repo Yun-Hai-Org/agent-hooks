@@ -676,9 +676,9 @@ git:
       payment-page-staged:
         enabled: true
 
-  # pre-push 钩子：full profile 质量门（总项默认 15 分钟）
+  # pre-push 钩子：full profile 质量门（总项默认 15 分钟；本地默认关闭，CI 启用）
   pre-push:
-    enabled: true
+    enabled: false
     timeout: 15m
     checks:
       # Hook 项目 bun test --coverage 全量单测
@@ -865,9 +865,9 @@ git:
         enabled: true
         timeout: 2m
 
-  # pre-merge-commit 钩子：与 pre-push 相同的 full profile 质量门
+  # pre-merge-commit 钩子：与 pre-push 相同的 full profile 质量门（本地默认关闭，CI 启用）
   pre-merge-commit:
-    enabled: true
+    enabled: false
     timeout: 15m
     checks:
       # Hook 项目 bun test --coverage 全量单测
