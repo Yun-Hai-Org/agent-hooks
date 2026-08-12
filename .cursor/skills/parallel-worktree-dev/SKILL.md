@@ -83,13 +83,25 @@ git worktree remove .worktrees/feat-<name>-task-<id>
 
 ### 7. Ship loop
 
-When impl todos are complete:
+When impl todos are complete, ship via GitHub PR（not local merge）.
 
-1. **ship-sa** — `git add` + `git commit` until pre-commit passes (`ship_status=commit_ok`)
-2. **merge-sa** — merge epic into main/master + push (`ship_status=merge_ok`); **必须先** `./scripts/verify-ship-readiness.sh`
-3. **ci-fixer-sa** — fix CI/gate failures and retry
+> **策略**：禁止本地 `git merge <feat>` 到 main/master（有 remote 且 `forcePrWhenRemote` 开启时由 `block-dangerous-commands` 的 `checkMergeNoFfRequired` 拦截）。无 remote 或开关关闭时仍可本地 merge（需 `--no-ff` 触发 pre-merge-commit 门）。
 
-Stop is blocked until `ship_status=merge_ok`. Read the hook reason and dispatch the matching background SA.
+1. **ship-sa** `Task(background, shell)` — in the task worktree:
+   1. `git add` + `git commit` until pre-commit gate is green（conventional commit message: `feat`/`fix`/`docs`/`test`/`chore`...）
+   2. `git push -u origin feat/<name>`
+   3. Watch CI until all green: `gh run watch`（或 `gh pr checks --watch --fail-fast`）。CI 失败时停止并上报——orchestrator 将 dispatch `ci-fixer-sa`，修复后 re-push/re-watch。
+   4. Create PR: `gh pr create --base main --head feat/<name> --title "<type>: <desc>" --body "<summary>"`
+
+2. **merge-sa** `Task(background, generalPurpose)` — after PR created and CI green:
+   1. Merge the PR: `gh pr merge --squash --delete-branch`（默认 `--squash`，除非 repo 约定另有要求；保留 `--delete-branch` 清理远程 feat 分支）
+   2. Sync local main: `git checkout main && git pull --ff-only`
+   3. Redeploy hooks locally: `./scripts/link-cursor-hooks-global.sh && ./scripts/install-cursor-yingmi-hooks.sh`
+   4. Tell the user to restart Cursor so the IDE reloads hook configuration.
+
+3. **ci-fixer-sa** — fix CI/gate failures and retry（由 orchestrator 在 ship-sa 上报 CI 失败后 dispatch）。
+
+Stop is blocked until `ship_status=merge_ok`（PR 已合并）. Read the hook reason and dispatch the matching background SA.
 
 ## Examples
 
@@ -113,8 +125,16 @@ Task(background, generalPurpose) integrator-sa @ .worktrees/feat-x
 ### Example: phase ship
 
 ```text
-Task(background, shell) ship-sa → commit in task wt
-Task(background, generalPurpose) merge-sa → merge feat/x into main + push
+Task(background, shell) ship-sa @ task wt
+  → git commit until pre-commit green
+  → git push -u origin feat/x
+  → gh run watch (CI green)  # 失败则 orchestrator dispatch ci-fixer-sa
+  → gh pr create --base main --head feat/x
+Task(background, generalPurpose) merge-sa
+  → gh pr merge --squash --delete-branch
+  → git checkout main && git pull --ff-only
+  → ./scripts/link-cursor-hooks-global.sh && ./scripts/install-cursor-yingmi-hooks.sh
+  → tell user to restart Cursor
 ```
 
 ## Anti-patterns

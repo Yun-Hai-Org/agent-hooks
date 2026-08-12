@@ -35,7 +35,12 @@ async function runMergeConcludeGate(cwd: string): Promise<void> {
     process.exit(0);
   }
 
-  const gateResult = await runQualityGate({ profile: 'full', cwd });
+  const gateResult = await runQualityGate({
+    profile: 'full',
+    cwd,
+    gatePathPrefix: 'git.pre-merge-commit',
+    allowOnSkip: true,
+  });
   logGateResult(HOOK_NAME, gateResult, { profile: 'full', cwd, hook: 'merge-conclude' });
 
   if (!gateResult.passed) {

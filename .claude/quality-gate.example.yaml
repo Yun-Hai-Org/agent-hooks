@@ -23,6 +23,7 @@ settings:
       - main
       - master
     exclude: []
+  forcePrWhenRemote: true
   worktree:
     forbidCreateFromMain: true
     integratorMergeRequiresFull: false
@@ -184,31 +185,37 @@ ide:
       # 拦截 podman exec 带 -e 传环境变量
       podman-exec-env:
         enabled: true
-      # 拦截 pip install，请用 uv
+      # 拦截 pip install，请用 uv（可通过 quality-gate enabled 开关）
       pip-install:
         enabled: true
-      # 拦截 npm install，请用 bun
+      # 拦截 npm install，请用 bun（可通过 quality-gate enabled 开关）
       npm-install:
         enabled: true
-      # 拦截 npm ci，请用 bun install --frozen-lockfile
+      # 拦截 npm ci，请用 bun install --frozen-lockfile（可通过 quality-gate enabled 开关）
       npm-ci:
         enabled: true
-      # 拦截 pnpm install，请用 bun
+      # 拦截 pnpm install/add（可配置；默认关闭以允许 pnpm）
       pnpm-install:
-        enabled: true
-      # 拦截 yarn install，请用 bun
+        enabled: false
+      # 拦截 yarn install，请用 bun（可通过 quality-gate enabled 开关）
       yarn-install:
         enabled: true
-      # 拦截 npx，请用 bunx
+      # 拦截 npx，请用 bunx（可通过 quality-gate enabled 开关）
       npx:
         enabled: true
-      # 拦截 python script.py，请用 uv run
+      # 拦截 python script.py，请用 uv run（可通过 quality-gate enabled 开关）
       python-script:
         enabled: true
-      # 拦截 python3 script.py，请用 uv run
+      # 拦截 python3 script.py，请用 uv run（可通过 quality-gate enabled 开关）
       python3-script:
         enabled: true
-      # 拦截 node script.js，请用 bun
+      # 拦截 python -m module，请用 uv run（可通过 quality-gate enabled 开关）
+      python-module:
+        enabled: true
+      # 拦截 python3 -m module，请用 uv run（可通过 quality-gate enabled 开关）
+      python3-module:
+        enabled: true
+      # 拦截 node script.js，请用 bun（可通过 quality-gate enabled 开关）
       node-script:
         enabled: true
       # 拦截修改 hooks 路径绕过
@@ -228,9 +235,6 @@ ide:
         enabled: true
       # 拦截 git merge --no-verify
       merge-no-verify:
-        enabled: true
-      # 拦截 gh pr merge 绕过本地门
-      gh-pr-merge:
         enabled: true
       # 拦截 git pull 产生 merge commit 绕过
       git-pull-merge:
@@ -285,15 +289,16 @@ ide:
   workflow-stop-gate:
     enabled: true
 
-  # beforeReadFile/preToolUse：Orchestrator 禁直接 Read/Write（complement workflow-gate）
+  # subagentStart/subagentStop：同步 active_background_tasks 供 workflow-stop-gate
+  workflow-subagent-sync:
+    enabled: true
+
+  # beforeReadFile/preToolUse Shell：Orchestrator 禁直接 Read/Write 及 Shell 写文件（complement workflow-gate）
   orchestrator-gate:
     enabled: true
 
   # beforeShellExecution/preToolUse Shell：Orchestrator 禁 git commit/push/merge；仅 ship-sa 子代理
   git-ship-gate:
-    enabled: true
-
-  workflow-subagent-sync:
     enabled: true
 
   # beforeShellExecution：限制删除未 merge 分支与 worktree prune

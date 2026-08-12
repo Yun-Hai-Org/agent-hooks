@@ -12,15 +12,16 @@
  */
 
 import { appendFileSync, mkdirSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, resolve, isAbsolute } from 'path';
 import { LOG_DIR, getCurrentBranch } from './security-orchestrator.js';
 import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } from './hook-adapter.js';
 import { notifySecurityEventAsync } from './notify-security-event.js';
-import { isGateNodeEnabled } from './gate-config.js';
+import { isGateNodeEnabled, resolveForcePrWhenRemote } from './gate-config.js';
 import {
   isGitMergeCommand,
   isGitCommitCommand,
   isProtectedBranch,
+  hasRemote,
   extractBranchDeleteTargets,
   extractRemoteBranchDeleteTargets,
   extractUpdateRefDeleteTargets,
@@ -282,7 +283,11 @@ const PATTERNS = [
     regex: /\bpython3\s+[^-\s][^\s]*\.py\b/,
     reason: '请使用 uv run python <script.py>',
   },
-  // 31. node <script>
+  // python -m <module>
+  { level: 'strict', id: 'python-module', regex: /\bpython\s+-m\s+\S+/, reason: '请使用 uv run python -m <module>' },
+  // python3 -m <module>
+  { level: 'strict', id: 'python3-module', regex: /\bpython3\s+-m\s+\S+/, reason: '请使用 uv run python -m <module>' },
+  // 33. node <script>
   { level: 'strict', id: 'node-script', regex: /\bnode\s+[^-\s][^\s]*\.js\b/, reason: '请使用 bun <script.js>' },
 
   // ==================== STRICT - Hook 绕过防护 ====================
@@ -327,13 +332,6 @@ const PATTERNS = [
     id: 'merge-no-verify',
     regex: /\bgit\s+merge\b.*--no-verify/,
     reason: '禁止使用 --no-verify 跳过 merge hooks',
-  },
-  // 34d. gh pr merge（绕过本地 merge gate）
-  {
-    level: 'strict',
-    id: 'gh-pr-merge',
-    regex: /\bgh\s+pr\s+merge\b/,
-    reason: '禁止 gh pr merge，请使用 git merge 以触发本地质量门',
   },
   // 34e. git pull with merge（需本地 merge gate）
   {
@@ -394,6 +392,7 @@ const ALLOW_PATTERNS = [
   /\bbun\s+--version\b/,
   /\buv\s+--version\b/,
   /\bgit\s+checkout\s+(main|master)\b/, // 切换到主分支本身不阻止
+  /\buv\s+run\s+python3?\b/, // uv run python ... 形式放行
 ];
 
 type PatternLevel = 'critical' | 'high' | 'strict';
@@ -434,19 +433,32 @@ function checkCommand(cmd: string, safetyLevel: string = SAFETY_LEVEL) {
 
 export interface MergeNoFfCheckResult {
   blocked: boolean;
-  id?: 'merge-ff-bypass' | 'merge-squash-bypass';
+  id?: 'merge-ff-bypass' | 'merge-squash-bypass' | 'merge-local-blocked-by-pr-policy';
   reason?: string;
 }
 
 const MERGE_IN_PROGRESS = /\bgit\s+merge\b[^\n]*--(?:abort|continue|quit)(?:\s|$)/;
 
+function extractGitCwdTarget(cmd: string): string | null {
+  // 解析 `git -C <path> ...` 或 `git --git-dir=<path>` / `git -C <path>` 指向的工作目录
+  const m1 = /\bgit\s+-C\s+([^\s]+)/.exec(cmd);
+  if (m1) return m1[1];
+  const m2 = /\bgit\s+--git-dir=([^\s]+)/.exec(cmd);
+  if (m2) return m2[1];
+  return null;
+}
+
 function isCompositeMergeOntoProtectedBranch(cmd: string): boolean {
-  return /\bgit\s+(?:checkout|switch)\b[^\n]*\b(main|master)\b[\s\S]*\bgit\s+merge\b/.test(cmd);
+  // 用前瞻要求 merge 后是空白或行尾，避免误匹配 `git merge-base`
+  return /\bgit\s+(?:checkout|switch)\b[^\n]*\b(main|master)\b[\s\S]*\bgit\s+merge(?=\s|$)/.test(cmd);
 }
 
 function isMergeOntoProtectedBranch(cmd: string, cwd?: string): boolean {
   if (isCompositeMergeOntoProtectedBranch(cmd)) return true;
-  const branch = getCurrentBranch(cwd ?? process.cwd());
+  const baseDir = cwd ?? process.cwd();
+  const target = extractGitCwdTarget(cmd);
+  const targetDir = target ? (isAbsolute(target) ? target : resolve(baseDir, target)) : baseDir;
+  const branch = getCurrentBranch(targetDir);
   return branch !== null && isProtectedBranch(branch);
 }
 
@@ -468,6 +480,15 @@ export function checkMergeNoFfRequired(cmd: string, cwd?: string): MergeNoFfChec
       blocked: true,
       id: 'merge-squash-bypass',
       reason: 'git merge --squash 不触发 pre-merge-commit。在 main/master 请使用：git merge --no-ff <branch>',
+    };
+  }
+
+  if (resolveForcePrWhenRemote(cwd) && hasRemote(cwd)) {
+    return {
+      blocked: true,
+      id: 'merge-local-blocked-by-pr-policy',
+      reason:
+        '存在 remote 且 forcePrWhenRemote 开启，禁止本地 merge 到 main/master，请走 PR 流程：push → CI 全绿 → gh pr create → gh pr merge',
     };
   }
 

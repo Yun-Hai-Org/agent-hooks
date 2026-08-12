@@ -37,6 +37,8 @@ const ALLOWLIST = [
   /\.env\.defaults$/i,
   /env\.example$/i,
   /example\.env$/i,
+  // 通用模板后缀：.example/.sample/.template/.schema/.defaults 末尾的文件视为模板，可读
+  /\.(example|sample|template|schema|defaults)$/i,
 ];
 
 // Excluded paths — skip content scanning for these

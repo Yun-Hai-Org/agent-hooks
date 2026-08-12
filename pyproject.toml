@@ -23,7 +23,8 @@ max-complexity = 10
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-"tests/**/*.py" = ["S101"]
+"tests/**/*.py" = ["S101", "D103", "PLR2004", "ANN401", "INP001"]
+"scripts/**/*.py" = ["T201", "ANN401", "PLR2004"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -31,6 +32,7 @@ indent-style = "space"
 
 [dependency-groups]
 dev = [
+  "pip-audit>=2.7.0",
   "pyright>=1.1.409",
   "pytest>=8.0.0",
   "pytest-cov>=6.0.0",
@@ -40,3 +42,9 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.pyright]
+# 4-file repo whose hooks_manifest_validator intentionally parses
+# untyped JSON (load_json returns Any) and uses a CLI entry returning int.
+reportUnusedCallResult = "none"
+reportUnknownArgumentType = "none"

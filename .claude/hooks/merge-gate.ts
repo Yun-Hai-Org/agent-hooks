@@ -12,9 +12,12 @@ import { readHookInput, formatDenyOutput, formatAllowOutput, isShellHookInput } 
 import {
   extractMergeTarget,
   isGitMergeCommand,
+  isProtectedBranch,
+  hasRemote,
   hasUncommittedChanges,
   buildUncommittedWorktreeDenyReason,
 } from './checks/git-policy.js';
+import { resolveForcePrWhenRemote } from './gate-config.js';
 import {
   describePushMergeBranchSkip,
   resolvePushMergeBranchPolicyForCwd,
@@ -79,6 +82,16 @@ async function main() {
         cwd: workingDir,
       });
       process.stdout.write(`${formatAllowOutput()}\n`);
+      return;
+    }
+
+    if (isProtectedBranch(currentBranch ?? '') && resolveForcePrWhenRemote(workingDir) && hasRemote(workingDir)) {
+      console.log(
+        formatDenyOutput(
+          DECISION.DENY,
+          '存在 remote 且 forcePrWhenRemote 开启，禁止本地 merge 到 main/master，请走 PR 流程：push → CI 全绿 → gh pr create → gh pr merge',
+        ),
+      );
       return;
     }
 

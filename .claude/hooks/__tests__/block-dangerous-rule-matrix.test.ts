@@ -54,6 +54,8 @@ import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
 // @rule:npx
 // @rule:python-script
 // @rule:python3-script
+// @rule:python-module
+// @rule:python3-module
 // @rule:node-script
 // @rule:hook-bypass-path
 // @rule:hook-bypass-config
@@ -61,7 +63,6 @@ import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
 // @rule:no-verify-short
 // @rule:push-no-verify
 // @rule:merge-no-verify
-// @rule:gh-pr-merge
 // @rule:git-pull-merge
 // @rule:git-update-ref-delete
 // @rule:git-force-any
@@ -117,6 +118,8 @@ const CHECK_COMMAND_SAMPLES: Record<string, string> = {
   npx: 'npx eslint .',
   'python-script': 'python script.py',
   'python3-script': 'python3 script.py',
+  'python-module': 'python -m pytest',
+  'python3-module': 'python3 -m some.module',
   'node-script': 'node script.js',
   'hook-bypass-path': 'git -c core.hooksPath=/dev/null commit -m x',
   'hook-bypass-config': 'git config core.hooksPath /tmp/hooks',
@@ -124,7 +127,6 @@ const CHECK_COMMAND_SAMPLES: Record<string, string> = {
   'no-verify-short': 'git commit -n -m x',
   'push-no-verify': 'git push --no-verify',
   'merge-no-verify': 'git merge --no-verify feat/x',
-  'gh-pr-merge': 'gh pr merge 1 --merge',
   'git-pull-merge': 'git pull origin main',
   'git-update-ref-delete': 'git update-ref -d refs/heads/main',
   'git-force-any': 'git push --force origin feat/x',

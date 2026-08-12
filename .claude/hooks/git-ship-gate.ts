@@ -48,6 +48,7 @@ export function isGitShipWriteCommand(cmd: string): boolean {
   if (!cmd) return false;
   if (isGitCommitCommand(cmd) || isGitPushCommand(cmd) || isGitMergeCommand(cmd)) return true;
   if (/\bgh\s+pr\s+create\b/.test(cmd)) return true;
+  if (/\bgh\s+pr\s+merge\b/.test(cmd)) return true;
   if (/\bgit\s+pull\b.*\b(origin\s+)?(main|master)\b/.test(cmd)) return true;
   return /\bgit\s+checkout\b.*\b(main|master)\b/.test(cmd);
 }

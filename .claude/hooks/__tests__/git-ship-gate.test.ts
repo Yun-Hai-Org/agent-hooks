@@ -15,6 +15,7 @@ describe('git-ship-gate helpers', () => {
     expect(isGitShipWriteCommand('git merge --no-ff feat/x')).toBe(true);
     expect(isGitShipWriteCommand('git checkout main')).toBe(true);
     expect(isGitShipWriteCommand('gh pr create --title x')).toBe(true);
+    expect(isGitShipWriteCommand('gh pr merge 1 --merge')).toBe(true);
     expect(isGitShipWriteCommand('git status')).toBe(false);
     expect(isGitShipWriteCommand('git worktree list')).toBe(false);
   });
@@ -146,7 +147,9 @@ describe('git-ship-gate main()', () => {
     saveWorkflowState(parentSessionId, {
       ...defaultWorkflowState(),
       agent_role: 'ship-sa',
-      active_background_tasks: [{ agentId: 'pending-ship-sa', runInBackground: true, startedAt: new Date().toISOString() }],
+      active_background_tasks: [
+        { agentId: 'pending-ship-sa', runInBackground: true, startedAt: new Date().toISOString() },
+      ],
     });
     process.stdin = Readable.from([
       JSON.stringify({
@@ -160,4 +163,36 @@ describe('git-ship-gate main()', () => {
     expect(expectAllow(output[0]!)).toBe(true);
   });
 
+  it('allows merge-sa gh pr merge', async () => {
+    const sessionId = `merge-sa-${Date.now()}`;
+    saveWorkflowState(sessionId, { ...defaultWorkflowState(), agent_role: 'merge-sa' });
+    process.stdin = Readable.from([
+      JSON.stringify({
+        tool_name: 'Shell',
+        tool_input: { command: 'gh pr merge 1 --merge' },
+        session_id: sessionId,
+        cwd: PROJECT_ROOT,
+        agent_id: 'merge-sa-1',
+        agent_role: 'merge-sa',
+      }),
+    ]);
+    await gitShipMain();
+    expect(expectAllow(output[0]!)).toBe(true);
+  });
+
+  it('denies orchestrator-mode gh pr merge', async () => {
+    const sessionId = `ship-orch-pr-${Date.now()}`;
+    saveWorkflowState(sessionId, defaultWorkflowState());
+    process.stdin = Readable.from([
+      JSON.stringify({
+        command: 'gh pr merge 1 --merge',
+        session_id: sessionId,
+        cwd: PROJECT_ROOT,
+        agent_mode: 'orchestrator',
+      }),
+    ]);
+    await gitShipMain();
+    expect(expectDeny(output[0]!)).toBe(true);
+    expect(output[0]).toContain('git-ship-gate');
+  });
 });

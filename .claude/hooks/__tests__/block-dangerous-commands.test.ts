@@ -1,5 +1,6 @@
-import { describe, it, expect, afterEach } from 'bun:test';
+import { describe, it, expect, afterEach, beforeAll, afterAll } from 'bun:test';
 import { execSync } from 'child_process';
+import { join } from 'path';
 import {
   checkCommand,
   PATTERNS,
@@ -9,6 +10,7 @@ import {
   checkProtectedBranchDelete,
 } from '../block-dangerous-commands.js';
 import { createTempGitRepo, cleanupTempGitRepo, writeFile } from './helpers.js';
+import { clearGateConfigCache, isGateNodeEnabled } from '../gate-config.js';
 
 describe('block-dangerous-commands', () => {
   // CRITICAL level
@@ -33,9 +35,7 @@ describe('block-dangerous-commands', () => {
   });
 
   it('应该允许 dual-track-eval git commit（eval-exec 防误报）', () => {
-    const r = checkCommand(
-      'git add dual-track-eval/engine/foo.py && git commit -m "feat(dual-track-eval): x"',
-    );
+    const r = checkCommand('git add dual-track-eval/engine/foo.py && git commit -m "feat(dual-track-eval): x"');
     expect(r.blocked).toBe(false);
   });
 
@@ -156,6 +156,26 @@ describe('block-dangerous-commands', () => {
   it('应该阻止 python3 script.py', () => {
     const r = checkCommand('python3 my_script.py');
     expect(r.blocked).toBe(true);
+  });
+
+  it('应该阻止 python -m <module>', () => {
+    const r = checkCommand('python -m pytest');
+    expect(r.blocked).toBe(true);
+  });
+
+  it('应该阻止 python3 -m <module>', () => {
+    const r = checkCommand('python3 -m some.module');
+    expect(r.blocked).toBe(true);
+  });
+
+  it('应该允许 uv run python -m module', () => {
+    const r = checkCommand('uv run python -m module');
+    expect(r.blocked).toBe(false);
+  });
+
+  it('应该允许 uv run python script.py', () => {
+    const r = checkCommand('uv run python my_script.py');
+    expect(r.blocked).toBe(false);
   });
 
   it('应该阻止 node script.js', () => {
@@ -322,9 +342,37 @@ describe('block-dangerous-commands - main/master merge --no-ff', () => {
   });
 
   it('git checkout main && git merge feat/x 应被阻止', () => {
-    const r = checkMergeNoFfRequired('git checkout main && git merge feat/x', process.cwd());
+    mainRepo = createTempGitRepo('main');
+    const r = checkMergeNoFfRequired('git checkout main && git merge feat/x', mainRepo);
     expect(r.blocked).toBe(true);
     expect(r.id).toBe('merge-ff-bypass');
+  });
+
+  it('main + remote + forcePrWhenRemote 默认开启时 git merge --no-ff 应被 PR 策略阻止', () => {
+    mainRepo = createTempGitRepo('main');
+    execSync('git branch -M main', { cwd: mainRepo });
+    execSync('git remote add origin git@github.com:org/repo.git', { cwd: mainRepo });
+    clearGateConfigCache();
+
+    const r = checkMergeNoFfRequired('git merge --no-ff feat/x', mainRepo);
+    expect(r.blocked).toBe(true);
+    expect(r.id).toBe('merge-local-blocked-by-pr-policy');
+  });
+
+  it('main + remote + forcePrWhenRemote 关闭时 git merge --no-ff 应允许', () => {
+    mainRepo = createTempGitRepo('main');
+    execSync('git branch -M main', { cwd: mainRepo });
+    execSync('git remote add origin git@github.com:org/repo.git', { cwd: mainRepo });
+    writeFile(mainRepo, '.claude/quality-gate.yaml', 'settings:\n  forcePrWhenRemote: false\n');
+    clearGateConfigCache();
+
+    const r = checkMergeNoFfRequired('git merge --no-ff feat/x', mainRepo);
+    expect(r.blocked).toBe(false);
+  });
+
+  it('gh pr merge 现由 checkCommand 允许（由 git-ship-gate 管控）', () => {
+    const r = checkCommand('gh pr merge 1 --merge');
+    expect(r.blocked).toBe(false);
   });
 });
 
@@ -377,6 +425,15 @@ describe('block-dangerous-commands - protected branch delete', () => {
 });
 
 describe('block-dangerous-commands - main 函数直接调用', () => {
+  const originalGlobal = process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'];
+  beforeAll(() => {
+    process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'] = join(import.meta.dir, '..', '..', 'quality-gate.example.yaml');
+    clearGateConfigCache();
+  });
+  afterAll(() => {
+    process.env['QUALITY_GATE_GLOBAL_CONFIG_PATH'] = originalGlobal;
+    clearGateConfigCache();
+  });
   const { Readable } = require('stream');
   const { execSync } = require('child_process');
   const REPO_ROOT = execSync('git rev-parse --show-toplevel', { encoding: 'utf-8' }).trim();
@@ -563,5 +620,54 @@ describe('block-dangerous-commands - log 函数', () => {
 
     // 恢复原始的 HOME
     process.env.HOME = originalHome;
+  });
+});
+
+describe('block-dangerous-commands - rule enabled toggles', () => {
+  let repoDir: string;
+
+  afterEach(() => {
+    if (repoDir) cleanupTempGitRepo(repoDir);
+    clearGateConfigCache();
+  });
+
+  it('pnpm rule disabled via quality-gate', () => {
+    repoDir = createTempGitRepo('feat/tool-restrict-pnpm');
+    writeFile(
+      repoDir,
+      '.claude/quality-gate.yaml',
+      [
+        'ide:',
+        '  block-dangerous-commands:',
+        '    enabled: true',
+        '    rules:',
+        '      pnpm-install:',
+        '        enabled: false',
+        '',
+      ].join('\n'),
+    );
+    clearGateConfigCache();
+    expect(isGateNodeEnabled('ide.block-dangerous-commands.rules.pnpm-install', repoDir)).toBe(false);
+    // Pattern remains; main() skips deny when rule disabled
+    expect(checkCommand('pnpm add lodash').blocked).toBe(true);
+  });
+
+  it('pip rule disabled via quality-gate', () => {
+    repoDir = createTempGitRepo('feat/tool-restrict-pip');
+    writeFile(
+      repoDir,
+      '.claude/quality-gate.yaml',
+      [
+        'ide:',
+        '  block-dangerous-commands:',
+        '    enabled: true',
+        '    rules:',
+        '      pip-install:',
+        '        enabled: false',
+        '',
+      ].join('\n'),
+    );
+    clearGateConfigCache();
+    expect(isGateNodeEnabled('ide.block-dangerous-commands.rules.pip-install', repoDir)).toBe(false);
   });
 });
