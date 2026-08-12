@@ -55,8 +55,25 @@ export function getMaxGateRetryLoops() {
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_MAX_LOOPS;
 }
 
+export function getPendingGatePathPrefix(pending: GatePendingEntry): 'git.pre-push' | 'git.pre-merge-commit' {
+  return pending.type === 'merge' ? 'git.pre-merge-commit' : 'git.pre-push';
+}
+
+/** Local full disabled / ship gate retry — tip agent to CI via ci-fixer-sa */
+export function buildCiFixerShipFollowup(pending: GatePendingEntry): string {
+  return [
+    '🔒 [gate-retry-stop] push/merge 质量门失败，须 dispatch ci-fixer-sa 修复后重试 ship。',
+    '',
+    `pending: ${pending.type} — ${pending.command.slice(0, 200)}`,
+    '',
+    '步骤：',
+    '1. Task(background) ci-fixer-sa 读取 CI/门失败日志并修复',
+    '2. 再 dispatch ship-sa / merge-sa 直至 ship_status=merge_ok',
+  ].join('\n');
+}
+
 export async function rerunPendingGate(pending: GatePendingEntry) {
-  const gatePathPrefix = pending.type === 'merge' ? 'git.pre-merge-commit' : 'git.pre-push';
+  const gatePathPrefix = getPendingGatePathPrefix(pending);
   return runQualityGate({ profile: 'full', cwd: pending.cwd, gatePathPrefix });
 }
 
@@ -84,6 +101,21 @@ export async function runGateRetryStop(sessionId: string, options: { cwd?: strin
   }
 
   const gateName = GATE_LABELS[pending.type] || pending.type;
+  const gatePathPrefix = getPendingGatePathPrefix(pending);
+
+  // CI owns full when local pre-push / pre-merge-commit is disabled — do not re-run full locally
+  if (!isGateNodeEnabled(gatePathPrefix, pending.cwd)) {
+    clearPendingGateFailure(sessionId, pending.cwd);
+    return {
+      action: 'ci-owns-full',
+      gateName,
+      command: pending.command,
+      pendingType: pending.type,
+      reason: `${gatePathPrefix} disabled; CI owns full`,
+      followup: buildCiFixerShipFollowup(pending),
+    };
+  }
+
   const gateResult = await rerunPendingGate(pending);
 
   if (!gateResult.passed) {
@@ -161,15 +193,7 @@ async function main() {
     if (needsShipBeforeStop(workflowState)) {
       const pending = getPendingGateFailure(sessionId, cwd);
       if (pending) {
-        const followup = [
-          '🔒 [gate-retry-stop] push/merge 质量门失败，须 dispatch ci-fixer-sa 修复后重试 ship。',
-          '',
-          `pending: ${pending.type} — ${pending.command.slice(0, 200)}`,
-          '',
-          '步骤：',
-          '1. Task(background) ci-fixer-sa 读取 CI/门失败日志并修复',
-          '2. 再 dispatch ship-sa / merge-sa 直至 ship_status=merge_ok',
-        ].join('\n');
+        const followup = buildCiFixerShipFollowup(pending);
         log(HOOK_NAME, { level: 'BLOCKED', reason: 'ship gate retry', session_id: sessionId });
         notifyGateBlockedAsync({
           hook: HOOK_NAME,
@@ -183,6 +207,18 @@ async function main() {
     }
 
     const result = await runGateRetryStop(sessionId, { loopCount, cwd });
+
+    if (result.action === 'ci-owns-full' && result.followup) {
+      log(HOOK_NAME, { level: 'SKIP', reason: result.reason ?? 'CI owns full', session_id: sessionId });
+      notifyGateBlockedAsync({
+        hook: HOOK_NAME,
+        reason: result.followup,
+        cwd,
+        session_id: sessionId,
+      });
+      process.stdout.write(`${formatStopContinueOutput(result.followup, hookEvent)}\n`);
+      return;
+    }
 
     if (result.action === 'block' && result.gateResult) {
       const followup = buildGateRetryStopMessage(result.gateName, result.command, result.gateResult, {
