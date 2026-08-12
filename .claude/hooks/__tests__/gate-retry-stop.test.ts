@@ -9,8 +9,15 @@ import {
 } from '../gate-retry-stop.js';
 import { handleUserPromptSubmit } from '../user-prompt-filter.js';
 import { runResolveHookPathCli } from '../resolve-hook-path.js';
-import { setPendingGateFailure, clearPendingGateFailure } from '../gate-pending.js';
-import { createTempGitRepo, cleanupTempGitRepo, bootstrapQualityGateYaml, PROJECT_ROOT } from './helpers.js';
+import { setPendingGateFailure, getPendingGateFailure, clearPendingGateFailure } from '../gate-pending.js';
+import { clearGateConfigCache } from '../gate-config.js';
+import {
+  createTempGitRepo,
+  cleanupTempGitRepo,
+  bootstrapQualityGateYaml,
+  writeFile,
+  PROJECT_ROOT,
+} from './helpers.js';
 import { Readable } from 'stream';
 
 describe('gate-retry-stop helpers', () => {
@@ -50,17 +57,72 @@ describe('runGateRetryStop', () => {
   });
 
   it('无 pending 时 skip', async () => {
-    const r = await runGateRetryStop('no-pending-session', { cwd: PROJECT_ROOT });
-    expect(r.action).toBe('skip');
-    expect(r.reason).toBe('no pending gate failure');
+    const repoDir = createTempGitRepo('feat/no-pending');
+    try {
+      bootstrapQualityGateYaml(repoDir);
+      const r = await runGateRetryStop('no-pending-session', { cwd: repoDir });
+      expect(r.action).toBe('skip');
+      expect(r.reason).toBe('no pending gate failure');
+    } finally {
+      cleanupTempGitRepo(repoDir);
+      clearGateConfigCache();
+    }
   });
 
   it('GATE_RETRY_STOP=0 时 skip', async () => {
-    process.env.GATE_RETRY_STOP = '0';
-    setPendingGateFailure('test-session', { type: 'push', command: 'git push', cwd: PROJECT_ROOT });
-    const r = await runGateRetryStop('test-session', { cwd: PROJECT_ROOT });
-    expect(r.action).toBe('skip');
-    expect(r.reason).toBe('GATE_RETRY_STOP disabled');
+    const repoDir = createTempGitRepo('feat/retry-off');
+    try {
+      bootstrapQualityGateYaml(repoDir);
+      process.env.GATE_RETRY_STOP = '0';
+      setPendingGateFailure('test-session', { type: 'push', command: 'git push', cwd: repoDir });
+      const r = await runGateRetryStop('test-session', { cwd: repoDir });
+      expect(r.action).toBe('skip');
+      expect(r.reason).toBe('GATE_RETRY_STOP disabled');
+    } finally {
+      clearPendingGateFailure('test-session', repoDir);
+      cleanupTempGitRepo(repoDir);
+      clearGateConfigCache();
+      delete process.env.GATE_RETRY_STOP;
+    }
+  });
+
+  it('local full 门禁用时跳过 full 重跑并清理 pending', async () => {
+    const repoDir = createTempGitRepo('feat/skip-full-retry');
+    try {
+      writeFile(
+        repoDir,
+        '.claude/quality-gate.yaml',
+        [
+          'ide:',
+          '  gate-retry-stop:',
+          '    enabled: true',
+          'git:',
+          '  pre-push:',
+          '    enabled: false',
+          '  pre-merge-commit:',
+          '    enabled: false',
+          '',
+        ].join('\n'),
+      );
+      clearGateConfigCache();
+
+      const sessionId = 'skip-full-session';
+      setPendingGateFailure(sessionId, {
+        type: 'push',
+        command: 'git push origin feat/skip-full-retry',
+        cwd: repoDir,
+      });
+
+      const r = await runGateRetryStop(sessionId, { cwd: repoDir });
+      expect(r.action).toBe('ci-owns-full');
+      expect(r.reason).toContain('git.pre-push disabled');
+      expect(r.followup).toContain('ci-fixer-sa');
+      expect(getPendingGateFailure(sessionId, repoDir)).toBeNull();
+    } finally {
+      clearPendingGateFailure('skip-full-session', repoDir);
+      cleanupTempGitRepo(repoDir);
+      clearGateConfigCache();
+    }
   });
 });
 
@@ -131,16 +193,33 @@ describe('handleUserPromptSubmit', () => {
   });
 
   it('敏感 prompt 应 deny', async () => {
-    const logs: string[] = [];
-    console.log = (msg) => logs.push(String(msg));
-    await handleUserPromptSubmit({
-      tool_name: 'UserPromptSubmit',
-      tool_input: { user_prompt: 'key AKIAIOSFODNN7EXAMPLE' },
-      session_id: 's1',
-      cwd: PROJECT_ROOT,
-    });
-    const parsed = JSON.parse(logs[0] ?? '{}');
-    expect(parsed.hookSpecificOutput?.permissionDecision).toBe('deny');
+    const repoDir = createTempGitRepo('feat/prompt-deny');
+    try {
+      writeFile(
+        repoDir,
+        '.claude/quality-gate.yaml',
+        [
+          'ide:',
+          '  user-prompt-filter:',
+          '    enabled: true',
+          '',
+        ].join('\n'),
+      );
+      clearGateConfigCache();
+      const logs: string[] = [];
+      console.log = (msg) => logs.push(String(msg));
+      await handleUserPromptSubmit({
+        tool_name: 'UserPromptSubmit',
+        tool_input: { user_prompt: 'key AKIAIOSFODNN7EXAMPLE' },
+        session_id: 's1',
+        cwd: repoDir,
+      });
+      const parsed = JSON.parse(logs[0] ?? '{}');
+      expect(parsed.hookSpecificOutput?.permissionDecision).toBe('deny');
+    } finally {
+      cleanupTempGitRepo(repoDir);
+      clearGateConfigCache();
+    }
   });
 
   it('普通 prompt 放行', async () => {
