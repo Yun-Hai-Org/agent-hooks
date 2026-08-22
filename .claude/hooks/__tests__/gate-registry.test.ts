@@ -72,6 +72,11 @@ describe('gate-registry', () => {
     expect(GATE_REGISTRY.git['pre-merge-commit']?.defaultEnabled).toBe(false);
   });
 
+  it('generateExampleYaml session-end-notify 默认 enabled: false', () => {
+    const yaml = generateExampleYaml();
+    expect(yaml).toMatch(/session-end-notify:\n    enabled: false\n/);
+  });
+
   it('超时常量合理', () => {
     expect(REGISTRY_COMMIT_TIMEOUT_MS).toBe(300_000);
     expect(REGISTRY_FULL_TIMEOUT_MS).toBe(900_000);

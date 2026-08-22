@@ -17,7 +17,6 @@ settings:
       - .mypy_cache/
       - htmlcov/
       - coverage/
-      - .worktrees/
   pushMergeBranches:
     mode: selected
     include:
@@ -516,7 +515,7 @@ ide:
 
   # sessionEnd/Stop：对话结束 webhook 通知（Cursor/Claude/Kiro）
   session-end-notify:
-    enabled: true
+    enabled: false
     timeout: 5s
     trigger: both
     maxSummaryChars: 1500

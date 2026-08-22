@@ -566,6 +566,7 @@ export const GATE_REGISTRY: GateRegistryRoot = {
     'session-end-notify': {
       description: 'sessionEnd/Stop：对话结束 webhook 通知（Cursor/Claude/Kiro）',
       defaultTimeoutMs: 5000,
+      defaultEnabled: false,
     },
   },
   git: {
@@ -734,7 +735,7 @@ function emitYamlNode(
   lines.push(`${indent(level)}${key}:`);
   const next = level + 1;
   const enabled = node.defaultEnabled === false ? 'false' : 'true';
-  lines.push(`${indent(next)}enabled: ${enabled}`);
+  lines.push(`${indent(next)}enabled: ${key === 'session-end-notify' ? 'false' : enabled}`);
   const hookAutoFix = node.supportsAutoFix === true || parentAutoFix === true;
   if (isHook && hookAutoFix) {
     lines.push(`${indent(next)}autoFix: true`);
