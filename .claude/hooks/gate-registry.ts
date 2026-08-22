@@ -735,7 +735,7 @@ function emitYamlNode(
   lines.push(`${indent(level)}${key}:`);
   const next = level + 1;
   const enabled = node.defaultEnabled === false ? 'false' : 'true';
-  lines.push(`${indent(next)}enabled: ${key === 'session-end-notify' ? 'false' : enabled}`);
+  lines.push(`${indent(next)}enabled: ${enabled}`);
   const hookAutoFix = node.supportsAutoFix === true || parentAutoFix === true;
   if (isHook && hookAutoFix) {
     lines.push(`${indent(next)}autoFix: true`);
