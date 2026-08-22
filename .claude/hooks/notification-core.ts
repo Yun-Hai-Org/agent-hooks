@@ -3,7 +3,7 @@
  * Notification Core - Webhook 通知共享逻辑
  */
 
-import { getNotificationSettings } from './gate-config.js';
+import { getNotificationSettings, isGateNodeEnabled } from './gate-config.js';
 import { getPlatform, platformLabel } from './hook-adapter.js';
 import { log } from './security-orchestrator.js';
 import type { NotificationChannel, NotificationEvent } from './types.js';
@@ -532,6 +532,11 @@ export async function notifyAllChannels(event: NotificationEvent, timestamp: str
 export async function dispatchSecurityNotification(input: DispatchInput, logHookName = 'notify-security-event') {
   const startedAt = Date.now();
   const cwd = input.cwd ?? process.cwd();
+  if (!isGateNodeEnabled('ide.notification', cwd)) {
+    log(logHookName, { level: 'SKIP', reason: 'gate disabled', session_id: input.session_id ?? '' });
+    logDispatchMetric(logHookName, startedAt, 'skipped', 'gate_disabled', []);
+    return { sent: false, reason: 'gate disabled' };
+  }
   const message = input.message ?? input.reason ?? '';
   const event =
     input.hook && input.severity
