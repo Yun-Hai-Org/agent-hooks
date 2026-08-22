@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import {
@@ -19,6 +19,7 @@ import {
   recordSent,
   truncateSummary,
   formatWechatGitOperationMessage,
+  dispatchSecurityNotification,
   type ConversationEndEvent,
   type GitOperationEvent,
 } from '../notification-core.js';
@@ -164,5 +165,99 @@ describe('notification-core', () => {
     );
     const content = (body.markdown as { content: string }).content;
     expect(content).not.toContain('归属 agent');
+  });
+
+  describe('dispatchSecurityNotification ide.notification gate', () => {
+    let repoDir: string;
+    const originalFetch = globalThis.fetch;
+
+    function writeNotifyYaml(enabled: boolean | 'omit') {
+      mkdirSync(join(repoDir, '.claude'), { recursive: true });
+      const ideBlock =
+        enabled === 'omit'
+          ? ''
+          : `ide:
+  notification:
+    enabled: ${enabled ? 'true' : 'false'}
+`;
+      writeFileSync(
+        join(repoDir, '.claude/quality-gate.yaml'),
+        `settings:
+  notifications:
+    timeout: 5s
+    cooldown: 5m
+    channels:
+      wechat:
+        url: "https://example.com/wechat"
+${ideBlock}`,
+      );
+      clearGateConfigCache();
+    }
+
+    beforeEach(() => {
+      repoDir = createTempGitRepo('feat/notify-core-gate');
+      clearCooldownState();
+      clearGateConfigCache();
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+      cleanupTempGitRepo(repoDir);
+      clearGateConfigCache();
+      clearCooldownState();
+    });
+
+    it('ide.notification.enabled false 时不应 POST webhook', async () => {
+      writeNotifyYaml(false);
+      let fetchCalls = 0;
+      globalThis.fetch = async () => {
+        fetchCalls += 1;
+        return new Response('ok', { status: 200 });
+      };
+      const result = await dispatchSecurityNotification({
+        hook: 'block-dangerous-commands',
+        severity: 'high',
+        reason: 'blocked',
+        cwd: repoDir,
+      });
+      expect(result.sent).toBe(false);
+      expect(result.reason).toBe('gate disabled');
+      expect(fetchCalls).toBe(0);
+    });
+
+    it('ide.notification 节点缺失时不应 POST webhook', async () => {
+      writeNotifyYaml('omit');
+      let fetchCalls = 0;
+      globalThis.fetch = async () => {
+        fetchCalls += 1;
+        return new Response('ok', { status: 200 });
+      };
+      const result = await dispatchSecurityNotification({
+        hook: 'block-dangerous-commands',
+        severity: 'high',
+        reason: 'blocked',
+        cwd: repoDir,
+      });
+      expect(result.sent).toBe(false);
+      expect(result.reason).toBe('gate disabled');
+      expect(fetchCalls).toBe(0);
+    });
+
+    it('ide.notification.enabled true 且有 url 时应 POST webhook', async () => {
+      writeNotifyYaml(true);
+      let fetchCalls = 0;
+      globalThis.fetch = async () => {
+        fetchCalls += 1;
+        return new Response('ok', { status: 200 });
+      };
+      const result = await dispatchSecurityNotification({
+        hook: 'block-dangerous-commands',
+        severity: 'high',
+        reason: 'blocked',
+        cwd: repoDir,
+      });
+      expect(result.sent).toBe(true);
+      expect(fetchCalls).toBe(1);
+    });
   });
 });
