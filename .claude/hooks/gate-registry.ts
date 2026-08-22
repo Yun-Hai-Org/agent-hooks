@@ -566,6 +566,7 @@ export const GATE_REGISTRY: GateRegistryRoot = {
     'session-end-notify': {
       description: 'sessionEnd/Stop：对话结束 webhook 通知（Cursor/Claude/Kiro）',
       defaultTimeoutMs: 5000,
+      defaultEnabled: false,
     },
   },
   git: {
