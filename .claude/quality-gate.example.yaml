@@ -511,7 +511,7 @@ ide:
 
   # Notification：安全/质量事件 webhook 通知
   notification:
-    enabled: true
+    enabled: false
     timeout: 5s
 
   # sessionEnd/Stop：对话结束 webhook 通知（Cursor/Claude/Kiro）

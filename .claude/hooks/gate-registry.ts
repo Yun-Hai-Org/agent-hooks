@@ -562,6 +562,7 @@ export const GATE_REGISTRY: GateRegistryRoot = {
     notification: {
       description: 'Notification：安全/质量事件 webhook 通知',
       defaultTimeoutMs: 5000,
+      defaultEnabled: false,
     },
     'session-end-notify': {
       description: 'sessionEnd/Stop：对话结束 webhook 通知（Cursor/Claude/Kiro）',
