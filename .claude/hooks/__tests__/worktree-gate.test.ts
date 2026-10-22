@@ -208,6 +208,53 @@ describe('worktree-gate main()', () => {
     }
   });
 
+  it('cursor Write path 指向仓库外应放行', async () => {
+    const repo = createTempGitRepo('main');
+    const prev = process.env.HOOK_PLATFORM;
+    process.env.HOOK_PLATFORM = 'cursor';
+    try {
+      const externalPath = join(process.env['HOME'] ?? '/tmp', '.cursor', 'plans', 'cursor-path.plan.md');
+      process.stdin = Readable.from([
+        JSON.stringify({
+          tool_name: 'Write',
+          tool_input: { path: externalPath, contents: 'x' },
+          session_id: 's10',
+          cwd: repo,
+        }),
+      ]);
+      await worktreeMain();
+      expect(output).toHaveLength(1);
+      expect(expectAllow(output[0]!)).toBe(true);
+    } finally {
+      if (prev) process.env.HOOK_PLATFORM = prev;
+      else delete process.env.HOOK_PLATFORM;
+      cleanupTempGitRepo(repo);
+    }
+  });
+
+  it('cursor StrReplace path 指向 .cursor/plans 应放行', async () => {
+    const repo = createTempGitRepo('main');
+    const prev = process.env.HOOK_PLATFORM;
+    process.env.HOOK_PLATFORM = 'cursor';
+    try {
+      process.stdin = Readable.from([
+        JSON.stringify({
+          tool_name: 'StrReplace',
+          tool_input: { path: '.cursor/plans/foo.plan.md', old_string: 'a', new_string: 'b' },
+          session_id: 's11',
+          cwd: repo,
+        }),
+      ]);
+      await worktreeMain();
+      expect(output).toHaveLength(1);
+      expect(expectAllow(output[0]!)).toBe(true);
+    } finally {
+      if (prev) process.env.HOOK_PLATFORM = prev;
+      else delete process.env.HOOK_PLATFORM;
+      cleanupTempGitRepo(repo);
+    }
+  });
+
   it('allows Write to in-repo .cursor/plans/ relative path on main checkout', async () => {
     const repo = createTempGitRepo('main');
     try {

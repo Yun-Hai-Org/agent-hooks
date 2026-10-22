@@ -72,6 +72,7 @@ async function readGateInput() {
   const data = normalizeInput(raw);
   let tool_name = data.tool_name;
   if (/^write$/i.test(tool_name)) tool_name = 'Write';
+  if (/^strreplace$/i.test(tool_name)) tool_name = 'Edit';
   if (isShellTool(tool_name)) tool_name = 'Shell';
   return { ...data, tool_name };
 }

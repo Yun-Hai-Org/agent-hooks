@@ -86,6 +86,7 @@ function isAllowedPathOnMain(filePath: string) {
 
 function stripShellRedirectsForWriteDetection(command: string): string {
   return command
+    .replace(/>=|<=|->|=>/g, ' ')
     .replace(/\d*\s*>\s*\/dev\/(?:null|stdout|stderr)\b/g, '')
     .replace(/\d*\s*>\s*&\s*\d+/g, '')
     .replace(/<[^>\s]+@[^>\s]+>/g, '');
@@ -112,7 +113,7 @@ function getWritePatternName(command: string) {
 function normalizeToolName(toolName: string) {
   if (isShellTool(toolName)) return 'Bash';
   if (/^write$/i.test(toolName)) return 'Write';
-  if (/^edit$/i.test(toolName)) return 'Edit';
+  if (/^(edit|strreplace)$/i.test(toolName)) return 'Edit';
   return toolName;
 }
 

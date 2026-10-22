@@ -464,6 +464,20 @@ describe('branch-gate', () => {
       expect(isFileWriteCommand('git worktree add .claude/worktrees/epic-2 feat/epic-2 2>&1')).toBe(false);
     });
 
+    it('isFileWriteCommand 不应该把比较和箭头运算符误判为重定向', () => {
+      const cmd = [
+        "python <<'PY'",
+        'if x >= 1 and y <= 2:',
+        '    print(a -> b)',
+        '    fn = lambda z: z => z',
+        'PY',
+      ].join('\n');
+      expect(isFileWriteCommand(cmd)).toBe(false);
+      expect(getWritePatternName(cmd)).toBe(null);
+      expect(isFileWriteCommand('echo "test" > file.txt')).toBe(true);
+      expect(getWritePatternName('echo "test" >> file.txt')).toBe('重定向写入 (>)');
+    });
+
     it('isFileWriteCommand 不应该把 stderr 重定向误判为文件写入（playwright 排查场景）', () => {
       const cmds = [
         'ls /tmp/project/_bmad/ 2>/dev/null',

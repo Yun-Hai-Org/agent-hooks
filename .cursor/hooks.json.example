@@ -47,11 +47,11 @@
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts worktree-gate.ts",
-        "matcher": "Shell|Write"
+        "matcher": "Shell|Write|StrReplace"
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts branch-gate.ts",
-        "matcher": "Shell|Write"
+        "matcher": "Shell|Write|StrReplace"
       },
       {
         "command": "HOOK_PLATFORM=cursor $HOME/.cursor/bun $HOME/.claude/hooks/resolve-hook-path.ts protect-secrets.ts",

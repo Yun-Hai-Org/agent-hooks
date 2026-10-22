@@ -54,6 +54,45 @@ describe('hook-adapter', () => {
     else delete process.env.HOOK_PLATFORM;
   });
 
+  it('cursor Write 的 path 应归一化为 file_path', () => {
+    const prev = process.env.HOOK_PLATFORM;
+    process.env.HOOK_PLATFORM = 'cursor';
+    const normalized = normalizeInput({
+      tool_name: 'Write',
+      tool_input: { path: '/tmp/proj/a.ts', contents: 'x' },
+      cwd: '/tmp/proj',
+    });
+    expect(normalized.tool_input.file_path).toBe('/tmp/proj/a.ts');
+    if (prev) process.env.HOOK_PLATFORM = prev;
+    else delete process.env.HOOK_PLATFORM;
+  });
+
+  it('cursor 空 file_path 应回退到 path', () => {
+    const prev = process.env.HOOK_PLATFORM;
+    process.env.HOOK_PLATFORM = 'cursor';
+    const normalized = normalizeInput({
+      tool_name: 'StrReplace',
+      tool_input: { file_path: '', path: '/tmp/proj/b.ts' },
+      cwd: '/tmp/proj',
+    });
+    expect(normalized.tool_input.file_path).toBe('/tmp/proj/b.ts');
+    if (prev) process.env.HOOK_PLATFORM = prev;
+    else delete process.env.HOOK_PLATFORM;
+  });
+
+  it('cursor 有值的 file_path 优先于 path', () => {
+    const prev = process.env.HOOK_PLATFORM;
+    process.env.HOOK_PLATFORM = 'cursor';
+    const normalized = normalizeInput({
+      tool_name: 'Write',
+      tool_input: { file_path: '/tmp/proj/from-file-path.ts', path: '/tmp/proj/from-path.ts' },
+      cwd: '/tmp/proj',
+    });
+    expect(normalized.tool_input.file_path).toBe('/tmp/proj/from-file-path.ts');
+    if (prev) process.env.HOOK_PLATFORM = prev;
+    else delete process.env.HOOK_PLATFORM;
+  });
+
   it('isShellTool 识别 Bash/Shell', () => {
     expect(isShellTool('Bash')).toBe(true);
     expect(isShellTool('Shell')).toBe(true);

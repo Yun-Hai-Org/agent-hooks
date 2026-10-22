@@ -35,8 +35,13 @@ export function getPlatform(): HookPlatform {
 }
 
 function toolInputField(toolInput: unknown, field: 'command' | 'file_path'): string {
-  if (toolInput && typeof toolInput === 'object' && field in toolInput) {
-    return asString((toolInput as Record<string, unknown>)[field]);
+  if (!toolInput || typeof toolInput !== 'object') return '';
+  const obj = toolInput as Record<string, unknown>;
+  const keys = field === 'file_path' ? ['file_path', 'path'] : [field];
+  for (const key of keys) {
+    if (!(key in obj)) continue;
+    const value = asString(obj[key]);
+    if (value) return value;
   }
   return '';
 }
@@ -95,9 +100,11 @@ export function normalizeInput(data: Record<string, unknown>): HookInput {
     if (!tool_name && (isBeforeShell || command)) tool_name = 'Shell';
     const sessionId = asString(data['session_id']) || asString(data['conversation_id']);
     const state = loadWorkflowState(sessionId);
+    const filePath =
+      toolInputField(toolInput, 'file_path') || asString(data['file_path']) || asString(data['path']);
     return {
       tool_name,
-      tool_input: { command: mergedCommand },
+      tool_input: filePath ? { command: mergedCommand, file_path: filePath } : { command: mergedCommand },
       session_id: sessionId,
       cwd: resolveCwd(data),
       agent_id: asString(data['agent_id']),
@@ -150,7 +157,8 @@ function parseHookToolInput(rawInput: unknown): HookToolInput {
   if (!rawInput || typeof rawInput !== 'object') return tool_input;
   const obj = rawInput as Record<string, unknown>;
   if ('command' in obj) tool_input.command = asString(obj['command']);
-  if ('file_path' in obj) tool_input.file_path = asString(obj['file_path']);
+  const filePath = toolInputField(obj, 'file_path');
+  if (filePath) tool_input.file_path = filePath;
   if ('content' in obj) tool_input.content = asString(obj['content']);
   if ('new_string' in obj) tool_input.new_string = asString(obj['new_string']);
   return tool_input;

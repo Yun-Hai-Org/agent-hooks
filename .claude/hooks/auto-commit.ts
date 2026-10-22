@@ -2,12 +2,13 @@
 /**
  * Auto Commit - Stop hook
  *
- * AUTO_COMMIT_MODE=agent（默认）：Stop 时检查工作区；有未提交变更 → block，要求 Agent 自行 git commit（native pre-commit 校验）
+ * 默认关闭。设置 AUTO_COMMIT=1 后：
+ * AUTO_COMMIT_MODE=agent（开启后的默认）：Stop 时检查工作区；有未提交变更 → block，要求 Agent 自行 git commit（native pre-commit 校验）
  * AUTO_COMMIT_MODE=auto：有暂存变更时 hook 自动 git commit（quality-gate profile=commit → git commit）
  *
  * 环境变量：
- *   AUTO_COMMIT=0           关闭 Stop 侧 commit 检查/自动提交
- *   AUTO_COMMIT_MODE        agent（默认）| auto
+ *   AUTO_COMMIT=1           开启 Stop 侧 commit 检查/自动提交（默认关闭）
+ *   AUTO_COMMIT_MODE        agent（开启后的默认）| auto
  *   AUTO_COMMIT_MESSAGE     auto 模式固定 commit message（需符合 feat: 格式）
  *   AUTO_COMMIT_SUBAGENT=1  允许 SubagentStop 时检查/提交（默认跳过）
  *   AUTO_COMMIT_MAX_LOOPS=8 Cursor stop 最大自动 follow-up 次数（默认 8）
@@ -51,7 +52,7 @@ export function parseStopInput(data: Record<string, unknown>) {
  *
  */
 export function isAutoCommitEnabled() {
-  const v = (process.env['AUTO_COMMIT'] ?? '1').toLowerCase();
+  const v = (process.env['AUTO_COMMIT'] ?? '0').toLowerCase();
   return v !== '0' && v !== 'false' && v !== 'off';
 }
 

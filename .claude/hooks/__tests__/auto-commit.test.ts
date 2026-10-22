@@ -46,7 +46,12 @@ describe('auto-commit', () => {
   });
 
   describe('isAutoCommitEnabled', () => {
-    it('默认启用', () => {
+    it('默认关闭', () => {
+      expect(isAutoCommitEnabled()).toBe(false);
+    });
+
+    it('AUTO_COMMIT=1 时启用', () => {
+      process.env.AUTO_COMMIT = '1';
       expect(isAutoCommitEnabled()).toBe(true);
     });
 
@@ -186,12 +191,14 @@ describe('auto-commit', () => {
 
   describe('runAutoCommit', () => {
     it('无暂存时不提交', async () => {
+      process.env.AUTO_COMMIT = '1';
       const result = await runAutoCommit(repoPath);
       expect(result.committed).toBe(false);
       expect(result.reason).toBe('no staged changes');
     });
 
     it('main 分支不提交', async () => {
+      process.env.AUTO_COMMIT = '1';
       execSync('git checkout -b main', { cwd: repoPath, stdio: 'pipe' });
       writeFileSync(join(repoPath, 'y.js'), 'y');
       execSync('git add y.js', { cwd: repoPath, stdio: 'pipe' });
@@ -201,6 +208,7 @@ describe('auto-commit', () => {
     });
 
     it('非 git 目录不提交', () => {
+      process.env.AUTO_COMMIT = '1';
       const result = runAutoCommit('/tmp/not-a-git-repo-xyz');
       expect(result.committed).toBe(false);
       expect(result.reason).toBe('not a git repo');

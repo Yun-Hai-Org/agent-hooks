@@ -323,10 +323,12 @@ describe('auto-commit success path', () => {
   let repoDir: string;
 
   beforeEach(() => {
+    process.env.AUTO_COMMIT = '1';
     repoDir = createTempGitRepo('feat/auto-commit-ok');
   });
 
   afterEach(() => {
+    delete process.env.AUTO_COMMIT;
     cleanupTempGitRepo(repoDir);
   });
 
@@ -391,7 +393,7 @@ describe('CLI hook main entrypoints', () => {
       session_id: 'cli-commit-1',
       cwd: repoDir,
     });
-    const { code, stdout } = await runHookScript(autoCommitPath, input, { AUTO_COMMIT_MODE: 'auto' });
+    const { code, stdout } = await runHookScript(autoCommitPath, input, { AUTO_COMMIT: '1', AUTO_COMMIT_MODE: 'auto' });
     expect(code).toBe(0);
     expect(stdout.trim()).toBe('{}');
   });
