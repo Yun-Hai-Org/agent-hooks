@@ -1,7 +1,19 @@
 #!/usr/bin/env bash
 # preToolUse guard for Write/TabWrite.
 
-set -euo pipefail
+set -eEuo pipefail
+
+on_unexpected_error() {
+  local line="$1"
+  local cmd="$2"
+  local status="$3"
+  trap - ERR
+  printf 'prohibited-content-pretool-guard: line %s: %s (exit %s)\n' "$line" "$cmd" "$status" >&2
+  printf '%s\n' '{"permission":"allow"}'
+  exit 0
+}
+trap 'on_unexpected_error "$LINENO" "$BASH_COMMAND" "$?"' ERR
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 json_escape() {
@@ -52,6 +64,9 @@ fi
 
 file_path=""
 if [[ "$raw_input" =~ \"file_path\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+  file_path="${BASH_REMATCH[1]}"
+fi
+if [[ -z "$file_path" && "$raw_input" =~ \"path\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
   file_path="${BASH_REMATCH[1]}"
 fi
 

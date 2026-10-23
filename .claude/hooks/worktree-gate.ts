@@ -5,7 +5,7 @@
  */
 
 import { existsSync, appendFileSync, mkdirSync, realpathSync } from 'fs';
-import { join, resolve, isAbsolute, basename, dirname } from 'path';
+import { join, resolve, isAbsolute, basename } from 'path';
 import { LOG_DIR, readStdin, isGitRepo, execCommand } from './security-orchestrator.js';
 import { repoRelativePathFromAbs } from './checks/scan-scope.js';
 import {
@@ -26,6 +26,7 @@ import {
   getWritePatternName,
   ALLOWED_PATHS_ON_MAIN,
   isAllowedPathOnMain,
+  findEnclosingWorktree,
 } from './branch-gate.js';
 import { notifyGateBlockedAsync } from './gate-blocked-notify.js';
 
@@ -155,17 +156,7 @@ async function main() {
     if (tool_name !== 'Shell' && typeof tool_input.file_path === 'string') {
       const rawFilePath = tool_input.file_path;
       const absFilePath = isAbsolute(rawFilePath) ? rawFilePath : resolve(workingDir, rawFilePath);
-      let dir = dirname(absFilePath);
-      let fileWorktreeRoot: string | null = null;
-      while (dir !== '/' && dir.length >= workingDir.length) {
-        const dotGit = join(dir, '.git');
-        if (existsSync(dotGit)) {
-          fileWorktreeRoot = dir;
-          break;
-        }
-        if (dir === workingDir) break;
-        dir = dirname(dir);
-      }
+      const fileWorktreeRoot = findEnclosingWorktree(absFilePath, workingDir);
       if (fileWorktreeRoot) {
         const fileBranch = getCurrentBranch(fileWorktreeRoot);
         if (isFeatBranch(fileBranch)) {

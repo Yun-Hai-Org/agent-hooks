@@ -478,6 +478,13 @@ describe('branch-gate', () => {
       expect(getWritePatternName('echo "test" >> file.txt')).toBe('重定向写入 (>)');
     });
 
+    it('isFileWriteCommand 不应该把引号里的 > 误判为重定向', () => {
+      const cmd = 'rg -n "pattern: />" .claude/hooks/branch-gate.ts';
+      expect(isFileWriteCommand(cmd)).toBe(false);
+      expect(getWritePatternName(cmd)).toBe(null);
+      expect(isFileWriteCommand('echo "x >= 1" > out.txt')).toBe(true);
+    });
+
     it('isFileWriteCommand 不应该把 stderr 重定向误判为文件写入（playwright 排查场景）', () => {
       const cmds = [
         'ls /tmp/project/_bmad/ 2>/dev/null',
@@ -1002,6 +1009,75 @@ describe('branch-gate', () => {
       expect(consoleOutput[0]).toBe('{}');
 
       rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it('main 会话写入 feat worktree 文件应该放行', async () => {
+      const tempDir = `/tmp/branch-gate-feat-wt-${Date.now()}`;
+      mkdirSync(tempDir, { recursive: true });
+      execSync('git init -b main', { cwd: tempDir, stdio: 'pipe' });
+      execSync('git config user.email "test@test.com"', { cwd: tempDir, stdio: 'pipe' });
+      execSync('git config user.name "Test"', { cwd: tempDir, stdio: 'pipe' });
+      disableGlobalGitHooks(tempDir);
+      bootstrapQualityGateYaml(tempDir);
+      writeFileSync(join(tempDir, 'README.md'), '# t\n');
+      execSync('git add README.md', { cwd: tempDir, stdio: 'pipe' });
+      execSync('git commit -m "chore: init"', { cwd: tempDir, stdio: 'pipe' });
+      const wt = join(tempDir, '.worktrees', 'pit-mining');
+      execSync(`git worktree add "${wt}" -b feat/pit-mining`, { cwd: tempDir, stdio: 'pipe' });
+      try {
+        const inputData = JSON.stringify({
+          tool_name: 'Write',
+          tool_input: { file_path: join(wt, 'docs', 'note.md'), content: 'x' },
+          session_id: 'test-feat-wt',
+          cwd: tempDir,
+        });
+        process.stdin = Readable.from([inputData]);
+        await main();
+        expect(consoleOutput).toHaveLength(1);
+        expect(consoleOutput[0]).toBe('{}');
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it('main 会话写入绝对路径白名单和仓库外文件应该放行', async () => {
+      const tempDir = `/tmp/branch-gate-abs-${Date.now()}`;
+      mkdirSync(tempDir, { recursive: true });
+      execSync('git init -b main', { cwd: tempDir, stdio: 'pipe' });
+      execSync('git config user.email "test@test.com"', { cwd: tempDir, stdio: 'pipe' });
+      execSync('git config user.name "Test"', { cwd: tempDir, stdio: 'pipe' });
+      disableGlobalGitHooks(tempDir);
+      bootstrapQualityGateYaml(tempDir);
+      writeFileSync(join(tempDir, 'README.md'), '# t\n');
+      execSync('git add README.md', { cwd: tempDir, stdio: 'pipe' });
+      execSync('git commit -m "chore: init"', { cwd: tempDir, stdio: 'pipe' });
+      try {
+        const planPath = join(tempDir, '.cursor', 'plans', 'foo.plan.md');
+        process.stdin = Readable.from([
+          JSON.stringify({
+            tool_name: 'Write',
+            tool_input: { file_path: planPath, content: 'x' },
+            session_id: 'test-abs-plan',
+            cwd: tempDir,
+          }),
+        ]);
+        await main();
+        expect(consoleOutput.at(-1)).toBe('{}');
+
+        const outside = join('/tmp', `outside-plan-${Date.now()}.plan.md`);
+        process.stdin = Readable.from([
+          JSON.stringify({
+            tool_name: 'Write',
+            tool_input: { file_path: outside, content: 'x' },
+            session_id: 'test-outside',
+            cwd: tempDir,
+          }),
+        ]);
+        await main();
+        expect(consoleOutput.at(-1)).toBe('{}');
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
     });
 
     it('Write 工具写入非白名单目录在 main 分支应该拒绝', async () => {

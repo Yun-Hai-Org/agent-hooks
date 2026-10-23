@@ -5,9 +5,10 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, statSync, appendFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { LOG_DIR, readStdin, isGitRepo } from './security-orchestrator.js';
+import { existsSync, statSync, appendFileSync, mkdirSync, realpathSync } from 'fs';
+import { join, dirname, basename, resolve, isAbsolute } from 'path';
+import { LOG_DIR, readStdin, isGitRepo, execCommand } from './security-orchestrator.js';
+import { repoRelativePathFromAbs } from './checks/scan-scope.js';
 import {
   normalizeInput,
   normalizeFileEditInput,
@@ -84,8 +85,80 @@ function isAllowedPathOnMain(filePath: string) {
   return ALLOWED_PATHS_ON_MAIN.some((allowed) => filePath.startsWith(allowed));
 }
 
+export function resolveAbsForGate(filePath: string, workingDir: string): string {
+  const absPath = isAbsolute(filePath) ? filePath : resolve(workingDir, filePath);
+  const missing: string[] = [];
+  let cursor = absPath;
+  while (cursor !== dirname(cursor)) {
+    try {
+      const real = realpathSync(cursor);
+      return missing.length === 0 ? real : join(real, ...missing);
+    } catch {
+      missing.unshift(basename(cursor));
+      cursor = dirname(cursor);
+    }
+  }
+  return absPath;
+}
+
+/** 从文件目录向上找最近的 .git，停在会话 cwd。与 worktree-gate 的 by-file-path 查找一致。 */
+export function findEnclosingWorktree(absPath: string, workingDir: string): string | null {
+  let dir = dirname(absPath);
+  while (dir !== '/' && dir.length >= workingDir.length) {
+    if (existsSync(join(dir, '.git'))) return dir;
+    if (dir === workingDir) break;
+    dir = dirname(dir);
+  }
+  return null;
+}
+
+function isFeatWorktreeBranch(branch: string | null): boolean {
+  return Boolean(branch && (branch.startsWith('feat/') || branch.includes('-task-')));
+}
+
+function allowFileWriteOnMain(filePath: string, workingDir: string, toolName: string, sessionId?: string): boolean {
+  if (!filePath) return false;
+  const absPath = resolveAbsForGate(filePath, workingDir);
+  const rootResult = execCommand('git rev-parse --show-toplevel', { cwd: workingDir });
+  const gitRoot = rootResult.success ? rootResult.stdout.trim() : '';
+  if (!gitRoot) return isAllowedPathOnMain(filePath);
+
+  const rel = repoRelativePathFromAbs(absPath, gitRoot);
+  if (rel === null) {
+    log({ level: 'INFO', reason: 'write outside repo allowed', file: absPath, tool: toolName, session_id: sessionId });
+    return true;
+  }
+
+  const fileWorktree = findEnclosingWorktree(absPath, workingDir);
+  if (fileWorktree) {
+    const fileBranch = getCurrentBranch(fileWorktree);
+    if (isFeatWorktreeBranch(fileBranch)) {
+      log({
+        level: 'INFO',
+        reason: 'write inside feat worktree (by file path)',
+        file: absPath,
+        worktree: fileWorktree,
+        branch: fileBranch,
+        tool: toolName,
+        session_id: sessionId,
+      });
+      return true;
+    }
+  }
+
+  if (isAllowedPathOnMain(rel)) {
+    log({ level: 'INFO', reason: 'allowed path on main', file: rel, tool: toolName, session_id: sessionId });
+    return true;
+  }
+  return false;
+}
+
+function stripQuotedSegments(command: string): string {
+  return command.replace(/'(?:\\'|[^'])*'/g, ' ').replace(/"(?:\\"|[^"])*"/g, ' ');
+}
+
 function stripShellRedirectsForWriteDetection(command: string): string {
-  return command
+  return stripQuotedSegments(command)
     .replace(/>=|<=|->|=>/g, ' ')
     .replace(/\d*\s*>\s*\/dev\/(?:null|stdout|stderr)\b/g, '')
     .replace(/\d*\s*>\s*&\s*\d+/g, '')
@@ -258,8 +331,7 @@ async function main() {
     }
 
     const filePath = tool_input.file_path ?? '';
-    if (isAllowedPathOnMain(filePath)) {
-      log({ level: 'INFO', reason: 'allowed path on main', file: filePath, tool: tool_name, session_id });
+    if (allowFileWriteOnMain(filePath, workingDir, tool_name, session_id)) {
       console.log(allow());
       return;
     }
